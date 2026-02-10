@@ -9,7 +9,7 @@ https://creativecommons.org/licenses/by-nc-sa/4.0/
 
 ### cloud.google.com/go/auth
 
-License: https://github.com/googleapis/google-cloud-go/blob/auth/v0.18.0/auth/LICENSE
+License: https://github.com/googleapis/google-cloud-go/blob/auth/v0.18.1/auth/LICENSE
 Source: Apache-2.0
 
 ### cloud.google.com/go/auth/oauth2adapt
@@ -74,7 +74,7 @@ Source: Unlicense
 
 ### github.com/getsentry/sentry-go
 
-License: https://github.com/getsentry/sentry-go/blob/v0.41.0/LICENSE
+License: https://github.com/getsentry/sentry-go/blob/v0.42.0/LICENSE
 Source: MIT
 
 ### github.com/go-audio/audio
@@ -114,7 +114,7 @@ Source: MPL-2.0
 
 ### github.com/go-viper/mapstructure/v2
 
-License: https://github.com/go-viper/mapstructure/blob/v2.4.0/LICENSE
+License: https://github.com/go-viper/mapstructure/blob/v2.5.0/LICENSE
 Source: MIT
 
 ### github.com/golang-jwt/jwt/v5
@@ -134,7 +134,7 @@ Source: BSD-3-Clause
 
 ### github.com/googleapis/enterprise-certificate-proxy/client
 
-License: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.9/LICENSE
+License: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.11/LICENSE
 Source: Apache-2.0
 
 ### github.com/googleapis/gax-go/v2
@@ -249,12 +249,12 @@ Source: BSD-3-Clause
 
 ### github.com/nicholas-fedor/shoutrrr
 
-License: https://github.com/nicholas-fedor/shoutrrr/blob/v0.13.1/LICENSE.md
+License: https://github.com/nicholas-fedor/shoutrrr/blob/v0.13.2/LICENSE.md
 Source: MIT
 
 ### github.com/nicholas-fedor/shoutrrr/pkg/color
 
-License: https://github.com/nicholas-fedor/shoutrrr/blob/v0.13.1/pkg/color/LICENSE.md
+License: https://github.com/nicholas-fedor/shoutrrr/blob/v0.13.2/pkg/color/LICENSE.md
 Source: MIT
 
 ### github.com/patrickmn/go-cache
@@ -314,7 +314,7 @@ Source: Apache-2.0
 
 ### github.com/smallnest/ringbuffer
 
-License: https://github.com/smallnest/ringbuffer/blob/0da97b586904/LICENSE
+License: https://github.com/smallnest/ringbuffer/blob/v0.1.1/LICENSE
 Source: MIT
 
 ### github.com/spf13/afero
@@ -382,6 +382,11 @@ Source: Unknown
 License: Unknown
 Source: Unknown
 
+### github.com/tphakala/birdnet-go/tools/dbexport
+
+License: Unknown
+Source: Unknown
+
 ### github.com/tphakala/flac
 
 License: https://github.com/tphakala/flac/blob/20d6d98f5ee3/LICENSE
@@ -419,17 +424,17 @@ Source: Apache-2.0
 
 ### go.opentelemetry.io/otel
 
-License: https://github.com/open-telemetry/opentelemetry-go/blob/v1.38.0/LICENSE
+License: https://github.com/open-telemetry/opentelemetry-go/blob/v1.39.0/LICENSE
 Source: Apache-2.0
 
 ### go.opentelemetry.io/otel/metric
 
-License: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.38.0/metric/LICENSE
+License: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.39.0/metric/LICENSE
 Source: Apache-2.0
 
 ### go.opentelemetry.io/otel/trace
 
-License: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.38.0/trace/LICENSE
+License: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.39.0/trace/LICENSE
 Source: Apache-2.0
 
 ### go.uber.org/goleak
@@ -449,17 +454,17 @@ Source: MIT
 
 ### golang.org/x/crypto
 
-License: https://cs.opensource.google/go/x/crypto/+/v0.47.0:LICENSE
+License: https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE
 Source: BSD-3-Clause
 
 ### golang.org/x/net
 
-License: https://cs.opensource.google/go/x/net/+/v0.49.0:LICENSE
+License: https://cs.opensource.google/go/x/net/+/v0.50.0:LICENSE
 Source: BSD-3-Clause
 
 ### golang.org/x/oauth2
 
-License: https://cs.opensource.google/go/x/oauth2/+/v0.34.0:LICENSE
+License: https://cs.opensource.google/go/x/oauth2/+/v0.35.0:LICENSE
 Source: BSD-3-Clause
 
 ### golang.org/x/sync
@@ -469,17 +474,17 @@ Source: BSD-3-Clause
 
 ### golang.org/x/sys
 
-License: https://cs.opensource.google/go/x/sys/+/v0.40.0:LICENSE
+License: https://cs.opensource.google/go/x/sys/+/v0.41.0:LICENSE
 Source: BSD-3-Clause
 
 ### golang.org/x/term
 
-License: https://cs.opensource.google/go/x/term/+/v0.39.0:LICENSE
+License: https://cs.opensource.google/go/x/term/+/v0.40.0:LICENSE
 Source: BSD-3-Clause
 
 ### golang.org/x/text
 
-License: https://cs.opensource.google/go/x/text/+/v0.33.0:LICENSE
+License: https://cs.opensource.google/go/x/text/+/v0.34.0:LICENSE
 Source: BSD-3-Clause
 
 ### golang.org/x/time/rate
@@ -489,12 +494,12 @@ Source: BSD-3-Clause
 
 ### google.golang.org/api
 
-License: https://github.com/googleapis/google-api-go-client/blob/v0.260.0/LICENSE
+License: https://github.com/googleapis/google-api-go-client/blob/v0.265.0/LICENSE
 Source: BSD-3-Clause
 
 ### google.golang.org/genproto/googleapis/rpc
 
-License: https://github.com/googleapis/go-genproto/blob/0a764e51fe1b/googleapis/rpc/LICENSE
+License: https://github.com/googleapis/go-genproto/blob/8636f8732409/googleapis/rpc/LICENSE
 Source: Apache-2.0
 
 ### google.golang.org/grpc
