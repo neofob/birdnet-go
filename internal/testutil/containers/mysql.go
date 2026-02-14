@@ -56,13 +56,11 @@ func DefaultMySQLConfig() MySQLConfig {
 
 // NewMySQLContainer creates and starts a MySQL container with the given config.
 // If config is nil, uses DefaultMySQLConfig().
-func NewMySQLContainer(config *MySQLConfig) (*MySQLContainer, error) {
+func NewMySQLContainer(ctx context.Context, config *MySQLConfig) (*MySQLContainer, error) {
 	if config == nil {
 		defaultCfg := DefaultMySQLConfig()
 		config = &defaultCfg
 	}
-
-	ctx := context.Background()
 
 	// Build container request
 	opts := []testcontainers.ContainerCustomizer{
@@ -107,7 +105,7 @@ func NewMySQLContainer(config *MySQLConfig) (*MySQLContainer, error) {
 	db.SetConnMaxIdleTime(1 * time.Minute)
 
 	// Verify connection with health check
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		_ = mysqlContainer.Terminate(ctx)
 		return nil, fmt.Errorf("failed to ping database: %w", err)
@@ -253,9 +251,7 @@ func (c *MySQLContainer) ExecuteScript(ctx context.Context, scriptPath string) e
 
 // Terminate stops and removes the MySQL container.
 // It also closes the database connection if open.
-func (c *MySQLContainer) Terminate() error {
-	ctx := context.Background()
-
+func (c *MySQLContainer) Terminate(ctx context.Context) error {
 	// Close database connection first
 	if c.db != nil {
 		if err := c.db.Close(); err != nil {
