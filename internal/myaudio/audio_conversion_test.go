@@ -13,7 +13,7 @@ func TestConvert16BitToFloat32_WithPool(t *testing.T) {
 	// Initialize the pool
 	err := InitFloat32Pool()
 	require.NoError(t, err)
-	
+
 	// Test data: 16-bit PCM samples
 	// Create test data with known values
 	testData := []byte{
@@ -23,27 +23,27 @@ func TestConvert16BitToFloat32_WithPool(t *testing.T) {
 		0x00, 0x40, // 16384
 		0x00, 0xC0, // -16384
 	}
-	
+
 	// Convert
 	result := convert16BitToFloat32(testData)
-	
+
 	// Verify length
 	assert.Len(t, result, 5)
-	
+
 	// Verify values
 	assert.InDelta(t, 0.0, result[0], 0.0001)
-	assert.InDelta(t, 0.999969, result[1], 0.0001)  // 32767/32768
-	assert.InDelta(t, -1.0, result[2], 0.0001)      // -32768/32768
-	assert.InDelta(t, 0.5, result[3], 0.0001)       // 16384/32768
-	assert.InDelta(t, -0.5, result[4], 0.0001)      // -16384/32768
-	
+	assert.InDelta(t, 0.999969, result[1], 0.0001) // 32767/32768
+	assert.InDelta(t, -1.0, result[2], 0.0001)     // -32768/32768
+	assert.InDelta(t, 0.5, result[3], 0.0001)      // 16384/32768
+	assert.InDelta(t, -0.5, result[4], 0.0001)     // -16384/32768
+
 	// Return buffer to pool
 	ReturnFloat32Buffer(result)
 }
 
 func TestConvert16BitToFloat32_Correctness(t *testing.T) {
 	// Do not use t.Parallel() - this test may access global float32Pool
-	
+
 	tests := []struct {
 		name     string
 		input    []byte
@@ -75,12 +75,12 @@ func TestConvert16BitToFloat32_Correctness(t *testing.T) {
 			expected: []float32{0.5, -0.5, 0.5, -0.5},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := convert16BitToFloat32(tt.input)
 			assert.Len(t, result, len(tt.expected))
-			
+
 			for i := range tt.expected {
 				assert.InDelta(t, tt.expected[i], result[i], 0.0001)
 			}
@@ -126,11 +126,11 @@ func TestConvertToFloat32_AllBitDepths(t *testing.T) {
 			wantErr:  true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ConvertToFloat32(tt.input, tt.bitDepth)
-			
+
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Nil(t, result)
@@ -147,13 +147,13 @@ func TestFloat32PoolIntegration(t *testing.T) {
 	// Initialize pool
 	err := InitFloat32Pool()
 	require.NoError(t, err)
-	
+
 	// Get initial stats
 	initialStats := float32Pool.GetStats()
-	
+
 	// Create standard size buffer (3 seconds at 48kHz, 16-bit)
 	testData := make([]byte, conf.BufferSize)
-	
+
 	// Fill with test pattern
 	for i := 0; i < len(testData); i += 2 {
 		// Create a sine wave pattern
@@ -161,7 +161,7 @@ func TestFloat32PoolIntegration(t *testing.T) {
 		testData[i] = byte(value & 0xFF)
 		testData[i+1] = byte(value >> 8)
 	}
-	
+
 	// Perform multiple conversions
 	const iterations = 10
 	for range iterations {
@@ -190,21 +190,21 @@ func TestConvert16BitToFloat32_NonStandardSize(t *testing.T) {
 	// Initialize pool
 	err := InitFloat32Pool()
 	require.NoError(t, err)
-	
+
 	// Test with various non-standard sizes
 	sizes := []int{100, 1000, 10000, 50000}
-	
+
 	for _, size := range sizes {
 		t.Run(fmt.Sprintf("size_%d", size), func(t *testing.T) {
 			// Create test data
 			testData := make([]byte, size*2) // 2 bytes per sample
-			
+
 			// Convert
 			result := convert16BitToFloat32(testData)
-			
+
 			// Should not use pool for non-standard sizes
 			assert.Len(t, result, size)
-			
+
 			// Verify pool stats didn't change (no gets/puts for non-standard sizes)
 			// The pool should not be used for these sizes
 			// This is a bit indirect, but we can't directly verify allocation

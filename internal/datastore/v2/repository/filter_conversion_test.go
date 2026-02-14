@@ -525,12 +525,14 @@ func (m *mockAudioSourceRepository) GetBySourceURI(_ context.Context, _, _ strin
 func (m *mockAudioSourceRepository) GetAll(_ context.Context) ([]*entities.AudioSource, error) {
 	return nil, nil //nolint:nilnil // mock implementation
 }
-func (m *mockAudioSourceRepository) Count(_ context.Context) (int64, error)           { return 0, nil }
-func (m *mockAudioSourceRepository) Delete(_ context.Context, _ uint) error           { return nil }
+func (m *mockAudioSourceRepository) Count(_ context.Context) (int64, error) { return 0, nil }
+func (m *mockAudioSourceRepository) Delete(_ context.Context, _ uint) error { return nil }
 func (m *mockAudioSourceRepository) Update(_ context.Context, _ uint, _ map[string]any) error {
 	return nil
 }
-func (m *mockAudioSourceRepository) Exists(_ context.Context, _ uint) (bool, error) { return false, nil }
+func (m *mockAudioSourceRepository) Exists(_ context.Context, _ uint) (bool, error) {
+	return false, nil
+}
 
 // =============================================================================
 // ResolveSpeciesToLabelIDs Tests
@@ -562,8 +564,8 @@ func TestResolveSpeciesToLabelIDs(t *testing.T) {
 	t.Run("found species returns label IDs", func(t *testing.T) {
 		labelRepo := &mockLabelRepository{
 			labels: map[string]*entities.Label{
-				"Turdus merula":    {ID: 1},
-				"Parus major":      {ID: 2},
+				"Turdus merula":      {ID: 1},
+				"Parus major":        {ID: 2},
 				"Erithacus rubecula": {ID: 3},
 			},
 		}

@@ -117,7 +117,7 @@ type HourRange struct {
 
 // ConfidenceRange defines a confidence filter with operator.
 type ConfidenceRange struct {
-	Operator string  // ">=", "<=", "=", ">", "<"
+	Operator string // ">=", "<=", "=", ">", "<"
 	Value    float64
 }
 

@@ -23,14 +23,14 @@ type mockErrorEvent struct {
 	reported  atomic.Bool
 }
 
-func (m *mockErrorEvent) GetComponent() string                { return m.component }
-func (m *mockErrorEvent) GetCategory() string                 { return m.category }
-func (m *mockErrorEvent) GetContext() map[string]any          { return m.context }
-func (m *mockErrorEvent) GetTimestamp() time.Time             { return m.timestamp }
-func (m *mockErrorEvent) GetError() error                     { return nil }
-func (m *mockErrorEvent) GetMessage() string                  { return m.message }
-func (m *mockErrorEvent) IsReported() bool                    { return m.reported.Load() }
-func (m *mockErrorEvent) MarkReported()                       { m.reported.Store(true) }
+func (m *mockErrorEvent) GetComponent() string       { return m.component }
+func (m *mockErrorEvent) GetCategory() string        { return m.category }
+func (m *mockErrorEvent) GetContext() map[string]any { return m.context }
+func (m *mockErrorEvent) GetTimestamp() time.Time    { return m.timestamp }
+func (m *mockErrorEvent) GetError() error            { return nil }
+func (m *mockErrorEvent) GetMessage() string         { return m.message }
+func (m *mockErrorEvent) IsReported() bool           { return m.reported.Load() }
+func (m *mockErrorEvent) MarkReported()              { m.reported.Store(true) }
 
 // mockConsumer implements EventConsumer for testing
 type mockConsumer struct {
@@ -49,13 +49,13 @@ func (m *mockConsumer) ProcessEvent(event ErrorEvent) error {
 	if m.processDelay > 0 {
 		time.Sleep(m.processDelay)
 	}
-	
+
 	m.mu.Lock()
 	m.events = append(m.events, event)
 	m.mu.Unlock()
-	
+
 	m.processedCount.Add(1)
-	
+
 	if m.errorOnProcess {
 		return fmt.Errorf("mock error")
 	}
@@ -109,10 +109,10 @@ func waitForProcessed(t *testing.T, consumer *mockConsumer, expected int32, time
 // createTestEventBus creates a properly initialized EventBus for testing
 func createTestEventBus(t *testing.T, bufferSize, workers int) *EventBus {
 	t.Helper()
-	
+
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(func() { cancel() })
-	
+
 	eb := &EventBus{
 		errorEventChan:    make(chan ErrorEvent, bufferSize),
 		resourceEventChan: make(chan ResourceEvent, bufferSize),
@@ -127,7 +127,7 @@ func createTestEventBus(t *testing.T, bufferSize, workers int) *EventBus {
 		config:            &Config{Workers: workers, BufferSize: bufferSize},
 	}
 	eb.initialized.Store(true)
-	
+
 	return eb
 }
 
@@ -154,12 +154,12 @@ func resetGlobalStateForTesting() {
 // TestEventBusInitialization tests event bus initialization
 func TestEventBusInitialization(t *testing.T) {
 	// Don't run in parallel due to global state modifications
-	
+
 	// Logger is created per test in helper function
-	
+
 	// Reset global state
 	ResetForTesting()
-	
+
 	t.Run("default initialization", func(t *testing.T) {
 		t.Parallel()
 
@@ -174,7 +174,7 @@ func TestEventBusInitialization(t *testing.T) {
 		assert.Equal(t, 10000, eb.bufferSize)
 		assert.Equal(t, 4, eb.workers)
 	})
-	
+
 	t.Run("disabled configuration", func(t *testing.T) {
 		t.Parallel()
 
@@ -217,7 +217,7 @@ func TestEventBusPublish(t *testing.T) {
 		// Should return false with no consumers
 		assert.False(t, eb.TryPublish(event), "expected publish to fail with no consumers")
 	})
-	
+
 	t.Run("publish with consumer", func(t *testing.T) {
 		// Don't run in parallel - RegisterConsumer modifies global state
 

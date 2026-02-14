@@ -124,7 +124,7 @@ func TestMigration_EndToEnd_HappyPath(t *testing.T) {
 	imageCaches := make([]datastore.ImageCache, 10)
 	for i := range imageCaches {
 		imageCaches[i] = testutil.NewImageCacheBuilder().
-			WithID(uint(i + 1)).                                           //nolint:gosec // G115: test data uses small values
+			WithID(uint(i + 1)).                                             //nolint:gosec // G115: test data uses small values
 			WithScientificName("ImageCache Species " + string(rune('A'+i))). // Unique per entry
 			Build()
 	}
@@ -745,7 +745,7 @@ func TestMigration_RelatedData_SecondaryPredictionsMigrated(t *testing.T) {
 				WithID(resultID).
 				WithNoteID(uint(i+1)). //nolint:gosec // G115: test data uses small values
 				WithSpecies("Secondary Species "+string(rune('A'+j))).
-				WithConfidence(float32(0.5 + float64(j)*0.1)).
+				WithConfidence(float32(0.5+float64(j)*0.1)).
 				Build())
 			resultID++
 		}

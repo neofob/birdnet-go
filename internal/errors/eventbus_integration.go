@@ -28,9 +28,9 @@ func publishToEventBus(ee *EnhancedError) {
 	if publisher == nil {
 		return
 	}
-	
+
 	eventPublisher := publisher.(EventPublisher)
-	
+
 	// Try to publish the event
 	// The event bus will handle type assertion to ErrorEvent interface
 	eventPublisher.TryPublish(ee)
@@ -43,14 +43,14 @@ func reportToTelemetry(ee *EnhancedError) {
 	if !hasActiveReporting.Load() {
 		return
 	}
-	
+
 	// Try to publish to event bus first
 	if globalEventPublisher.Load() != nil {
 		// Event bus is available, use async processing
 		publishToEventBus(ee)
 		return
 	}
-	
+
 	// Fall back to legacy synchronous processing
 	reportToTelemetryLegacy(ee)
 }

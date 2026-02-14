@@ -17,9 +17,9 @@ type Label struct {
 	CreatedAt        time.Time `gorm:"autoCreateTime"`
 
 	// Relationships
-	Model          *AIModel         `gorm:"foreignKey:ModelID"`
-	LabelType      *LabelType       `gorm:"foreignKey:LabelTypeID"`
-	TaxonomicClass *TaxonomicClass  `gorm:"foreignKey:TaxonomicClassID"`
+	Model          *AIModel        `gorm:"foreignKey:ModelID"`
+	LabelType      *LabelType      `gorm:"foreignKey:LabelTypeID"`
+	TaxonomicClass *TaxonomicClass `gorm:"foreignKey:TaxonomicClassID"`
 }
 
 // TableName returns the table name for GORM.

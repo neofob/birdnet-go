@@ -121,7 +121,7 @@ func InitSentry(settings *conf.Settings) error {
 
 	// Event bus integration is deferred until after core services are initialized
 	// to avoid circular dependencies and ensure proper logging
-	
+
 	return nil
 }
 
@@ -735,7 +735,7 @@ func InitMinimalSentryForSupport(systemID, version string) error {
 
 	// Mark as initialized but with limited functionality
 	sentryInitialized = true
-	
+
 	// Create an enabled attachment uploader
 	attachmentUploader = NewAttachmentUploader(true)
 

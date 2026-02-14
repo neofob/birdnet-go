@@ -19,9 +19,9 @@ type HourlyWeather struct {
 	WindDeg       int
 	WindGust      float64
 	Clouds        int
-	WeatherMain   string `gorm:"size:50"`
-	WeatherDesc   string `gorm:"size:200"`
-	WeatherIcon   string `gorm:"size:20"`
+	WeatherMain   string    `gorm:"size:50"`
+	WeatherDesc   string    `gorm:"size:200"`
+	WeatherIcon   string    `gorm:"size:20"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`
 }
 

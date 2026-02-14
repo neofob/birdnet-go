@@ -68,7 +68,7 @@ func (t *MockTransport) FlushWithContext(ctx context.Context) bool {
 		return false
 	default:
 	}
-	
+
 	// If delay is set, wait for it or context cancellation
 	if t.delay > 0 {
 		select {
@@ -78,7 +78,7 @@ func (t *MockTransport) FlushWithContext(ctx context.Context) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -86,7 +86,7 @@ func (t *MockTransport) FlushWithContext(ctx context.Context) bool {
 func (t *MockTransport) GetEvents() []*sentry.Event {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	// Return a copy to avoid race conditions
 	events := make([]*sentry.Event, len(t.events))
 	copy(events, t.events)
@@ -125,7 +125,7 @@ func (t *MockTransport) SetDelay(delay time.Duration) {
 func (t *MockTransport) GetLastEvent() *sentry.Event {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	if len(t.events) == 0 {
 		return nil
 	}
@@ -136,7 +136,7 @@ func (t *MockTransport) GetLastEvent() *sentry.Event {
 func (t *MockTransport) FindEventByMessage(message string) *sentry.Event {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	for _, event := range t.events {
 		if event.Message == message {
 			return event
@@ -149,7 +149,7 @@ func (t *MockTransport) FindEventByMessage(message string) *sentry.Event {
 func (t *MockTransport) GetEventMessages() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	messages := make([]string, 0, len(t.events))
 	for _, event := range t.events {
 		messages = append(messages, event.Message)
@@ -159,19 +159,19 @@ func (t *MockTransport) GetEventMessages() []string {
 
 // EventSummary provides a simplified view of an event for testing
 type EventSummary struct {
-	Message     string                 `json:"message"`
-	Level       string                 `json:"level"`
-	Tags        map[string]string      `json:"tags"`
-	Extra       map[string]any `json:"extra"`
-	Fingerprint []string               `json:"fingerprint"`
-	Timestamp   time.Time              `json:"timestamp"`
+	Message     string            `json:"message"`
+	Level       string            `json:"level"`
+	Tags        map[string]string `json:"tags"`
+	Extra       map[string]any    `json:"extra"`
+	Fingerprint []string          `json:"fingerprint"`
+	Timestamp   time.Time         `json:"timestamp"`
 }
 
 // GetEventSummaries returns simplified summaries of all events
 func (t *MockTransport) GetEventSummaries() []EventSummary {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	summaries := make([]EventSummary, 0, len(t.events))
 	for _, event := range t.events {
 		summary := EventSummary{
@@ -213,7 +213,7 @@ func (t *MockTransport) WaitForEventCount(count int, timeout time.Duration) bool
 func (t *MockTransport) Close() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	// Clear all events on close
 	t.events = nil
 	t.disabled = true

@@ -65,17 +65,17 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 // PreRendererTestOptions configures PreRenderer settings for testing
 type PreRendererTestOptions struct {
-	SoxPath        string
+	SoxPath         string
 	SpectrogramSize string
-	RawEnabled     bool
+	RawEnabled      bool
 }
 
 // DefaultPreRendererOptions returns sensible defaults for testing
 func DefaultPreRendererOptions() *PreRendererTestOptions {
 	return &PreRendererTestOptions{
-		SoxPath:        "/usr/bin/sox",
+		SoxPath:         "/usr/bin/sox",
 		SpectrogramSize: "sm",
-		RawEnabled:     true,
+		RawEnabled:      true,
 	}
 }
 

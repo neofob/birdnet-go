@@ -111,15 +111,15 @@ func TestConvertToS16_AlignmentCalculation(t *testing.T) {
 		expectedOutput int
 		droppedBytes   int
 	}{
-		{"24bit_aligned", 9, malgo.FormatS24, 3, 6, 0},    // 3 samples → 6 bytes
-		{"24bit_plus1", 10, malgo.FormatS24, 3, 6, 1},     // 3 samples + 1 dropped
-		{"24bit_plus2", 11, malgo.FormatS24, 3, 6, 2},     // 3 samples + 2 dropped
-		{"32bit_aligned", 12, malgo.FormatS32, 4, 6, 0},   // 3 samples → 6 bytes
-		{"32bit_plus1", 13, malgo.FormatS32, 4, 6, 1},     // 3 samples + 1 dropped
-		{"32bit_plus2", 14, malgo.FormatS32, 4, 6, 2},     // 3 samples + 2 dropped
-		{"32bit_plus3", 15, malgo.FormatS32, 4, 6, 3},     // 3 samples + 3 dropped
-		{"f32_aligned", 8, malgo.FormatF32, 4, 4, 0},      // 2 samples → 4 bytes
-		{"f32_plus1", 9, malgo.FormatF32, 4, 4, 1},        // 2 samples + 1 dropped
+		{"24bit_aligned", 9, malgo.FormatS24, 3, 6, 0},  // 3 samples → 6 bytes
+		{"24bit_plus1", 10, malgo.FormatS24, 3, 6, 1},   // 3 samples + 1 dropped
+		{"24bit_plus2", 11, malgo.FormatS24, 3, 6, 2},   // 3 samples + 2 dropped
+		{"32bit_aligned", 12, malgo.FormatS32, 4, 6, 0}, // 3 samples → 6 bytes
+		{"32bit_plus1", 13, malgo.FormatS32, 4, 6, 1},   // 3 samples + 1 dropped
+		{"32bit_plus2", 14, malgo.FormatS32, 4, 6, 2},   // 3 samples + 2 dropped
+		{"32bit_plus3", 15, malgo.FormatS32, 4, 6, 3},   // 3 samples + 3 dropped
+		{"f32_aligned", 8, malgo.FormatF32, 4, 4, 0},    // 2 samples → 4 bytes
+		{"f32_plus1", 9, malgo.FormatF32, 4, 4, 1},      // 2 samples + 1 dropped
 	}
 
 	for _, tc := range testCases {

@@ -12,12 +12,12 @@ func BenchmarkPairLabelsAndConfidenceAlloc(b *testing.B) {
 	speciesCount := 6522
 	labels := make([]string, speciesCount)
 	confidence := make([]float32, speciesCount)
-	
+
 	for i := range labels {
 		labels[i] = generateSpeciesName(i)
 		confidence[i] = float32(i%100) / 100.0
 	}
-	
+
 	b.Run("Current", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
@@ -25,7 +25,7 @@ func BenchmarkPairLabelsAndConfidenceAlloc(b *testing.B) {
 			_ = results
 		}
 	})
-	
+
 	b.Run("PreAllocExact", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
@@ -36,7 +36,7 @@ func BenchmarkPairLabelsAndConfidenceAlloc(b *testing.B) {
 			_ = results
 		}
 	})
-	
+
 	b.Run("ReuseSlice", func(b *testing.B) {
 		b.ReportAllocs()
 		results := make([]datastore.Results, len(labels))
@@ -53,14 +53,14 @@ func BenchmarkPairLabelsAndConfidenceAlloc(b *testing.B) {
 func BenchmarkResultsStructSize(b *testing.B) {
 	b.Logf("Size of datastore.Results struct: %d bytes", unsafe.Sizeof(datastore.Results{}))
 	b.Logf("Size of slice header: %d bytes", unsafe.Sizeof([]datastore.Results{}))
-	
+
 	// Calculate expected memory for 6522 results
 	count := 6522
 	structSize := unsafe.Sizeof(datastore.Results{})
 	sliceHeaderSize := unsafe.Sizeof([]datastore.Results{})
 	totalExpected := int(structSize)*count + int(sliceHeaderSize)
 	b.Logf("Expected memory for %d results: %d bytes", count, totalExpected)
-	
+
 	// Measure actual allocation
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -75,12 +75,12 @@ func BenchmarkPairLabelsVariations(b *testing.B) {
 	speciesCount := 6522
 	labels := make([]string, speciesCount)
 	confidence := make([]float32, speciesCount)
-	
+
 	for i := range labels {
 		labels[i] = generateSpeciesName(i)
 		confidence[i] = float32(i%100) / 100.0
 	}
-	
+
 	b.Run("WithPointers", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
@@ -94,7 +94,7 @@ func BenchmarkPairLabelsVariations(b *testing.B) {
 			_ = results
 		}
 	})
-	
+
 	b.Run("IndexAssignment", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {

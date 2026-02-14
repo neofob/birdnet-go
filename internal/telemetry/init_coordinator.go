@@ -80,7 +80,7 @@ func (c *InitCoordinator) WaitForInitialization(timeout time.Duration) error {
 		waitForState InitState
 	}{
 		{ComponentErrorIntegration, true, InitStateCompleted},
-		{ComponentSentry, false, InitStateCompleted}, // Not required
+		{ComponentSentry, false, InitStateCompleted},   // Not required
 		{ComponentEventBus, false, InitStateCompleted}, // May be deferred
 	}
 
@@ -121,7 +121,7 @@ func (c *InitCoordinator) HealthCheck() HealthStatus {
 func (c *InitCoordinator) Shutdown(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	
+
 	return c.manager.Shutdown(ctx)
 }
 

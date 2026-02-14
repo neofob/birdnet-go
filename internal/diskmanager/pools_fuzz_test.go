@@ -14,9 +14,9 @@ func FuzzPooledSliceOperations(f *testing.F) {
 	f.Add(1)
 	f.Add(10)
 	f.Add(100)
-	f.Add(499)  // Just under MaxPoolCapacity
-	f.Add(500)  // At MaxPoolCapacity
-	f.Add(501)  // Just over MaxPoolCapacity (triggers oversized path)
+	f.Add(499) // Just under MaxPoolCapacity
+	f.Add(500) // At MaxPoolCapacity
+	f.Add(501) // Just over MaxPoolCapacity (triggers oversized path)
 	f.Add(1000)
 	f.Add(10000)
 

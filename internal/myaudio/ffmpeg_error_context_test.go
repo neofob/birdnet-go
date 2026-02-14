@@ -170,9 +170,9 @@ func TestFormatForConsole_NoTroubleshooting(t *testing.T) {
 
 func TestErrorContext_ShouldOpenCircuit(t *testing.T) {
 	tests := []struct {
-		errorType      string
-		shouldOpen     bool
-		description    string
+		errorType   string
+		shouldOpen  bool
+		description string
 	}{
 		{"rtsp_404", true, "404 errors should open circuit"},
 		{"auth_failed", true, "Auth failures should open circuit"},
@@ -201,9 +201,9 @@ func TestErrorContext_ShouldOpenCircuit(t *testing.T) {
 
 func TestErrorContext_ShouldRestart(t *testing.T) {
 	tests := []struct {
-		errorType       string
-		shouldRestart   bool
-		description     string
+		errorType     string
+		shouldRestart bool
+		description   string
 	}{
 		{"connection_timeout", true, "Timeout should trigger restart (transient)"},
 		{"invalid_data", true, "Invalid data should trigger restart (transient)"},
@@ -308,10 +308,10 @@ Error opening input files: Server returned 503 Service Unavailable`
 // TestExtractErrorContext_OverlappingPatterns tests error precedence when multiple patterns match
 func TestExtractErrorContext_OverlappingPatterns(t *testing.T) {
 	tests := []struct {
-		name           string
-		stderrOutput   string
-		expectedType   string
-		explanation    string
+		name         string
+		stderrOutput string
+		expectedType string
+		explanation  string
 	}{
 		{
 			name: "Timeout takes precedence over Network unreachable",
@@ -425,12 +425,12 @@ Error opening input files: Connection timed out`
 // TestExtractErrorContext_CredentialSanitization tests that credentials are properly stripped
 func TestExtractErrorContext_CredentialSanitization(t *testing.T) {
 	tests := []struct {
-		name           string
-		stderrOutput   string
-		expectedType   string
-		checkHost      bool
-		hostShouldNot  string // What the host should NOT contain
-		explanation    string
+		name          string
+		stderrOutput  string
+		expectedType  string
+		checkHost     bool
+		hostShouldNot string // What the host should NOT contain
+		explanation   string
 	}{
 		{
 			name: "RTSP 404 with credentials in URL",
@@ -517,11 +517,11 @@ func TestExtractHostWithoutCredentials(t *testing.T) {
 		{"rtsp://admin:pass@camera.local:554/stream", "camera.local"},
 		{"rtsp://user:p@ssw0rd!@192.168.1.100:8554/live", "192.168.1.100"},
 		{"rtsps://admin:secret@secure.cam.com/feed", "secure.cam.com"},
-		{"admin:pass@camera.local:554", "camera.local"},           // Without scheme
-		{"camera.local:554", "camera.local"},                      // Just host:port
-		{"camera.local", "camera.local"},                          // Just host
-		{"user:pass@host.local", "host.local"},                    // userinfo without port
-		{"rtsp://[2001:db8::1]:554/stream", "2001:db8::1"},       // IPv6
+		{"admin:pass@camera.local:554", "camera.local"},              // Without scheme
+		{"camera.local:554", "camera.local"},                         // Just host:port
+		{"camera.local", "camera.local"},                             // Just host
+		{"user:pass@host.local", "host.local"},                       // userinfo without port
+		{"rtsp://[2001:db8::1]:554/stream", "2001:db8::1"},           // IPv6
 		{"rtsp://user:pass@[2001:db8::1]:554/stream", "2001:db8::1"}, // IPv6 with credentials
 	}
 
@@ -543,10 +543,10 @@ func TestExtractHostWithoutCredentials(t *testing.T) {
 // TestExtractHostAndPortFromConnectionURL tests the new URL-based extraction
 func TestExtractHostAndPortFromConnectionURL(t *testing.T) {
 	tests := []struct {
-		name         string
+		name          string
 		connectionURL string
-		expectedHost string
-		expectedPort int
+		expectedHost  string
+		expectedPort  int
 		shouldSucceed bool
 	}{
 		{

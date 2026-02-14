@@ -148,7 +148,7 @@ func NewCSRF(config *CSRFConfig) echo.MiddlewareFunc {
 		// Note: CookieSecure is false because Echo's CSRF middleware uses static config.
 		// For dynamic Secure flag handling (HTTPS detection), EnsureCSRFToken uses
 		// IsSecureRequest() when generating tokens for endpoints like /api/v2/app/config.
-		CookieSecure: false, // Static false for HTTP deployments; dynamic handling elsewhere
+		CookieSecure:   false, // Static false for HTTP deployments; dynamic handling elsewhere
 		CookieSameSite: http.SameSiteLaxMode,
 		CookieMaxAge:   cookieMaxAge,
 		ErrorHandler: func(err error, c echo.Context) error {

@@ -60,7 +60,7 @@ const (
 	DefaultImageproviderLogPath = "logs/imageprovider.log"
 	DefaultSpectrogramLogPath   = "logs/spectrogram.log"
 	DefaultActionsLogPath       = "logs/actions.log"
-	DefaultMaxSize              = 100 // MB before rotation
+	DefaultMaxSize              = 100   // MB before rotation
 	DefaultMaxAge               = 30    // days to keep rotated files
 	DefaultMaxRotatedFiles      = 10    // max number of rotated files
 	DefaultCompressLogs         = false // compression disabled by default

@@ -1288,7 +1288,7 @@ func createComprehensiveMockConfig() map[string]any {
 
 			// Log Deduplication
 			"logDeduplication": map[string]any{
-				"enabled":                   true,
+				"enabled":                    true,
 				"healthCheckIntervalSeconds": 300,
 			},
 
@@ -1592,17 +1592,17 @@ func createComprehensiveMockConfig() map[string]any {
 				},
 			},
 			"push": map[string]any{
-				"enabled":                  true,
-				"defaultTimeout":           "30s",
-				"maxRetries":               3,
-				"retryDelay":               "5s",
-				"minConfidenceThreshold":   0.8,
-				"speciesCooldownMinutes":   30,
+				"enabled":                true,
+				"defaultTimeout":         "30s",
+				"maxRetries":             3,
+				"retryDelay":             "5s",
+				"minConfidenceThreshold": 0.8,
+				"speciesCooldownMinutes": 30,
 				"circuitBreaker": map[string]any{
-					"enabled":              true,
-					"maxFailures":          5,
-					"timeout":              "30s",
-					"halfOpenMaxRequests":  2,
+					"enabled":             true,
+					"maxFailures":         5,
+					"timeout":             "30s",
+					"halfOpenMaxRequests": 2,
 				},
 				"healthCheck": map[string]any{
 					"enabled":  true,
@@ -1692,12 +1692,12 @@ func createComprehensiveMockConfig() map[string]any {
 		// Section 9: Default value preservation tests
 		// These should NOT be redacted because they are empty/zero/nil
 		"defaultValueTests": map[string]any{
-			"password":        "",    // empty string - preserve
-			"apiKey":          "",    // empty string - preserve
-			"latitude":        0.0,   // zero float - preserve
-			"longitude":       0.0,   // zero float - preserve
-			"token":           nil,   // nil - preserve
-			"port":            0,     // zero int - preserve
+			"password":        "",  // empty string - preserve
+			"apiKey":          "",  // empty string - preserve
+			"latitude":        0.0, // zero float - preserve
+			"longitude":       0.0, // zero float - preserve
+			"token":           nil, // nil - preserve
+			"port":            0,   // zero int - preserve
 			"nonSensitiveKey": "visible_value",
 		},
 	}

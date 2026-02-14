@@ -109,11 +109,11 @@ type Config struct {
 // When enabled, the broker will publish the WillPayload to WillTopic if the client
 // disconnects unexpectedly, allowing Home Assistant to detect offline status.
 type LWTConfig struct {
-	Enabled     bool   // true to enable LWT
-	Topic       string // topic for LWT messages (e.g., "birdnet/status")
-	Payload     string // payload to send on unexpected disconnect (e.g., "offline")
-	QoS         byte   // QoS level for LWT message (0, 1, or 2)
-	Retain      bool   // true to retain LWT message
+	Enabled bool   // true to enable LWT
+	Topic   string // topic for LWT messages (e.g., "birdnet/status")
+	Payload string // payload to send on unexpected disconnect (e.g., "offline")
+	QoS     byte   // QoS level for LWT message (0, 1, or 2)
+	Retain  bool   // true to retain LWT message
 }
 
 // TLSConfig holds TLS/SSL configuration for secure MQTT connections

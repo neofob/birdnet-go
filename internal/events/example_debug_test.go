@@ -3,7 +3,7 @@ package events_test
 import (
 	"fmt"
 	"time"
-	
+
 	"github.com/tphakala/birdnet-go/internal/events"
 )
 
@@ -23,14 +23,14 @@ func ExampleConfig_debug() {
 			CleanupInterval: 1 * time.Minute,
 		},
 	}
-	
+
 	// Initialize event bus
 	eb, err := events.Initialize(config)
 	if err != nil {
 		fmt.Printf("Failed to initialize: %v\n", err)
 		return
 	}
-	
+
 	// Event bus will now log:
 	// - Event publishing details with buffer metrics
 	// - Worker processing times
@@ -38,9 +38,9 @@ func ExampleConfig_debug() {
 	// - Slow consumer warnings (>100ms)
 	// - Deduplication checks
 	// - Enhanced performance metrics with rates
-	
+
 	// Shutdown when done
 	_ = eb.Shutdown(5 * time.Second)
-	
+
 	// Output:
 }

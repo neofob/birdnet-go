@@ -728,11 +728,11 @@ func (p *Processor) createDetectionResult(
 	audioSource := p.resolveAudioSource(source)
 
 	return detection.Result{
-		Timestamp:      detectionTime,
-		SourceNode:     p.Settings.Main.Name,
-		AudioSource:    audioSource,
-		BeginTime:      beginTime,
-		EndTime:        endTime,
+		Timestamp:   detectionTime,
+		SourceNode:  p.Settings.Main.Name,
+		AudioSource: audioSource,
+		BeginTime:   beginTime,
+		EndTime:     endTime,
 		Species: detection.Species{
 			ScientificName: scientificName,
 			CommonName:     commonName,

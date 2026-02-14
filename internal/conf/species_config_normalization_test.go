@@ -91,8 +91,8 @@ func TestNormalizeSpeciesConfigKeys_DuplicateAfterNormalization(t *testing.T) {
 	// This is deterministic (not random map iteration) due to the two-pass algorithm.
 	// In practice users shouldn't have duplicates, but this documents the behavior.
 	input := map[string]SpeciesConfig{
-		"American Robin": {Threshold: 0.8},  // mixed-case: should win
-		"american robin": {Threshold: 0.9},  // lowercase: should be overwritten
+		"American Robin": {Threshold: 0.8}, // mixed-case: should win
+		"american robin": {Threshold: 0.9}, // lowercase: should be overwritten
 	}
 
 	result := NormalizeSpeciesConfigKeys(input)

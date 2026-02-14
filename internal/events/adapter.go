@@ -20,17 +20,17 @@ func (a *EventPublisherAdapter) TryPublish(event any) bool {
 	if !HasActiveConsumers() {
 		return false
 	}
-	
+
 	if a.eventBus == nil {
 		return false
 	}
-	
+
 	// Type assert to ErrorEvent
 	errorEvent, ok := event.(ErrorEvent)
 	if !ok {
 		return false
 	}
-	
+
 	return a.eventBus.TryPublish(errorEvent)
 }
 
@@ -41,12 +41,12 @@ func InitializeErrorsIntegration(setPublisher func(any)) error {
 	if eb == nil {
 		return nil // Event bus not initialized, skip integration
 	}
-	
+
 	// Create adapter
 	adapter := NewEventPublisherAdapter(eb)
-	
+
 	// Set the publisher in the errors package
 	setPublisher(adapter)
-	
+
 	return nil
 }

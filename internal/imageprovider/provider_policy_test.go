@@ -145,7 +145,7 @@ func TestBatchLoadFromDBFallbackPolicy(t *testing.T) {
 				require.NoError(t, err, "Failed to save test image to cache")
 			},
 			expectedProviders:  map[string]bool{"avicommons": true}, // Only avicommons should be checked
-			expectedImageCount: 0, // No images found because avicommons has none
+			expectedImageCount: 0,                                   // No images found because avicommons has none
 		},
 		{
 			name:           "fallback_when_policy_all",
@@ -247,7 +247,7 @@ func (m *mockStoreWithTracking) GetImageCacheBatch(providerName string, scientif
 	m.mu.Lock()
 	m.queriedProviders[providerName] = true
 	m.mu.Unlock()
-	
+
 	return m.mockStore.GetImageCacheBatch(providerName, scientificNames)
 }
 

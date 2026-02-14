@@ -28,11 +28,11 @@ const (
 	defaultIdleConnTimeout     = 90 * time.Second
 
 	// Default timeouts for various HTTP operations
-	defaultTLSHandshakeTimeout    = 10 * time.Second
-	defaultResponseHeaderTimeout  = 10 * time.Second
-	defaultExpectContinueTimeout  = 1 * time.Second
-	defaultDialTimeout            = 30 * time.Second
-	defaultDialKeepAlive          = 30 * time.Second
+	defaultTLSHandshakeTimeout   = 10 * time.Second
+	defaultResponseHeaderTimeout = 10 * time.Second
+	defaultExpectContinueTimeout = 1 * time.Second
+	defaultDialTimeout           = 30 * time.Second
+	defaultDialKeepAlive         = 30 * time.Second
 
 	// Default User-Agent
 	defaultUserAgent = "BirdNET-Go"
@@ -96,16 +96,16 @@ type Config struct {
 // DefaultConfig returns a Config with sensible production defaults.
 func DefaultConfig() Config {
 	return Config{
-		DefaultTimeout:          DefaultTimeout,
-		UserAgent:              defaultUserAgent,
-		MaxIdleConns:           defaultMaxIdleConns,
-		MaxIdleConnsPerHost:    defaultMaxIdleConnsPerHost,
-		IdleConnTimeout:        defaultIdleConnTimeout,
-		TLSHandshakeTimeout:    defaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout:  defaultResponseHeaderTimeout,
-		ExpectContinueTimeout:  defaultExpectContinueTimeout,
-		DisableKeepAlives:      false,
-		DisableCompression:     false,
+		DefaultTimeout:        DefaultTimeout,
+		UserAgent:             defaultUserAgent,
+		MaxIdleConns:          defaultMaxIdleConns,
+		MaxIdleConnsPerHost:   defaultMaxIdleConnsPerHost,
+		IdleConnTimeout:       defaultIdleConnTimeout,
+		TLSHandshakeTimeout:   defaultTLSHandshakeTimeout,
+		ResponseHeaderTimeout: defaultResponseHeaderTimeout,
+		ExpectContinueTimeout: defaultExpectContinueTimeout,
+		DisableKeepAlives:     false,
+		DisableCompression:    false,
 	}
 }
 

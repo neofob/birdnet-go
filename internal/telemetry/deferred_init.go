@@ -12,7 +12,7 @@ import (
 var (
 	// deferredInitMutex protects deferred initialization
 	deferredInitMutex sync.Mutex
-	
+
 	// telemetryInitialized tracks if telemetry event bus integration is done
 	telemetryInitialized atomic.Bool
 )
@@ -22,12 +22,12 @@ var (
 func InitializeTelemetryEventBus() error {
 	deferredInitMutex.Lock()
 	defer deferredInitMutex.Unlock()
-	
+
 	// Check if already initialized
 	if telemetryInitialized.Load() {
 		return nil
 	}
-	
+
 	initLog := GetLogger().With(logger.String("component", "telemetry-init"))
 
 	// Step 1: Initialize event bus if not already done
@@ -57,7 +57,7 @@ func InitializeTelemetryEventBus() error {
 
 	telemetryInitialized.Store(true)
 	initLog.Info("telemetry event bus integration completed successfully")
-	
+
 	return nil
 }
 

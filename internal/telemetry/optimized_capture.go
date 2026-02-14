@@ -17,7 +17,7 @@ func UpdateTelemetryEnabled() {
 		telemetryEnabled.Store(true)
 		return
 	}
-	
+
 	settings := conf.GetSettings()
 	if settings != nil && settings.Sentry.Enabled {
 		telemetryEnabled.Store(true)
@@ -57,7 +57,7 @@ func FastCaptureError(err error, component string) {
 	if !IsTelemetryEnabled() {
 		return
 	}
-	
+
 	// Slow path: actually capture
 	CaptureError(err, component)
 }
@@ -68,7 +68,7 @@ func FastCaptureMessage(message string, level sentry.Level, component string) {
 	if !IsTelemetryEnabled() {
 		return
 	}
-	
+
 	// Slow path: actually capture
 	CaptureMessage(message, level, component)
 }

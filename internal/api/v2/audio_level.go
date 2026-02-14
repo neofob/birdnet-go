@@ -78,7 +78,7 @@ const maxStreamAnonymMapSize = 100
 // TODO: Consider moving to Controller struct for better encapsulation
 var audioLevelMgr = &audioLevelManager{
 	streamAnonymMap: make(map[string]string),
-	subscribers:   make(map[chan myaudio.AudioLevelData]struct{}),
+	subscribers:     make(map[chan myaudio.AudioLevelData]struct{}),
 }
 
 // SetAudioLevelChan sets the audio level channel for the controller and starts

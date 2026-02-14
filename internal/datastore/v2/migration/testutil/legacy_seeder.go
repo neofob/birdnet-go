@@ -660,11 +660,11 @@ type SeedData struct {
 func GenerateRelatedData(notes []datastore.Note, config *RelatedDataConfig) *SeedData {
 	if config == nil {
 		config = &RelatedDataConfig{
-			ResultsPerNote:       2,
-			ReviewedNoteRatio:    0.5,
-			CommentedNoteRatio:   0.3,
-			CommentsPerNote:      2,
-			LockedNoteRatio:      0.1,
+			ResultsPerNote:     2,
+			ReviewedNoteRatio:  0.5,
+			CommentedNoteRatio: 0.3,
+			CommentsPerNote:    2,
+			LockedNoteRatio:    0.1,
 		}
 	}
 
@@ -739,9 +739,9 @@ func GenerateRelatedData(notes []datastore.Note, config *RelatedDataConfig) *See
 
 // RelatedDataConfig configures how related data is generated.
 type RelatedDataConfig struct {
-	ResultsPerNote       int     // Number of secondary results per note
-	ReviewedNoteRatio    float64 // Fraction of notes with reviews (0-1)
-	CommentedNoteRatio   float64 // Fraction of notes with comments (0-1)
-	CommentsPerNote      int     // Number of comments per commented note
-	LockedNoteRatio      float64 // Fraction of notes that are locked (0-1)
+	ResultsPerNote     int     // Number of secondary results per note
+	ReviewedNoteRatio  float64 // Fraction of notes with reviews (0-1)
+	CommentedNoteRatio float64 // Fraction of notes with comments (0-1)
+	CommentsPerNote    int     // Number of comments per commented note
+	LockedNoteRatio    float64 // Fraction of notes that are locked (0-1)
 }

@@ -26,15 +26,15 @@ const (
 	DefaultRateLimitMaxEvents = 100
 
 	// Event bus configuration
-	eventBusBufferSize       = 10000
-	eventBusWorkers          = 4
-	deduplicationTTL         = 5 * time.Minute
-	deduplicationMaxEntries  = 1000
-	deduplicationCleanupInt  = 1 * time.Minute
+	eventBusBufferSize      = 10000
+	eventBusWorkers         = 4
+	deduplicationTTL        = 5 * time.Minute
+	deduplicationMaxEntries = 1000
+	deduplicationCleanupInt = 1 * time.Minute
 
 	// Shutdown timeouts
-	eventBusShutdownTimeout   = 5 * time.Second
-	telemetryShutdownTimeout  = 2 * time.Second
+	eventBusShutdownTimeout  = 5 * time.Second
+	telemetryShutdownTimeout = 2 * time.Second
 )
 
 // SystemInitManager manages initialization of all async subsystems
@@ -43,13 +43,13 @@ type SystemInitManager struct {
 	notificationInitOnce   sync.Once
 	eventBusInitOnce       sync.Once
 	notificationWorkerOnce sync.Once
-	
+
 	notificationErr error
 	eventBusErr     error
 	workerErr       error
-	
-	mu       sync.RWMutex
-	sysLog   logger.Logger
+
+	mu     sync.RWMutex
+	sysLog logger.Logger
 }
 
 var (
@@ -65,7 +65,7 @@ func GetSystemInitManager() *SystemInitManager {
 		if globalInitCoordinator != nil {
 			coordinator = globalInitCoordinator
 		}
-		
+
 		systemInitManager = &SystemInitManager{
 			telemetryCoordinator: coordinator,
 			sysLog:               GetLogger().With(logger.String("component", "system-init")),
@@ -190,14 +190,14 @@ func (m *SystemInitManager) initializeNotification() error {
 func (m *SystemInitManager) initializeEventBus() error {
 	m.eventBusInitOnce.Do(func() {
 		m.sysLog.Debug("initializing event bus")
-		
+
 		// Get settings for debug flag
 		settings := conf.GetSettings()
 		debug := false
 		if settings != nil {
 			debug = settings.Debug
 		}
-		
+
 		// Initialize event bus for async error processing
 		eventBusConfig := &events.Config{
 			BufferSize: eventBusBufferSize,
@@ -212,7 +212,7 @@ func (m *SystemInitManager) initializeEventBus() error {
 				CleanupInterval: deduplicationCleanupInt,
 			},
 		}
-		
+
 		eventBus, err := events.Initialize(eventBusConfig)
 		if err != nil {
 			// Handle disabled event bus as non-error
@@ -223,21 +223,21 @@ func (m *SystemInitManager) initializeEventBus() error {
 			m.eventBusErr = fmt.Errorf("event bus initialization failed: %w", err)
 			return
 		}
-		
+
 		// Verify event bus is available
 		if eventBus == nil {
 			m.eventBusErr = fmt.Errorf("event bus is nil after initialization")
 			return
 		}
-		
+
 		adapter := events.NewEventPublisherAdapter(eventBus)
 		apperrors.SetEventPublisher(adapter)
-		
+
 		m.sysLog.Info("event bus initialized successfully",
 			logger.Int("buffer_size", eventBusConfig.BufferSize),
 			logger.Int("workers", eventBusConfig.Workers))
 	})
-	
+
 	return m.eventBusErr
 }
 
@@ -245,27 +245,27 @@ func (m *SystemInitManager) initializeEventBus() error {
 func (m *SystemInitManager) initializeNotificationWorker() error {
 	m.notificationWorkerOnce.Do(func() {
 		m.sysLog.Debug("initializing notification worker")
-		
+
 		// Check prerequisites
 		if !notification.IsInitialized() {
 			m.workerErr = fmt.Errorf("notification service not initialized")
 			return
 		}
-		
+
 		if !events.IsInitialized() {
 			m.workerErr = fmt.Errorf("event bus not initialized")
 			return
 		}
-		
+
 		// Initialize notification worker
 		if err := notification.InitializeEventBusIntegration(); err != nil {
 			m.workerErr = fmt.Errorf("notification worker initialization failed: %w", err)
 			return
 		}
-		
+
 		m.sysLog.Info("notification worker initialized successfully")
 	})
-	
+
 	return m.workerErr
 }
 
@@ -283,7 +283,7 @@ func (m *SystemInitManager) HealthCheck() SystemHealthStatus {
 	defer m.mu.RUnlock()
 
 	status := SystemHealthStatus{
-		Timestamp: time.Now(),
+		Timestamp:  time.Now(),
 		Subsystems: make(map[string]SubsystemHealth),
 	}
 
@@ -291,7 +291,7 @@ func (m *SystemInitManager) HealthCheck() SystemHealthStatus {
 	if m.telemetryCoordinator != nil {
 		telemetryHealth := m.telemetryCoordinator.HealthCheck()
 		status.Subsystems["telemetry"] = SubsystemHealth{
-			Healthy: telemetryHealth.Healthy,
+			Healthy:    telemetryHealth.Healthy,
 			Components: telemetryHealth.Components,
 		}
 	}
@@ -307,7 +307,7 @@ func (m *SystemInitManager) HealthCheck() SystemHealthStatus {
 			},
 		},
 	}
-	
+
 	// Add notification worker health if available
 	if worker := notification.GetNotificationWorker(); worker != nil {
 		stats := worker.GetStats()
@@ -482,7 +482,7 @@ func InitializeAsyncSystems() error {
 func ShutdownSystem(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	
+
 	manager := GetSystemInitManager()
 	return manager.Shutdown(ctx)
 }

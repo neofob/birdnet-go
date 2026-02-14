@@ -27,10 +27,10 @@ const (
 	hivemqTLSBroker = "ssl://broker.hivemq.com:8883"
 
 	// Test timeouts
-	tlsTestTimeout              = 30 * time.Second
-	tlsResultCollectionTimeout  = 20 * time.Second
-	tlsConfigValidationTimeout  = 10 * time.Second
-	benchmarkConnectionTimeout  = 10 * time.Second
+	tlsTestTimeout             = 30 * time.Second
+	tlsResultCollectionTimeout = 20 * time.Second
+	tlsConfigValidationTimeout = 10 * time.Second
+	benchmarkConnectionTimeout = 10 * time.Second
 
 	// Environment variable values
 	envTrue = "true"

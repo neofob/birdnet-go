@@ -21,9 +21,9 @@ func FuzzNewSunCalc(f *testing.F) {
 	f.Add(89.999, 179.999)   // Near extremes
 	f.Add(-89.999, -179.999) // Near extremes
 	// Invalid coordinates
-	f.Add(91.0, 0.0)         // Invalid latitude
-	f.Add(0.0, 181.0)        // Invalid longitude
-	f.Add(-91.0, -181.0)     // Both invalid
+	f.Add(91.0, 0.0)     // Invalid latitude
+	f.Add(0.0, 181.0)    // Invalid longitude
+	f.Add(-91.0, -181.0) // Both invalid
 
 	f.Fuzz(func(t *testing.T, lat, lon float64) {
 		// Skip NaN and Inf - these cause undefined behavior
@@ -63,13 +63,13 @@ func FuzzNewSunCalc(f *testing.F) {
 // FuzzGetSunEventTimes tests GetSunEventTimes with arbitrary dates.
 func FuzzGetSunEventTimes(f *testing.F) {
 	// Seed with various dates
-	f.Add(int64(0))                    // Unix epoch
-	f.Add(int64(1719014400))           // 2024-06-21 (midsummer)
-	f.Add(int64(1703203200))           // 2023-12-21 (winter solstice)
-	f.Add(int64(-62135596800))         // Year 1
-	f.Add(int64(253402300799))         // Year 9999
-	f.Add(int64(1000000000))           // 2001-09-09
-	f.Add(int64(-1000000000))          // 1938-04-24
+	f.Add(int64(0))            // Unix epoch
+	f.Add(int64(1719014400))   // 2024-06-21 (midsummer)
+	f.Add(int64(1703203200))   // 2023-12-21 (winter solstice)
+	f.Add(int64(-62135596800)) // Year 1
+	f.Add(int64(253402300799)) // Year 9999
+	f.Add(int64(1000000000))   // 2001-09-09
+	f.Add(int64(-1000000000))  // 1938-04-24
 
 	f.Fuzz(func(t *testing.T, unixSec int64) {
 		// Skip dates that would overflow time.Time
@@ -95,11 +95,11 @@ func FuzzGetSunEventTimes(f *testing.F) {
 // FuzzSunCalcCoordinatesAndDate tests the combination of coordinates and dates.
 func FuzzSunCalcCoordinatesAndDate(f *testing.F) {
 	// Seed with combinations
-	f.Add(60.1699, 24.9384, int64(1719014400))  // Helsinki, midsummer
-	f.Add(71.0, 25.0, int64(1719014400))        // Arctic, midsummer (midnight sun)
-	f.Add(-71.0, 0.0, int64(1719014400))        // Antarctic, midsummer (polar night)
-	f.Add(0.0, 0.0, int64(1719014400))          // Equator
-	f.Add(90.0, 0.0, int64(1719014400))         // North Pole
+	f.Add(60.1699, 24.9384, int64(1719014400)) // Helsinki, midsummer
+	f.Add(71.0, 25.0, int64(1719014400))       // Arctic, midsummer (midnight sun)
+	f.Add(-71.0, 0.0, int64(1719014400))       // Antarctic, midsummer (polar night)
+	f.Add(0.0, 0.0, int64(1719014400))         // Equator
+	f.Add(90.0, 0.0, int64(1719014400))        // North Pole
 
 	f.Fuzz(func(t *testing.T, lat, lon float64, unixSec int64) {
 		// Skip dates that would overflow

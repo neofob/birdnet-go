@@ -20,8 +20,8 @@ type MQTTEventDTO struct {
 	// Legacy fields - DO NOT CHANGE (breaks existing HA automations)
 	// These use PascalCase via Go's default JSON marshaling
 	// ===========================================================================
-	Date           string  `json:"Date"`           // "2024-01-15"
-	Time           string  `json:"Time"`           // "14:30:00"
+	Date           string  `json:"Date"` // "2024-01-15"
+	Time           string  `json:"Time"` // "14:30:00"
 	CommonName     string  `json:"CommonName"`
 	ScientificName string  `json:"ScientificName"`
 	Confidence     float64 `json:"Confidence"`
@@ -33,9 +33,9 @@ type MQTTEventDTO struct {
 	// ===========================================================================
 	// Existing fields with specific casing (part of API contract)
 	// ===========================================================================
-	DetectionID uint    `json:"detectionId"`            // camelCase - database ID for URL construction
-	SourceID    string  `json:"sourceId"`               // camelCase - audio source ID for HA filtering
-	Occurrence  float64 `json:"occurrence,omitempty"`   // lowercase with omitempty
+	DetectionID uint    `json:"detectionId"`          // camelCase - database ID for URL construction
+	SourceID    string  `json:"sourceId"`             // camelCase - audio source ID for HA filtering
+	Occurrence  float64 `json:"occurrence,omitempty"` // lowercase with omitempty
 
 	// ===========================================================================
 	// BirdImage (PascalCase for backward compatibility - DO NOT CHANGE)

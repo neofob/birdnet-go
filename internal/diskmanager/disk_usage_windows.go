@@ -72,7 +72,7 @@ func GetDetailedDiskUsage(path string) (DiskSpaceInfo, error) {
 			m.RecordDiskCheckDuration(time.Since(startTime).Seconds())
 		}
 	}()
-	
+
 	h := syscall.MustLoadDLL("kernel32.dll")
 	c := h.MustFindProc("GetDiskFreeSpaceExW")
 

@@ -14,7 +14,7 @@ var benchResult []float32
 func BenchmarkConvert16BitToFloat32_Original(b *testing.B) {
 	// Create test data - 3 seconds of 16-bit audio at 48kHz
 	testData := make([]byte, conf.BufferSize)
-	
+
 	// Fill with realistic audio pattern
 	for i := 0; i < len(testData); i += 2 {
 		// Simulate audio wave
@@ -22,19 +22,19 @@ func BenchmarkConvert16BitToFloat32_Original(b *testing.B) {
 		testData[i] = byte(value & 0xFF)
 		testData[i+1] = byte(value >> 8)
 	}
-	
+
 	// Temporarily disable pool for baseline test
 	originalPool := float32Pool
 	float32Pool = nil
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for b.Loop() {
 		result := convert16BitToFloat32(testData)
 		benchResult = result // Prevent compiler optimization
 	}
-	
+
 	// Restore pool
 	float32Pool = originalPool
 }
@@ -48,10 +48,10 @@ func BenchmarkConvert16BitToFloat32_WithPool(b *testing.B) {
 			b.Fatalf("Failed to initialize float32 pool: %v", err)
 		}
 	}
-	
+
 	// Create test data - 3 seconds of 16-bit audio at 48kHz
 	testData := make([]byte, conf.BufferSize)
-	
+
 	// Fill with realistic audio pattern
 	for i := 0; i < len(testData); i += 2 {
 		// Simulate audio wave
@@ -59,17 +59,17 @@ func BenchmarkConvert16BitToFloat32_WithPool(b *testing.B) {
 		testData[i] = byte(value & 0xFF)
 		testData[i+1] = byte(value >> 8)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for b.Loop() {
 		result := convert16BitToFloat32(testData)
 		// Return to pool to simulate real usage
 		ReturnFloat32Buffer(result)
 		benchResult = result // Prevent compiler optimization
 	}
-	
+
 	// Log pool statistics
 	if float32Pool != nil {
 		stats := float32Pool.GetStats()
@@ -86,27 +86,27 @@ func BenchmarkConvert16BitToFloat32_Various_Sizes(b *testing.B) {
 		name string
 		size int
 	}{
-		{"1KB", 512},          // 512 samples = 1KB
-		{"10KB", 5120},        // 5120 samples = 10KB
-		{"100KB", 51200},      // 51200 samples = 100KB
-		{"Standard", 144000},  // Standard buffer size (288KB)
-		{"1MB", 524288},       // 524288 samples = 1MB
+		{"1KB", 512},         // 512 samples = 1KB
+		{"10KB", 5120},       // 5120 samples = 10KB
+		{"100KB", 51200},     // 51200 samples = 100KB
+		{"Standard", 144000}, // Standard buffer size (288KB)
+		{"1MB", 524288},      // 524288 samples = 1MB
 	}
-	
+
 	for _, sz := range sizes {
 		b.Run(sz.name, func(b *testing.B) {
 			testData := make([]byte, sz.size*2) // 2 bytes per sample
-			
+
 			// Fill with test pattern
 			for i := 0; i < len(testData); i += 2 {
 				value := int16(i % 32768) //nolint:gosec // G115: i%32768 is always in int16 range
 				testData[i] = byte(value & 0xFF)
 				testData[i+1] = byte(value >> 8)
 			}
-			
+
 			b.ResetTimer()
 			b.ReportAllocs()
-			
+
 			for b.Loop() {
 				result := convert16BitToFloat32(testData)
 				benchResult = result
@@ -124,7 +124,7 @@ func BenchmarkConvert16BitToFloat32_Concurrent(b *testing.B) {
 			b.Fatalf("Failed to initialize float32 pool: %v", err)
 		}
 	}
-	
+
 	// Create test data
 	testData := make([]byte, conf.BufferSize)
 	for i := 0; i < len(testData); i += 2 {
@@ -132,10 +132,10 @@ func BenchmarkConvert16BitToFloat32_Concurrent(b *testing.B) {
 		testData[i] = byte(value & 0xFF)
 		testData[i+1] = byte(value >> 8)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			result := convert16BitToFloat32(testData)
@@ -143,7 +143,7 @@ func BenchmarkConvert16BitToFloat32_Concurrent(b *testing.B) {
 			benchResult = result
 		}
 	})
-	
+
 	// Log pool statistics
 	if float32Pool != nil {
 		stats := float32Pool.GetStats()
@@ -165,7 +165,7 @@ func BenchmarkProcessData_Integration(b *testing.B) {
 func benchmarkOriginalConversion(b *testing.B) {
 	// Create test data - 3 seconds of 16-bit audio at 48kHz
 	testData := make([]byte, conf.BufferSize)
-	
+
 	// Fill with realistic audio pattern
 	for i := 0; i < len(testData); i += 2 {
 		// Simulate audio wave
@@ -173,19 +173,19 @@ func benchmarkOriginalConversion(b *testing.B) {
 		testData[i] = byte(value & 0xFF)
 		testData[i+1] = byte(value >> 8)
 	}
-	
+
 	// Temporarily disable pool for baseline test
 	originalPool := float32Pool
 	float32Pool = nil
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for b.Loop() {
 		result := convert16BitToFloat32(testData)
 		benchResult = result // Prevent compiler optimization
 	}
-	
+
 	// Restore pool
 	float32Pool = originalPool
 }
@@ -198,10 +198,10 @@ func benchmarkPooledConversion(b *testing.B) {
 			b.Fatalf("Failed to initialize float32 pool: %v", err)
 		}
 	}
-	
+
 	// Create test data - 3 seconds of 16-bit audio at 48kHz
 	testData := make([]byte, conf.BufferSize)
-	
+
 	// Fill with realistic audio pattern
 	for i := 0; i < len(testData); i += 2 {
 		// Simulate audio wave
@@ -209,17 +209,17 @@ func benchmarkPooledConversion(b *testing.B) {
 		testData[i] = byte(value & 0xFF)
 		testData[i+1] = byte(value >> 8)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for b.Loop() {
 		result := convert16BitToFloat32(testData)
 		// Return to pool to simulate real usage
 		ReturnFloat32Buffer(result)
 		benchResult = result // Prevent compiler optimization
 	}
-	
+
 	// Log pool statistics
 	if float32Pool != nil {
 		stats := float32Pool.GetStats()

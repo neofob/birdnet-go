@@ -16,7 +16,7 @@ func BenchmarkOptimizedTelemetryDisabled(b *testing.B) {
 		err := fmt.Errorf("benchmark error")
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			FastCaptureError(err, "benchmark")
 		}
@@ -25,7 +25,7 @@ func BenchmarkOptimizedTelemetryDisabled(b *testing.B) {
 	b.Run("FastCaptureMessage", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			FastCaptureMessage("benchmark message", sentry.LevelInfo, "benchmark")
 		}
@@ -34,7 +34,7 @@ func BenchmarkOptimizedTelemetryDisabled(b *testing.B) {
 	b.Run("AtomicCheck", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			_ = IsTelemetryEnabled()
 		}
@@ -45,11 +45,11 @@ func BenchmarkOptimizedTelemetryDisabled(b *testing.B) {
 func BenchmarkInlinedCheck(b *testing.B) {
 	// Ensure telemetry is disabled
 	telemetryEnabled.Store(false)
-	
+
 	b.Run("DirectAtomicLoad", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			if telemetryEnabled.Load() {
 				// This branch should never execute
@@ -62,7 +62,7 @@ func BenchmarkInlinedCheck(b *testing.B) {
 		err := fmt.Errorf("benchmark error")
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			// This is what production code should do
 			if IsTelemetryEnabled() {
@@ -77,7 +77,7 @@ func BenchmarkInlinedCheck(b *testing.B) {
 //nolint:gocognit // benchmark requires multiple test scenarios for comprehensive coverage
 func BenchmarkMemoryPressure(b *testing.B) {
 	telemetryEnabled.Store(false)
-	
+
 	b.Run("LargeErrorMessage", func(b *testing.B) {
 		// Create a large error message
 		largeMsg := make([]byte, 1024)
@@ -85,10 +85,10 @@ func BenchmarkMemoryPressure(b *testing.B) {
 			largeMsg[i] = 'x'
 		}
 		err := fmt.Errorf("%s", largeMsg)
-		
+
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			if IsTelemetryEnabled() {
 				CaptureError(err, "benchmark")
@@ -101,10 +101,10 @@ func BenchmarkMemoryPressure(b *testing.B) {
 		for i := range errors {
 			errors[i] = fmt.Errorf("error %d", i)
 		}
-		
+
 		b.ReportAllocs()
 		b.ResetTimer()
-		
+
 		for b.Loop() {
 			for _, err := range errors {
 				if IsTelemetryEnabled() {

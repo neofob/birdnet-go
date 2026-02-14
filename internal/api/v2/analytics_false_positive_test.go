@@ -207,9 +207,9 @@ func TestGetSpeciesDiversity_ExcludesFalsePositives(t *testing.T) {
 
 	// Parse response - GetSpeciesDiversity returns a wrapped response
 	var response struct {
-		StartDate    string `json:"start_date"`
-		EndDate      string `json:"end_date"`
-		Data         []struct {
+		StartDate string `json:"start_date"`
+		EndDate   string `json:"end_date"`
+		Data      []struct {
 			Date          string `json:"date"`
 			UniqueSpecies int    `json:"unique_species"`
 		} `json:"data"`

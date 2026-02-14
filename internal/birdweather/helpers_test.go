@@ -20,13 +20,13 @@ func TestParseSoundscapeResponse(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		responseBody   []byte
-		maskedURL      string
-		statusCode     int
-		expectedID     string
-		wantErr        bool
-		errContains    string
+		name         string
+		responseBody []byte
+		maskedURL    string
+		statusCode   int
+		expectedID   string
+		wantErr      bool
+		errContains  string
 	}{
 		{
 			name: "valid successful response",

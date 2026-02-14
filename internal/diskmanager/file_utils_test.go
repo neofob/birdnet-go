@@ -294,22 +294,22 @@ func TestGetAudioFilesHandlesTempFileRaceCondition(t *testing.T) {
 // TestHandleWalkError verifies that missing .temp entries during walk are ignored
 func TestHandleWalkError(t *testing.T) {
 	t.Parallel()
-	
+
 	tempDir := t.TempDir()
-	
+
 	// Test case 1: os.IsNotExist error for a .temp file should be ignored
 	err := handleWalkError(os.ErrNotExist, filepath.Join(tempDir, "foo.wav.temp"), true)
 	require.NoError(t, err, "missing .temp file should be ignored")
-	
+
 	// Test case 2: os.IsNotExist error for a .TEMP file (uppercase) should be ignored
 	err = handleWalkError(os.ErrNotExist, filepath.Join(tempDir, "bar.wav.TEMP"), true)
 	require.NoError(t, err, "missing .TEMP file (uppercase) should be ignored")
-	
+
 	// Test case 3: os.IsNotExist error for a non-temp file should propagate
 	err = handleWalkError(os.ErrNotExist, filepath.Join(tempDir, "baz.wav"), false)
 	require.Error(t, err, "missing non-temp file should not be ignored")
 	require.ErrorIs(t, err, os.ErrNotExist, "should return the original error")
-	
+
 	// Test case 4: Other errors should always propagate, even for temp files
 	permErr := os.ErrPermission
 	err = handleWalkError(permErr, filepath.Join(tempDir, "denied.wav.temp"), false)

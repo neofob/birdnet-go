@@ -26,9 +26,9 @@ const maxSpeciesBatch = 10
 
 // Analytics constants (file-local)
 const (
-	defaultConfidenceThreshold = 0.8            // Default confidence threshold for analytics
-	defaultAnalyticsDays       = 30             // Default number of days for analytics queries
-	defaultNewSpeciesLimit     = 100            // Default pagination limit for new species queries
+	defaultConfidenceThreshold = 0.8              // Default confidence threshold for analytics
+	defaultAnalyticsDays       = 30               // Default number of days for analytics queries
+	defaultNewSpeciesLimit     = 100              // Default pagination limit for new species queries
 	analyticsQueryTimeout      = 30 * time.Second // Timeout for analytics database queries
 )
 

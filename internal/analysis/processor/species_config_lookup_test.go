@@ -68,8 +68,8 @@ func TestLookupSpeciesConfig(t *testing.T) {
 			wantFound:      false,
 		},
 		{
-			name: "empty config map",
-			configMap: map[string]conf.SpeciesConfig{},
+			name:           "empty config map",
+			configMap:      map[string]conf.SpeciesConfig{},
 			commonName:     "American Robin",
 			scientificName: "Turdus migratorius",
 			wantConfig:     conf.SpeciesConfig{},
@@ -166,11 +166,11 @@ func TestLookupSpeciesConfig_MultipleSpecies(t *testing.T) {
 	t.Parallel()
 
 	configMap := map[string]conf.SpeciesConfig{
-		"american robin":      {Threshold: 0.8},
-		"house sparrow":       {Threshold: 0.9},
-		"turdus migratorius":  {Threshold: 0.75}, // Scientific name of American Robin
-		"passer domesticus":   {Threshold: 0.85}, // Scientific name of House Sparrow
-		"european blackbird":  {Threshold: 0.7},
+		"american robin":     {Threshold: 0.8},
+		"house sparrow":      {Threshold: 0.9},
+		"turdus migratorius": {Threshold: 0.75}, // Scientific name of American Robin
+		"passer domesticus":  {Threshold: 0.85}, // Scientific name of House Sparrow
+		"european blackbird": {Threshold: 0.7},
 	}
 
 	// Test that we can look up by common name

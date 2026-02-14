@@ -442,11 +442,11 @@ type StreamConfig struct {
 // RTSPSettings contains settings for audio streaming (supports multiple protocols).
 // Note: Struct name kept for backward compatibility with existing code.
 type RTSPSettings struct {
-	Streams          []StreamConfig     `yaml:"streams" json:"streams" mapstructure:"streams"`                                   // Stream configurations
-	URLs             []string           `yaml:"urls,omitempty" json:"urls,omitempty" mapstructure:"urls"`                        // Legacy: accepts old format, migrated on load
-	Transport        string             `yaml:"transport,omitempty" json:"transport,omitempty" mapstructure:"transport"`         // Legacy: global default, migrated on load
-	Health           RTSPHealthSettings `yaml:"health" json:"health" mapstructure:"health"`                                      // Health monitoring settings
-	FFmpegParameters []string           `yaml:"ffmpegParameters" json:"ffmpegParameters" mapstructure:"ffmpegParameters"`        // Custom FFmpeg parameters
+	Streams          []StreamConfig     `yaml:"streams" json:"streams" mapstructure:"streams"`                            // Stream configurations
+	URLs             []string           `yaml:"urls,omitempty" json:"urls,omitempty" mapstructure:"urls"`                 // Legacy: accepts old format, migrated on load
+	Transport        string             `yaml:"transport,omitempty" json:"transport,omitempty" mapstructure:"transport"`  // Legacy: global default, migrated on load
+	Health           RTSPHealthSettings `yaml:"health" json:"health" mapstructure:"health"`                               // Health monitoring settings
+	FFmpegParameters []string           `yaml:"ffmpegParameters" json:"ffmpegParameters" mapstructure:"ffmpegParameters"` // Custom FFmpeg parameters
 }
 
 // CRITICAL: Legacy fields (URLs, Transport) MUST include json tags to accept
@@ -455,15 +455,15 @@ type RTSPSettings struct {
 
 // MQTTSettings contains settings for MQTT integration.
 type MQTTSettings struct {
-	Enabled       bool                  `json:"enabled"`       // true to enable MQTT
-	Debug         bool                  `json:"debug"`         // true to enable MQTT debug
-	Broker        string                `json:"broker"`        // MQTT broker URL
-	Topic         string                `json:"topic"`         // MQTT topic
-	Username      string                `json:"username"`      // MQTT username
-	Password      string                `json:"password"`      // MQTT password
-	Retain        bool                  `json:"retain"`        // true to retain messages
-	RetrySettings RetrySettings         `json:"retrySettings"` // settings for retry mechanism
-	TLS           MQTTTLSSettings       `json:"tls"`           // TLS/SSL configuration
+	Enabled       bool                  `json:"enabled"`                                                         // true to enable MQTT
+	Debug         bool                  `json:"debug"`                                                           // true to enable MQTT debug
+	Broker        string                `json:"broker"`                                                          // MQTT broker URL
+	Topic         string                `json:"topic"`                                                           // MQTT topic
+	Username      string                `json:"username"`                                                        // MQTT username
+	Password      string                `json:"password"`                                                        // MQTT password
+	Retain        bool                  `json:"retain"`                                                          // true to retain messages
+	RetrySettings RetrySettings         `json:"retrySettings"`                                                   // settings for retry mechanism
+	TLS           MQTTTLSSettings       `json:"tls"`                                                             // TLS/SSL configuration
 	HomeAssistant HomeAssistantSettings `yaml:"homeassistant" mapstructure:"homeassistant" json:"homeAssistant"` // Home Assistant auto-discovery settings
 }
 
@@ -478,9 +478,9 @@ type MQTTTLSSettings struct {
 
 // HomeAssistantSettings contains settings for Home Assistant MQTT auto-discovery.
 type HomeAssistantSettings struct {
-	Enabled         bool   `yaml:"enabled" mapstructure:"enabled" json:"enabled"`                                    // true to enable HA auto-discovery
-	DiscoveryPrefix string `yaml:"discovery_prefix" mapstructure:"discovery_prefix" json:"discoveryPrefix"`          // HA discovery topic prefix (default: homeassistant)
-	DeviceName      string `yaml:"device_name" mapstructure:"device_name" json:"deviceName"`                         // base name for devices (default: BirdNET-Go)
+	Enabled         bool   `yaml:"enabled" mapstructure:"enabled" json:"enabled"`                           // true to enable HA auto-discovery
+	DiscoveryPrefix string `yaml:"discovery_prefix" mapstructure:"discovery_prefix" json:"discoveryPrefix"` // HA discovery topic prefix (default: homeassistant)
+	DeviceName      string `yaml:"device_name" mapstructure:"device_name" json:"deviceName"`                // base name for devices (default: BirdNET-Go)
 }
 
 // TelemetrySettings contains settings for telemetry.

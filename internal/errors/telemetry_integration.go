@@ -283,8 +283,8 @@ var globalTelemetryReporter TelemetryReporter
 
 // Global error hooks and mutex for thread safety
 var (
-	errorHooks      []ErrorHook
-	errorHooksMutex sync.RWMutex
+	errorHooks         []ErrorHook
+	errorHooksMutex    sync.RWMutex
 	hasActiveReporting atomic.Bool // true if telemetry is enabled OR hooks exist
 )
 
@@ -305,7 +305,7 @@ func AddErrorHook(hook ErrorHook) {
 	errorHooks = append(errorHooks, hook)
 	hooksExist := len(errorHooks) > 0
 	errorHooksMutex.Unlock()
-	
+
 	// Update status after releasing the lock
 	telemetryActive := globalTelemetryReporter != nil && globalTelemetryReporter.IsEnabled()
 	hasActiveReporting.Store(hooksExist || telemetryActive)
@@ -316,7 +316,7 @@ func ClearErrorHooks() {
 	errorHooksMutex.Lock()
 	errorHooks = nil
 	errorHooksMutex.Unlock()
-	
+
 	// Update status after releasing the lock
 	telemetryActive := globalTelemetryReporter != nil && globalTelemetryReporter.IsEnabled()
 	hasActiveReporting.Store(false || telemetryActive)
@@ -328,7 +328,7 @@ func updateActiveReportingStatus() {
 	errorHooksMutex.RLock()
 	hooksExist := len(errorHooks) > 0
 	errorHooksMutex.RUnlock()
-	
+
 	telemetryActive := globalTelemetryReporter != nil && globalTelemetryReporter.IsEnabled()
 	hasActiveReporting.Store(hooksExist || telemetryActive)
 }
@@ -354,7 +354,7 @@ func reportToTelemetryLegacy(ee *EnhancedError) {
 		errorHooksMutex.RUnlock()
 		return
 	}
-	
+
 	// Copy hooks while holding lock
 	hooks := make([]ErrorHook, len(errorHooks))
 	copy(hooks, errorHooks)

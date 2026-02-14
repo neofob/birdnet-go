@@ -33,9 +33,9 @@ var (
 	analysisMetrics      *metrics.MyAudioMetrics // Global metrics instance for analysis buffer operations
 	analysisMetricsMutex sync.RWMutex            // Mutex for thread-safe access to analysisMetrics
 	analysisMetricsOnce  sync.Once               // Ensures metrics are only set once
-	readBufferPool     *BufferPool // Global buffer pool for read operations
-	bufferPoolInitOnce sync.Once   // Ensures buffer pool is initialized exactly once
-	errBufferPoolInit  error       // Stores any error from buffer pool initialization
+	readBufferPool       *BufferPool             // Global buffer pool for read operations
+	bufferPoolInitOnce   sync.Once               // Ensures buffer pool is initialized exactly once
+	errBufferPoolInit    error                   // Stores any error from buffer pool initialization
 )
 
 // init initializes the warningCounter map

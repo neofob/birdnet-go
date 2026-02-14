@@ -161,9 +161,9 @@ const (
 	percentMultiplier = 100   // Multiplier for percentage calculations
 
 	// Performance threshold constants
-	dbCacheLookupSlowThreshold   = 50 * time.Millisecond  // Threshold for slow DB cache lookups
-	providerFetchSlowThreshold   = 100 * time.Millisecond // Threshold for slow provider fetch operations
-	totalFetchSlowThreshold      = 200 * time.Millisecond // Threshold for slow total fetch operations
+	dbCacheLookupSlowThreshold = 50 * time.Millisecond  // Threshold for slow DB cache lookups
+	providerFetchSlowThreshold = 100 * time.Millisecond // Threshold for slow provider fetch operations
+	totalFetchSlowThreshold    = 200 * time.Millisecond // Threshold for slow total fetch operations
 )
 
 // fallbackProviders defines the ordered list of providers to try when the primary provider fails.

@@ -5,22 +5,22 @@ import "time"
 
 // TaxonomyEntry represents a single entry from the eBird taxonomy
 type TaxonomyEntry struct {
-	ScientificName string   `json:"sciName"`
-	CommonName     string   `json:"comName"`
-	SpeciesCode    string   `json:"speciesCode"`
-	Category       string   `json:"category"`      // species, spuh, slash, hybrid, etc.
-	TaxonOrder     float64  `json:"taxonOrder"`    // For sorting in taxonomic order
-	BandingCodes   []string `json:"bandingCodes"`  // Array of banding codes
-	ComNameCodes   []string `json:"comNameCodes"`  // Array of common name codes
-	SciNameCodes   []string `json:"sciNameCodes"`  // Array of scientific name codes
-	Order          string   `json:"order"`         // Taxonomic order
-	FamilyCode     string   `json:"familyCode"`    // Family code (added in v3.3.32.4)
-	FamilyComName  string   `json:"familyComName"` // Common family name
-	FamilySciName  string   `json:"familySciName"` // Scientific family name
-	ReportAs       string   `json:"reportAs,omitempty"`      // Species to report as (for subspecies)
-	Extinct        bool     `json:"extinct,omitempty"`       // Whether species is extinct
-	ExtinctYear    int      `json:"extinctYear,omitempty"`   // Year of extinction
-	FamilyTaxonOrder float64 `json:"familyTaxonOrder,omitempty"` // Order within family
+	ScientificName   string   `json:"sciName"`
+	CommonName       string   `json:"comName"`
+	SpeciesCode      string   `json:"speciesCode"`
+	Category         string   `json:"category"`                   // species, spuh, slash, hybrid, etc.
+	TaxonOrder       float64  `json:"taxonOrder"`                 // For sorting in taxonomic order
+	BandingCodes     []string `json:"bandingCodes"`               // Array of banding codes
+	ComNameCodes     []string `json:"comNameCodes"`               // Array of common name codes
+	SciNameCodes     []string `json:"sciNameCodes"`               // Array of scientific name codes
+	Order            string   `json:"order"`                      // Taxonomic order
+	FamilyCode       string   `json:"familyCode"`                 // Family code (added in v3.3.32.4)
+	FamilyComName    string   `json:"familyComName"`              // Common family name
+	FamilySciName    string   `json:"familySciName"`              // Scientific family name
+	ReportAs         string   `json:"reportAs,omitempty"`         // Species to report as (for subspecies)
+	Extinct          bool     `json:"extinct,omitempty"`          // Whether species is extinct
+	ExtinctYear      int      `json:"extinctYear,omitempty"`      // Year of extinction
+	FamilyTaxonOrder float64  `json:"familyTaxonOrder,omitempty"` // Order within family
 }
 
 // TaxonomyTree represents the hierarchical structure of a species' taxonomy
@@ -71,6 +71,6 @@ func DefaultConfig() Config {
 		BaseURL:     "https://api.ebird.org/v2",
 		Timeout:     30 * time.Second,
 		CacheTTL:    24 * time.Hour, // Taxonomy rarely changes
-		RateLimitMS: 100,             // 10 requests per second max
+		RateLimitMS: 100,            // 10 requests per second max
 	}
 }

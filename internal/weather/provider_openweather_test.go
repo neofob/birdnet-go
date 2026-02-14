@@ -393,10 +393,10 @@ func TestMapOpenWeatherResponse(t *testing.T) {
 		{
 			name:      "imperial_fahrenheit_to_celsius",
 			units:     "imperial",
-			temp:      68.0,  // 20°C
-			feelsLike: 64.4,  // 18°C
-			tempMin:   59.0,  // 15°C
-			tempMax:   77.0,  // 25°C
+			temp:      68.0, // 20°C
+			feelsLike: 64.4, // 18°C
+			tempMin:   59.0, // 15°C
+			tempMax:   77.0, // 25°C
 			delta:     0.1,
 		},
 		{

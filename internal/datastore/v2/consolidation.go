@@ -210,9 +210,9 @@ func Consolidate(
 				logger.String("backup_path", backupPath),
 				logger.String("configured_path", configuredPath))
 			return nil, errors.Join(
-			fmt.Errorf("failed to rename v2 database: %w", err),
-			fmt.Errorf("rollback also failed: %w", rollbackErr),
-		)
+				fmt.Errorf("failed to rename v2 database: %w", err),
+				fmt.Errorf("rollback also failed: %w", rollbackErr),
+			)
 		}
 		_ = DeleteConsolidationState(dataDir)
 		return nil, fmt.Errorf("failed to rename v2 database (rolled back): %w", err)

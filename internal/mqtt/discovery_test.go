@@ -78,13 +78,13 @@ func newMockPublisher() *mockPublisher {
 	}
 }
 
-func (m *mockPublisher) Connect(_ context.Context) error            { return nil }
-func (m *mockPublisher) Disconnect()                                {}
-func (m *mockPublisher) IsConnected() bool                          { return true }
-func (m *mockPublisher) Publish(_ context.Context, _, _ string) error { return nil }
-func (m *mockPublisher) SetControlChannel(_ chan string)            {}
+func (m *mockPublisher) Connect(_ context.Context) error                       { return nil }
+func (m *mockPublisher) Disconnect()                                           {}
+func (m *mockPublisher) IsConnected() bool                                     { return true }
+func (m *mockPublisher) Publish(_ context.Context, _, _ string) error          { return nil }
+func (m *mockPublisher) SetControlChannel(_ chan string)                       {}
 func (m *mockPublisher) TestConnection(_ context.Context, _ chan<- TestResult) {}
-func (m *mockPublisher) RegisterOnConnectHandler(_ OnConnectHandler) {}
+func (m *mockPublisher) RegisterOnConnectHandler(_ OnConnectHandler)           {}
 
 func (m *mockPublisher) PublishWithRetain(_ context.Context, topic, data string, _ bool) error {
 	if m.publishError != nil {
@@ -740,12 +740,12 @@ func TestShortenDisplayName(t *testing.T) {
 		{
 			name:     "UTF-8 multi-byte characters handled safely",
 			input:    "日本語カメラ_ストリーム_フロントヤードの庭_高画質ストリーミング配信", // 34 runes
-			expected: "日本語カメラ_ストリーム_フロントヤードの庭",                         // truncated at _ (22 runes)
+			expected: "日本語カメラ_ストリーム_フロントヤードの庭",              // truncated at _ (22 runes)
 		},
 		{
 			name:     "Mixed ASCII and UTF-8 truncates correctly",
 			input:    "Café_Microphone_Stream_日本語_テスト_追加テキスト文字列", // 41 runes
-			expected: "Café_Microphone_Stream_日本語_テスト",                    // truncated at _ (30 runes)
+			expected: "Café_Microphone_Stream_日本語_テスト",           // truncated at _ (30 runes)
 		},
 		{
 			name:     "Short UTF-8 string passes through unchanged",

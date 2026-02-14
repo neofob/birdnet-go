@@ -32,23 +32,23 @@ type GenusMetadata struct {
 type FamilyMetadata struct {
 	FamilyCommon string   `json:"family_common"`
 	Order        string   `json:"order"`
-	Genera       []string `json:"genera"`       // List of genera in this family
+	Genera       []string `json:"genera"`        // List of genera in this family
 	SpeciesCount int      `json:"species_count"` // Total species in family
 }
 
 // Optimized database structure with bidirectional lookup support
 type TaxonomyDatabase struct {
-	Version     string                      `json:"version"`
-	Description string                      `json:"description"`
-	Source      string                      `json:"source"`
-	UpdatedAt   string                      `json:"updated_at"`
-	License     string                      `json:"license"`
-	Attribution string                      `json:"attribution"`
-	GenusCount  int                         `json:"genus_count"`
-	FamilyCount int                         `json:"family_count"`
-	Genera      map[string]GenusMetadata    `json:"genera"`   // genus_name -> metadata
-	Families    map[string]FamilyMetadata   `json:"families"` // family_name -> metadata
-	SpeciesIndex map[string]string          `json:"species_index"` // scientific_name -> genus_name
+	Version      string                    `json:"version"`
+	Description  string                    `json:"description"`
+	Source       string                    `json:"source"`
+	UpdatedAt    string                    `json:"updated_at"`
+	License      string                    `json:"license"`
+	Attribution  string                    `json:"attribution"`
+	GenusCount   int                       `json:"genus_count"`
+	FamilyCount  int                       `json:"family_count"`
+	Genera       map[string]GenusMetadata  `json:"genera"`        // genus_name -> metadata
+	Families     map[string]FamilyMetadata `json:"families"`      // family_name -> metadata
+	SpeciesIndex map[string]string         `json:"species_index"` // scientific_name -> genus_name
 }
 
 func main() {
@@ -66,9 +66,9 @@ func main() {
 	var fullData []GenusInfo
 	var optimizedData struct {
 		Genera map[string]struct {
-			Family       string   `json:"family"`
-			FamilyCommon string   `json:"family_common"`
-			Order        string   `json:"order"`
+			Family       string `json:"family"`
+			FamilyCommon string `json:"family_common"`
+			Order        string `json:"order"`
 		} `json:"genera"`
 	}
 
@@ -87,15 +87,15 @@ func main() {
 
 	// Create optimized structure
 	db := TaxonomyDatabase{
-		Version:     "2024",
-		Description: "Genus and family taxonomy metadata with bidirectional species lookup",
-		Source:      "eBird API v2 - https://api.ebird.org/v2/ref/taxonomy/ebird",
-		UpdatedAt:   "2025-10-26",
-		License:     "Derived from eBird data - Non-commercial use with attribution",
-		Attribution: "Taxonomy data © Cornell Lab of Ornithology. Derived from eBird/Clements Checklist under eBird API Terms of Use.",
-		GenusCount:  len(fullData),
-		Genera:      make(map[string]GenusMetadata),
-		Families:    make(map[string]FamilyMetadata),
+		Version:      "2024",
+		Description:  "Genus and family taxonomy metadata with bidirectional species lookup",
+		Source:       "eBird API v2 - https://api.ebird.org/v2/ref/taxonomy/ebird",
+		UpdatedAt:    "2025-10-26",
+		License:      "Derived from eBird data - Non-commercial use with attribution",
+		Attribution:  "Taxonomy data © Cornell Lab of Ornithology. Derived from eBird/Clements Checklist under eBird API Terms of Use.",
+		GenusCount:   len(fullData),
+		Genera:       make(map[string]GenusMetadata),
+		Families:     make(map[string]FamilyMetadata),
 		SpeciesIndex: make(map[string]string),
 	}
 

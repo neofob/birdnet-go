@@ -35,8 +35,8 @@ type client struct {
 	reconnectTimer    *time.Timer
 	reconnectStop     chan struct{}
 	metrics           *metrics.MQTTMetrics
-	controlChan       chan string           // Channel for control signals
-	onConnectHandlers []OnConnectHandler    // Handlers called on successful connection
+	controlChan       chan string        // Channel for control signals
+	onConnectHandlers []OnConnectHandler // Handlers called on successful connection
 }
 
 // NewClient creates a new MQTT client with the provided configuration.

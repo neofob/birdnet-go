@@ -15,14 +15,14 @@ const DetectionTimeOffset = 2 * time.Second
 
 // ResultParams holds the parameters for creating a new Result.
 type ResultParams struct {
-	Begin       time.Time
-	End         time.Time
-	Species     string  // BirdNET species string to be parsed
-	Confidence  float64
-	Source      AudioSource
-	ClipName    string
-	Elapsed     time.Duration
-	Occurrence  float64
+	Begin      time.Time
+	End        time.Time
+	Species    string // BirdNET species string to be parsed
+	Confidence float64
+	Source     AudioSource
+	ClipName   string
+	Elapsed    time.Duration
+	Occurrence float64
 }
 
 // NewResult creates a Result from the given parameters.

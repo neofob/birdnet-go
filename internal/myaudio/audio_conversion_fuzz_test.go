@@ -5,53 +5,53 @@ package myaudio
 import (
 	"math"
 	"testing"
-	
+
 	"github.com/tphakala/birdnet-go/internal/conf"
 )
 
 // FuzzConvert16BitToFloat32 tests the convert16BitToFloat32 function with random input
 func FuzzConvert16BitToFloat32(f *testing.F) {
 	// Add seed corpus with various edge cases
-	f.Add([]byte{})                          // Empty
-	f.Add([]byte{0x00})                      // Single byte (invalid)
-	f.Add([]byte{0x00, 0x00})                // Single zero sample
-	f.Add([]byte{0xFF, 0x7F})                // Max positive
-	f.Add([]byte{0x00, 0x80})                // Max negative
-	f.Add([]byte{0x00, 0x00, 0xFF, 0x7F})    // Two samples
-	f.Add([]byte{0x00, 0x40, 0x00, 0xC0})    // Positive and negative
-	
+	f.Add([]byte{})                       // Empty
+	f.Add([]byte{0x00})                   // Single byte (invalid)
+	f.Add([]byte{0x00, 0x00})             // Single zero sample
+	f.Add([]byte{0xFF, 0x7F})             // Max positive
+	f.Add([]byte{0x00, 0x80})             // Max negative
+	f.Add([]byte{0x00, 0x00, 0xFF, 0x7F}) // Two samples
+	f.Add([]byte{0x00, 0x40, 0x00, 0xC0}) // Positive and negative
+
 	// Add larger samples
 	largeSample := make([]byte, 1000)
 	for i := range largeSample {
 		largeSample[i] = byte(i % 256)
 	}
 	f.Add(largeSample)
-	
+
 	// Add standard buffer size
 	standardSample := make([]byte, conf.BufferSize) // Standard buffer size
 	f.Add(standardSample)
-	
+
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Skip if data length is odd (invalid for 16-bit samples)
 		if len(data)%2 != 0 {
 			t.Skip("Odd length data is invalid for 16-bit samples")
 		}
-		
+
 		// Run the conversion
 		result := convert16BitToFloat32(data)
-		
+
 		// Verify the output length
 		expectedLen := len(data) / 2
 		if len(result) != expectedLen {
 			t.Errorf("Expected %d samples, got %d", expectedLen, len(result))
 		}
-		
+
 		// Verify all values are within valid float32 range [-1.0, 1.0)
 		for i, val := range result {
 			if val < -1.0 || val >= 1.0 {
 				t.Errorf("Sample %d out of range: %f", i, val)
 			}
-			
+
 			// Check for NaN or Inf
 			if val != val { // NaN check
 				t.Errorf("Sample %d is NaN", i)
@@ -60,7 +60,7 @@ func FuzzConvert16BitToFloat32(f *testing.F) {
 				t.Errorf("Sample %d is infinite: %f", i, val)
 			}
 		}
-		
+
 		// If using pool, return the buffer
 		if len(result) == Float32BufferSize { // Standard size
 			ReturnFloat32Buffer(result)
@@ -72,62 +72,62 @@ func FuzzConvert16BitToFloat32(f *testing.F) {
 func FuzzConvertToFloat32_AllBitDepths(f *testing.F) {
 	// Add seed corpus for different bit depths
 	bitDepths := []int{16, 24, 32}
-	
+
 	for _, depth := range bitDepths {
 		bytesPerSample := depth / 8
-		
+
 		// Empty
 		f.Add(depth, []byte{})
-		
+
 		// Single sample
 		singleSample := make([]byte, bytesPerSample)
 		f.Add(depth, singleSample)
-		
+
 		// Multiple samples
 		multiSample := make([]byte, bytesPerSample*10)
 		f.Add(depth, multiSample)
 	}
-	
+
 	f.Fuzz(func(t *testing.T, bitDepth int, data []byte) {
 		// Only test valid bit depths
 		if bitDepth != 16 && bitDepth != 24 && bitDepth != 32 {
 			t.Skip("Invalid bit depth")
 		}
-		
+
 		bytesPerSample := bitDepth / 8
-		
+
 		// Skip if data length is not aligned
 		if len(data)%bytesPerSample != 0 {
 			t.Skip("Data length not aligned with bit depth")
 		}
-		
+
 		// Run the conversion
 		result, err := ConvertToFloat32(data, bitDepth)
-		
+
 		// Should not error for valid bit depths
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 			return
 		}
-		
+
 		// Verify we got a result
 		if result == nil {
 			t.Error("Result is nil")
 			return
 		}
-		
+
 		// Verify it's a single channel
 		if len(result) != 1 {
 			t.Errorf("Expected 1 channel, got %d", len(result))
 			return
 		}
-		
+
 		// Verify the output length
 		expectedLen := len(data) / bytesPerSample
 		if len(result[0]) != expectedLen {
 			t.Errorf("Expected %d samples, got %d", expectedLen, len(result[0]))
 		}
-		
+
 		// Verify all values are within valid range [-1.0, 1.0)
 		for i, val := range result[0] {
 			if val < -1.0 || val >= 1.0 {
@@ -145,25 +145,25 @@ func FuzzFloat32PoolOperations(f *testing.F) {
 			f.Fatalf("Failed to initialize pool: %v", err)
 		}
 	}
-	
+
 	// Add seed corpus - sequences of operations
 	// Format: even indices are operations (0=get, 1=put), odd indices are data
-	f.Add([]byte{0, 0}) // Single get
-	f.Add([]byte{0, 0, 1, 0}) // Get then put
+	f.Add([]byte{0, 0})                   // Single get
+	f.Add([]byte{0, 0, 1, 0})             // Get then put
 	f.Add([]byte{0, 0, 0, 0, 1, 0, 1, 0}) // Multiple gets and puts
-	
+
 	f.Fuzz(func(t *testing.T, ops []byte) {
 		if len(ops) < 2 {
 			t.Skip("Need at least one operation")
 		}
-		
+
 		// Declare buffers slice inside fuzz function to prevent state leakage
 		var buffers [][]float32
-		
+
 		// Process operations in pairs
 		for i := 0; i < len(ops)-1; i += 2 {
 			op := ops[i] % 2 // 0 = get, 1 = put
-			
+
 			switch op {
 			case 0: // Get
 				buf := float32Pool.Get()
@@ -175,7 +175,7 @@ func FuzzFloat32PoolOperations(f *testing.F) {
 				default:
 					buffers = append(buffers, buf)
 				}
-				
+
 			case 1: // Put
 				if len(buffers) > 0 {
 					// Return the last buffer
@@ -185,7 +185,7 @@ func FuzzFloat32PoolOperations(f *testing.F) {
 				}
 			}
 		}
-		
+
 		// Clean up - return all remaining buffers
 		for _, buf := range buffers {
 			float32Pool.Put(buf)

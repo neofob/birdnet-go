@@ -73,7 +73,7 @@ func (fp *Float32Pool) Put(buf []float32) {
 		fp.discarded.Add(1)
 		return
 	}
-	//nolint:staticcheck // SA6002: sync.Pool is designed to work with slices and 
+	//nolint:staticcheck // SA6002: sync.Pool is designed to work with slices and
 	// the overhead is negligible compared to the allocation savings we achieve
 	fp.pool.Put(buf)
 }
@@ -82,7 +82,7 @@ func (fp *Float32Pool) Put(buf []float32) {
 func (fp *Float32Pool) GetStats() Float32PoolStats {
 	gets := fp.gets.Load()
 	news := fp.news.Load()
-	
+
 	return Float32PoolStats{
 		Hits:      gets - news,
 		Misses:    news,

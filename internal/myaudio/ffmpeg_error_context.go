@@ -32,17 +32,17 @@ const (
 // Pre-compiled regular expressions for FFmpeg error parsing
 // Compiling these at package initialization improves performance during error detection
 var (
-	reConnectionAttempt  = regexp.MustCompile(`Connection attempt to (\S+) port (\d+) failed`)
-	reTimeoutDuration    = regexp.MustCompile(`timeout=(\d+)`)
-	reRTSPMethod         = regexp.MustCompile(`method (\w+) failed: (\d+)`)
-	reRTSPMethod404      = regexp.MustCompile(`method (\w+) failed: 404`)
-	reRTSPMethod401      = regexp.MustCompile(`method (\w+) failed: 401`)
-	reErrorOpeningInput  = regexp.MustCompile(`Error opening input file (rtsps?://\S+)`)
+	reConnectionAttempt = regexp.MustCompile(`Connection attempt to (\S+) port (\d+) failed`)
+	reTimeoutDuration   = regexp.MustCompile(`timeout=(\d+)`)
+	reRTSPMethod        = regexp.MustCompile(`method (\w+) failed: (\d+)`)
+	reRTSPMethod404     = regexp.MustCompile(`method (\w+) failed: 404`)
+	reRTSPMethod401     = regexp.MustCompile(`method (\w+) failed: 401`)
+	reErrorOpeningInput = regexp.MustCompile(`Error opening input file (rtsps?://\S+)`)
 	// Capture full TCP URL including credentials, IPv6, query params
 	// Pattern: "Connection to tcp://..." - captures everything after "Connection to "
-	reConnectionToTCP    = regexp.MustCompile(`Connection to (tcp://\S+)`)
-	reRTSPStatus         = regexp.MustCompile(`Server returned (\d+)`)
-	reSSLError           = regexp.MustCompile(`SSL.*error|TLS.*error|certificate.*error`)
+	reConnectionToTCP = regexp.MustCompile(`Connection to (tcp://\S+)`)
+	reRTSPStatus      = regexp.MustCompile(`Server returned (\d+)`)
+	reSSLError        = regexp.MustCompile(`SSL.*error|TLS.*error|certificate.*error`)
 )
 
 // ErrorContext contains rich information extracted from FFmpeg output.
@@ -59,10 +59,10 @@ type ErrorContext struct {
 	// SECURITY: This field is sanitized using privacy.SanitizeFFmpegError() to remove
 	// credentials from RTSP URLs (e.g., rtsp://user:pass@host → rtsp://***:***@host).
 	// The json:"-" tag prevents accidental credential leakage via JSON marshaling.
-	RawFFmpegOutput string `json:"-"` // Full FFmpeg output for debugging (sanitized)
-	UserFacingMsg   string            // Friendly message for user
-	TroubleShooting []string          // List of troubleshooting steps
-	Timestamp       time.Time         // When this error was detected
+	RawFFmpegOutput string    `json:"-"` // Full FFmpeg output for debugging (sanitized)
+	UserFacingMsg   string    // Friendly message for user
+	TroubleShooting []string  // List of troubleshooting steps
+	Timestamp       time.Time // When this error was detected
 }
 
 // extractHostWithoutCredentials safely extracts hostname from a URL string,

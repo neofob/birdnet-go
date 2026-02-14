@@ -12,10 +12,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/gen2brain/malgo"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
-	"github.com/gen2brain/malgo"
 )
 
 // AudioDataCallback is a function that can be registered to receive audio data

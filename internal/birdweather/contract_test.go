@@ -250,9 +250,9 @@ func TestBirdWeatherContract_EdgeCaseConfidence(t *testing.T) {
 		{"high", 0.99, true},
 		{"threshold", 0.70, true},
 		{"low", 0.01, true},
-		{"zero", 0.0, false},       // Zero confidence shouldn't be sent
-		{"negative", -0.5, false},  // Invalid
-		{"over_max", 1.5, false},   // Invalid
+		{"zero", 0.0, false},      // Zero confidence shouldn't be sent
+		{"negative", -0.5, false}, // Invalid
+		{"over_max", 1.5, false},  // Invalid
 	}
 
 	for _, tc := range testCases {

@@ -14,14 +14,14 @@ import (
 // It uses repository interfaces for database access and caches
 // lookup table IDs for efficient label resolution.
 type Resolver struct {
-	labelRepo    repository.LabelRepository
+	labelRepo     repository.LabelRepository
 	labelTypeRepo repository.LabelTypeRepository
 	taxClassRepo  repository.TaxonomicClassRepository
 	modelRepo     repository.ModelRepository
 
 	// Cached lookup table IDs (loaded at initialization)
-	labelTypeIDs   map[string]uint // "species" -> ID, "noise" -> ID, etc.
-	taxClassIDs    map[string]uint // "Aves" -> ID, "Chiroptera" -> ID
+	labelTypeIDs map[string]uint // "species" -> ID, "noise" -> ID, etc.
+	taxClassIDs  map[string]uint // "Aves" -> ID, "Chiroptera" -> ID
 
 	// Label cache: (modelID, rawLabel) -> *entities.Label
 	cache sync.Map

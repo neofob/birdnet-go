@@ -111,4 +111,3 @@ func UpdateSamplingRate(rate float64) error {
 
 	return nil
 }
-

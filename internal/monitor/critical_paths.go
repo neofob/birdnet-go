@@ -56,17 +56,17 @@ func GetCriticalPaths(settings *conf.Settings) []string {
 func resolvePath(path string) string {
 	// Expand environment variables without creating directories
 	path = os.ExpandEnv(path)
-	
+
 	// Clean the path
 	path = filepath.Clean(path)
-	
+
 	// Convert to absolute if not already
 	if !filepath.IsAbs(path) {
 		if absPath, err := filepath.Abs(path); err == nil {
 			path = absPath
 		}
 	}
-	
+
 	return path
 }
 
@@ -74,30 +74,30 @@ func resolvePath(path string) string {
 func deduplicatePaths(paths []string) []string {
 	seen := make(map[string]bool)
 	unique := make([]string, 0)
-	
+
 	for _, path := range paths {
 		// Clean and resolve the path
 		cleaned := filepath.Clean(path)
-		
+
 		// Skip empty paths
 		if cleaned == "" || cleaned == "." {
 			continue
 		}
-		
+
 		// Convert to absolute path if possible
 		if !filepath.IsAbs(cleaned) {
 			if absPath, err := filepath.Abs(cleaned); err == nil {
 				cleaned = absPath
 			}
 		}
-		
+
 		// Add if not seen before
 		if !seen[cleaned] {
 			seen[cleaned] = true
 			unique = append(unique, cleaned)
 		}
 	}
-	
+
 	return unique
 }
 
@@ -113,7 +113,6 @@ func mergePaths(configured, critical []string) []string {
 	// Remove duplicates and return
 	return deduplicatePaths(allPaths)
 }
-
 
 // GetMonitoringPathsInfo returns information about configured and auto-detected paths
 func GetMonitoringPathsInfo(settings *conf.Settings) (configured, autoDetected, merged []string) {

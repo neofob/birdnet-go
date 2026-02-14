@@ -307,7 +307,7 @@ func checkInitialUsage(baseDir string, usageThreshold int) (initialUsagePercent 
 	if diskInfo.TotalBytes > 0 {
 		initialUsagePercent = int((diskInfo.UsedBytes * 100) / diskInfo.TotalBytes) // #nosec G115 -- percentage calculation, result bounded by 100
 	}
-	
+
 	// Update disk usage metrics
 	updateDiskUsageMetrics(diskInfo)
 

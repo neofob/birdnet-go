@@ -78,7 +78,7 @@ func TestNotificationTiming_CrossMidnight(t *testing.T) {
 	// Simulate scenario: Detection at 11:55 PM on Dec 31, 2025
 	// Processing happens at 12:05 AM on Jan 1, 2026
 	detectionTime := time.Date(2025, 12, 31, 23, 55, 0, 0, time.UTC) // BeginTime
-	processingTime := time.Date(2026, 1, 1, 0, 5, 0, 0, time.UTC)   // Would be time.Now() during processing
+	processingTime := time.Date(2026, 1, 1, 0, 5, 0, 0, time.UTC)    // Would be time.Now() during processing
 
 	testSpecies := "Parus major" // Great Tit
 

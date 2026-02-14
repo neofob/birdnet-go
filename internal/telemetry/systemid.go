@@ -60,4 +60,3 @@ func LoadOrCreateSystemID(configDir string) (string, error) {
 
 	return id, nil
 }
-

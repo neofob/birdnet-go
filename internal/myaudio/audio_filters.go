@@ -12,11 +12,11 @@ import (
 
 // Global variables for filter chain and mutex
 var (
-	filterChain         *equalizer.FilterChain
-	filterMutex         sync.RWMutex
-	filterMetrics       *metrics.MyAudioMetrics // Global metrics instance for filter operations
-	filterMetricsMutex  sync.RWMutex            // Mutex for thread-safe access to filterMetrics
-	filterMetricsOnce   sync.Once               // Ensures metrics are only set once
+	filterChain        *equalizer.FilterChain
+	filterMutex        sync.RWMutex
+	filterMetrics      *metrics.MyAudioMetrics // Global metrics instance for filter operations
+	filterMetricsMutex sync.RWMutex            // Mutex for thread-safe access to filterMetrics
+	filterMetricsOnce  sync.Once               // Ensures metrics are only set once
 )
 
 // Sentinel errors for myaudio operations
@@ -93,7 +93,7 @@ func InitializeFilterChain(settings *conf.Settings) error {
 				if errors.Is(err, ErrFilterDisabled) {
 					continue
 				}
-				
+
 				enhancedErr := errors.New(err).
 					Component("myaudio").
 					Category(errors.CategoryConfiguration).
@@ -191,7 +191,7 @@ func UpdateFilterChain(settings *conf.Settings) error {
 				if errors.Is(err, ErrFilterDisabled) {
 					continue
 				}
-				
+
 				enhancedErr := errors.New(err).
 					Component("myaudio").
 					Category(errors.CategoryConfiguration).

@@ -18,37 +18,37 @@ import (
 
 // MigrationStatusResponse represents the migration status for the API.
 type MigrationStatusResponse struct {
-	State               string     `json:"state"`
-	CurrentPhase        string     `json:"current_phase,omitempty"`   // Current migration phase (detections, predictions, etc.)
-	PhaseNumber         int        `json:"phase_number,omitempty"`    // Current phase number (1-based)
-	TotalPhases         int        `json:"total_phases,omitempty"`    // Total number of phases
-	StartedAt           *time.Time `json:"started_at,omitempty"`
-	CompletedAt         *time.Time `json:"completed_at,omitempty"`
-	TotalRecords        int64      `json:"total_records"`
-	MigratedRecords     int64      `json:"migrated_records"`
-	ProgressPercent     float64    `json:"progress_percent"`
-	LastMigratedID      uint       `json:"last_migrated_id"`
-	ErrorMessage        string     `json:"error_message,omitempty"`
-	RelatedDataError    string     `json:"related_data_error,omitempty"` // Error from related data migration (reviews, comments, locks, predictions)
-	DirtyIDCount        int64      `json:"dirty_id_count"`
-	RecordsPerSecond    float64    `json:"records_per_second,omitempty"`
-	EstimatedRemaining  *string    `json:"estimated_remaining,omitempty"`
-	WorkerRunning       bool       `json:"worker_running"`
-	WorkerPaused        bool       `json:"worker_paused"`
-	CanStart            bool       `json:"can_start"`
-	CanPause            bool       `json:"can_pause"`
-	CanResume           bool       `json:"can_resume"`
-	CanCancel           bool       `json:"can_cancel"`
-	CanRollback         bool       `json:"can_rollback"`
-	IsDualWriteActive   bool       `json:"is_dual_write_active"`
-	ShouldReadFromV2    bool       `json:"should_read_from_v2"`
-	IsV2OnlyMode        bool       `json:"is_v2_only_mode"`
+	State              string     `json:"state"`
+	CurrentPhase       string     `json:"current_phase,omitempty"` // Current migration phase (detections, predictions, etc.)
+	PhaseNumber        int        `json:"phase_number,omitempty"`  // Current phase number (1-based)
+	TotalPhases        int        `json:"total_phases,omitempty"`  // Total number of phases
+	StartedAt          *time.Time `json:"started_at,omitempty"`
+	CompletedAt        *time.Time `json:"completed_at,omitempty"`
+	TotalRecords       int64      `json:"total_records"`
+	MigratedRecords    int64      `json:"migrated_records"`
+	ProgressPercent    float64    `json:"progress_percent"`
+	LastMigratedID     uint       `json:"last_migrated_id"`
+	ErrorMessage       string     `json:"error_message,omitempty"`
+	RelatedDataError   string     `json:"related_data_error,omitempty"` // Error from related data migration (reviews, comments, locks, predictions)
+	DirtyIDCount       int64      `json:"dirty_id_count"`
+	RecordsPerSecond   float64    `json:"records_per_second,omitempty"`
+	EstimatedRemaining *string    `json:"estimated_remaining,omitempty"`
+	WorkerRunning      bool       `json:"worker_running"`
+	WorkerPaused       bool       `json:"worker_paused"`
+	CanStart           bool       `json:"can_start"`
+	CanPause           bool       `json:"can_pause"`
+	CanResume          bool       `json:"can_resume"`
+	CanCancel          bool       `json:"can_cancel"`
+	CanRollback        bool       `json:"can_rollback"`
+	IsDualWriteActive  bool       `json:"is_dual_write_active"`
+	ShouldReadFromV2   bool       `json:"should_read_from_v2"`
+	IsV2OnlyMode       bool       `json:"is_v2_only_mode"`
 
 	// Cleanup state fields
-	CleanupState           string   `json:"cleanup_state"`             // idle, in_progress, completed, failed
-	CleanupError           string   `json:"cleanup_error,omitempty"`   // Error message if failed
-	CleanupTablesRemaining []string `json:"cleanup_tables_remaining"`  // MySQL: tables that failed to drop
-	CleanupSpaceReclaimed  int64    `json:"cleanup_space_reclaimed"`   // Bytes freed
+	CleanupState           string   `json:"cleanup_state"`            // idle, in_progress, completed, failed
+	CleanupError           string   `json:"cleanup_error,omitempty"`  // Error message if failed
+	CleanupTablesRemaining []string `json:"cleanup_tables_remaining"` // MySQL: tables that failed to drop
+	CleanupSpaceReclaimed  int64    `json:"cleanup_space_reclaimed"`  // Bytes freed
 }
 
 // MigrationStartRequest represents the request to start migration.
@@ -293,28 +293,28 @@ func (c *Controller) GetMigrationStatus(ctx echo.Context) error {
 	}
 
 	response := MigrationStatusResponse{
-		State:              string(state.State),
-		CurrentPhase:       string(state.CurrentPhase),
-		PhaseNumber:        state.PhaseNumber,
-		TotalPhases:        state.TotalPhases,
-		StartedAt:          state.StartedAt,
-		CompletedAt:        state.CompletedAt,
-		TotalRecords:       state.TotalRecords,
-		MigratedRecords:    state.MigratedRecords,
-		ProgressPercent:    progressPercent,
-		LastMigratedID:     state.LastMigratedID,
-		ErrorMessage:       state.ErrorMessage,
-		RelatedDataError:   state.RelatedDataError,
-		DirtyIDCount:       dirtyCount,
-		RecordsPerSecond:   recordsPerSec,
-		EstimatedRemaining: estimatedRemaining,
-		WorkerRunning:      workerRunning,
-		WorkerPaused:       workerPaused,
-		CanStart:           canStart,
-		CanPause:           canPause,
-		CanResume:          canResume,
-		CanCancel:          canCancel,
-		CanRollback:        canRollback,
+		State:                  string(state.State),
+		CurrentPhase:           string(state.CurrentPhase),
+		PhaseNumber:            state.PhaseNumber,
+		TotalPhases:            state.TotalPhases,
+		StartedAt:              state.StartedAt,
+		CompletedAt:            state.CompletedAt,
+		TotalRecords:           state.TotalRecords,
+		MigratedRecords:        state.MigratedRecords,
+		ProgressPercent:        progressPercent,
+		LastMigratedID:         state.LastMigratedID,
+		ErrorMessage:           state.ErrorMessage,
+		RelatedDataError:       state.RelatedDataError,
+		DirtyIDCount:           dirtyCount,
+		RecordsPerSecond:       recordsPerSec,
+		EstimatedRemaining:     estimatedRemaining,
+		WorkerRunning:          workerRunning,
+		WorkerPaused:           workerPaused,
+		CanStart:               canStart,
+		CanPause:               canPause,
+		CanResume:              canResume,
+		CanCancel:              canCancel,
+		CanRollback:            canRollback,
 		IsDualWriteActive:      isDualWriteActive,
 		ShouldReadFromV2:       shouldReadFromV2,
 		IsV2OnlyMode:           v2Only,

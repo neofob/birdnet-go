@@ -17,10 +17,10 @@ func TestFilterBatchByConfidence(t *testing.T) {
 		{
 			name: "filters out low confidence",
 			batch: []datastore.Results{
-				{ID: 1, Species: "Parus major", Confidence: 0.10},  // below threshold
-				{ID: 2, Species: "Parus major", Confidence: 0.20},  // at threshold
-				{ID: 3, Species: "Parus major", Confidence: 0.50},  // above threshold
-				{ID: 4, Species: "Parus major", Confidence: 0.19},  // below threshold
+				{ID: 1, Species: "Parus major", Confidence: 0.10}, // below threshold
+				{ID: 2, Species: "Parus major", Confidence: 0.20}, // at threshold
+				{ID: 3, Species: "Parus major", Confidence: 0.50}, // above threshold
+				{ID: 4, Species: "Parus major", Confidence: 0.19}, // below threshold
 			},
 			expected: 2, // only 0.20 and 0.50 pass
 		},

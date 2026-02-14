@@ -17,7 +17,7 @@ import (
 func TestResolveDNSWithFallback(t *testing.T) {
 	t.Parallel() // Safe to parallelize - no shared state
 
-	testCases := []struct{
+	testCases := []struct {
 		name        string
 		hostname    string
 		expectError bool
@@ -167,9 +167,9 @@ func TestIsDNSError(t *testing.T) {
 	t.Parallel() // Safe - no shared state
 
 	testCases := []struct {
-		name        string
-		errorMsg    string
-		expectDNS   bool
+		name      string
+		errorMsg  string
+		expectDNS bool
 	}{
 		{
 			name:      "DNS lookup error",

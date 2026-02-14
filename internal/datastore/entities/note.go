@@ -7,7 +7,7 @@ import "time"
 // NoteEntity is the GORM model for the 'notes' table.
 // Maps to the EXISTING database schema for backward compatibility.
 type NoteEntity struct {
-	ID             uint   `gorm:"primaryKey"`
+	ID             uint `gorm:"primaryKey"`
 	SourceNode     string
 	Date           string `gorm:"index:idx_notes_date;index:idx_notes_date_commonname_confidence;index:idx_notes_sciname_date;index:idx_notes_sciname_date_optimized,priority:2"`
 	Time           string `gorm:"index:idx_notes_time"`

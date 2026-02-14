@@ -632,9 +632,9 @@ func TestGetDailySpeciesSummary_MultipleDetections(t *testing.T) {
 	mockDS.On("GetBatchHourlyOccurrences", testDate, mock.MatchedBy(func(species []string) bool {
 		return len(species) == 2 &&
 			((species[0] == "American Crow" && species[1] == "Red-bellied Woodpecker") ||
-			 (species[0] == "Red-bellied Woodpecker" && species[1] == "American Crow"))
+				(species[0] == "Red-bellied Woodpecker" && species[1] == "American Crow"))
 	}), minConfidence).Return(map[string][24]int{
-		"American Crow": expectedAmcroHourlyCounts,
+		"American Crow":          expectedAmcroHourlyCounts,
 		"Red-bellied Woodpecker": expectedRbwoHourlyCounts,
 	}, nil)
 
@@ -803,7 +803,7 @@ func TestGetDailySpeciesSummary_SingleDetection(t *testing.T) {
 	// Setup mock expectations using m.On()
 	mockDS.On("GetTopBirdsData", "2025-03-07", 0.0, 0).Return(mockNotesSingle, nil)
 	mockDS.On("GetBatchHourlyOccurrences", "2025-03-07", mock.Anything, 0.0).Return(map[string][24]int{
-		"American Crow": expectedAmcroSingleHourly,
+		"American Crow":          expectedAmcroSingleHourly,
 		"Red-bellied Woodpecker": expectedRbwoSingleHourly,
 	}, nil)
 
@@ -1059,7 +1059,7 @@ func TestGetDailySpeciesSummary_ConfidenceFilter(t *testing.T) {
 	mockDS.On("GetTopBirdsData", "2025-03-07", expectedMinConfidence, 0).Return(mockNotesConfidence, nil)
 	// GetBatchHourlyOccurrences is called for all species returned by GetTopBirdsData
 	mockDS.On("GetBatchHourlyOccurrences", "2025-03-07", mock.Anything, expectedMinConfidence).Return(map[string][24]int{
-		"American Crow": expectedAmcroConfidenceHourly,
+		"American Crow":          expectedAmcroConfidenceHourly,
 		"Red-bellied Woodpecker": [24]int{}, // Filtered out later
 	}, nil)
 
@@ -1145,7 +1145,7 @@ func TestGetDailySpeciesSummary_LimitParameter(t *testing.T) {
 	mockDS.On("GetTopBirdsData", "2025-03-07", 0.0, 2).Return(mockNotesLimit, nil)
 	// Expect GetBatchHourlyOccurrences to be called for the 2 species returned
 	mockDS.On("GetBatchHourlyOccurrences", "2025-03-07", mock.Anything, 0.0).Return(map[string][24]int{
-		"American Crow": expectedAmcroLimitHourly,
+		"American Crow":          expectedAmcroLimitHourly,
 		"Red-bellied Woodpecker": expectedRbwoLimitHourly,
 	}, nil)
 

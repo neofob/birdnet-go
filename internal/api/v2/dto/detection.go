@@ -11,9 +11,9 @@ import (
 // Uses camelCase JSON tags per REST API conventions.
 type DetectionResponse struct {
 	ID             uint        `json:"id"`
-	Date           string      `json:"date"`           // "2024-01-15"
-	Time           string      `json:"time"`           // "14:30:00"
-	Timestamp      string      `json:"timestamp"`      // ISO8601 with TZ
+	Date           string      `json:"date"`      // "2024-01-15"
+	Time           string      `json:"time"`      // "14:30:00"
+	Timestamp      string      `json:"timestamp"` // ISO8601 with TZ
 	ScientificName string      `json:"scientificName"`
 	CommonName     string      `json:"commonName"`
 	SpeciesCode    string      `json:"speciesCode,omitempty"`

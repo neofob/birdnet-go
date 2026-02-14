@@ -68,7 +68,7 @@ func InitForTesting(t TestingTB) (config *TestConfig, cleanup func()) {
 	// Mark as initialized and enable test mode
 	sentryInitialized = true
 	atomic.StoreInt32(&testMode, 1)
-	
+
 	// Update telemetry enabled state for test mode
 	UpdateTelemetryEnabled()
 
@@ -318,4 +318,3 @@ func NewMockErrorEvent(component, message string, opts ...MockErrorEventOption) 
 	}
 	return event
 }
-

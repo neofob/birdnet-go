@@ -38,10 +38,10 @@ func TestIngressPath(t *testing.T) {
 			expected:         "/ingress/token",
 		},
 		{
-			name:             "X-Ingress-Path takes priority over config BasePath",
-			xIngressPath:     "/ingress/token",
-			basePath:         "/configured",
-			expected:         "/ingress/token",
+			name:         "X-Ingress-Path takes priority over config BasePath",
+			xIngressPath: "/ingress/token",
+			basePath:     "/configured",
+			expected:     "/ingress/token",
 		},
 		{
 			name:             "X-Ingress-Path takes priority over both header and config",

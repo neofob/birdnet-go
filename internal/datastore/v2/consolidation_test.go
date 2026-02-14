@@ -270,14 +270,14 @@ func newTestLogger() *testLogger {
 	return &testLogger{}
 }
 
-func (l *testLogger) Module(name string) logger.Logger                { return l }
-func (l *testLogger) Trace(msg string, fields ...logger.Field)        {}
-func (l *testLogger) Debug(msg string, fields ...logger.Field)        {}
-func (l *testLogger) Info(msg string, fields ...logger.Field)         {}
-func (l *testLogger) Warn(msg string, fields ...logger.Field)         {}
-func (l *testLogger) Error(msg string, fields ...logger.Field)        {}
-func (l *testLogger) With(fields ...logger.Field) logger.Logger       { return l }
-func (l *testLogger) WithContext(ctx context.Context) logger.Logger   { return l }
+func (l *testLogger) Module(name string) logger.Logger              { return l }
+func (l *testLogger) Trace(msg string, fields ...logger.Field)      {}
+func (l *testLogger) Debug(msg string, fields ...logger.Field)      {}
+func (l *testLogger) Info(msg string, fields ...logger.Field)       {}
+func (l *testLogger) Warn(msg string, fields ...logger.Field)       {}
+func (l *testLogger) Error(msg string, fields ...logger.Field)      {}
+func (l *testLogger) With(fields ...logger.Field) logger.Logger     { return l }
+func (l *testLogger) WithContext(ctx context.Context) logger.Logger { return l }
 func (l *testLogger) Log(level logger.LogLevel, msg string, fields ...logger.Field) {
 }
 func (l *testLogger) Flush() error { return nil }

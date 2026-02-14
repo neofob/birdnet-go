@@ -420,7 +420,7 @@ func TestDatabaseContract_MaxValues(t *testing.T) {
 		Latitude:       90.0,  // North pole
 		Longitude:      180.0, // International date line
 		Threshold:      1.0,
-		Sensitivity:    3.0,   // Max sensitivity
+		Sensitivity:    3.0, // Max sensitivity
 		ProcessingTime: 10 * time.Second,
 	}
 

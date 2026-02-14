@@ -60,8 +60,8 @@ type InitManager struct {
 	workerErr           atomic.Value // stores error
 
 	// Dependencies
-	mu        sync.RWMutex
-	initLog   logger.Logger
+	mu      sync.RWMutex
+	initLog logger.Logger
 }
 
 var (
@@ -226,7 +226,7 @@ func (m *InitManager) WaitForComponent(component string, desiredState InitState,
 	}
 
 	currentState := m.GetComponentState(component)
-	return fmt.Errorf("timeout waiting for %s to reach state %d, current state: %d", 
+	return fmt.Errorf("timeout waiting for %s to reach state %d, current state: %d",
 		component, desiredState, currentState)
 }
 
