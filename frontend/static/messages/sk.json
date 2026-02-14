@@ -839,7 +839,7 @@
           "locks": "Migrujú sa zámky"
         },
         "notes": {
-          "inProgress": "Systém môžete naďalej normálne používať, kým migrácia prebieha na pozadí.",
+          "in_progress": "Systém môžete naďalej normálne používať, kým migrácia prebieha na pozadí.",
           "dual_write": "Migrácia prebieha. Vaše dáta sú v bezpečí - všetky nové detekcie sa ukladajú do oboch databáz.",
           "migrating": "Kopírujú sa vaše existujúce detekcie do novej databázy.",
           "validating": "Overuje sa, či boli všetky záznamy skopírované správne. Skoro hotovo!",
@@ -2232,7 +2232,12 @@
           "36db": "36dB",
           "48db": "48dB"
         },
-        "filterHelp": "Pridajte viacero filtrov na tvarovanie frekvenčnej odozvy pre optimálnu detekciu vtákov vo vašom prostredí."
+        "filterHelp": "Pridajte viacero filtrov na tvarovanie frekvenčnej odozvy pre optimálnu detekciu vtákov vo vašom prostredí.",
+        "graph": {
+          "flatResponse": "Plochá odozva (Žiadne filtre nie sú použité)",
+          "frequency": "Frekvencia (Hz)",
+          "gain": "Zisk (dB)"
+        }
       },
       "soundLevelMonitoring": {
         "title": "Monitorovanie úrovne zvuku",
