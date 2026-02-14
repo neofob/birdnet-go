@@ -38,3 +38,4 @@ frontend/coverage/
 frontend/playwright-report*.zip
 REFACTOR_CHANGELOG.md
 .worktrees/
+.leann/
