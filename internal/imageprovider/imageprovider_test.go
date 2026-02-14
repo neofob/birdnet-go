@@ -161,11 +161,14 @@ func (m *mockStore) SetMetrics(metrics *datastore.Metrics)                      
 func (m *mockStore) SetSunCalcMetrics(suncalcMetrics any)                         {}
 func (m *mockStore) Optimize(ctx context.Context) error                           { return nil }
 func (m *mockStore) GetAllNotes() ([]datastore.Note, error)                       { return []datastore.Note{}, nil }
-func (m *mockStore) GetTopBirdsData(date string, minConf float64) ([]datastore.Note, error) {
+func (m *mockStore) GetTopBirdsData(date string, minConf float64, limit int) ([]datastore.Note, error) {
 	return []datastore.Note{}, nil
 }
 func (m *mockStore) GetHourlyOccurrences(date, name string, minConf float64) ([24]int, error) {
 	return [24]int{}, nil
+}
+func (m *mockStore) GetBatchHourlyOccurrences(date string, species []string, minConf float64) (map[string][24]int, error) {
+	return make(map[string][24]int), nil
 }
 func (m *mockStore) SpeciesDetections(species, date, hour string, duration int, asc bool, limit, offset int) ([]datastore.Note, error) {
 	return nil, nil
@@ -285,6 +288,10 @@ func (m *mockStore) GetNewSpeciesDetections(ctx context.Context, startDate, endD
 func (m *mockStore) GetSpeciesFirstDetectionInPeriod(ctx context.Context, startDate, endDate string, limit, offset int) ([]datastore.NewSpeciesData, error) {
 	// This is a mock test implementation, so we'll return empty data
 	return []datastore.NewSpeciesData{}, nil
+}
+
+func (m *mockStore) GetSpeciesDiversityData(_ context.Context, _, _ string) ([]datastore.DailyAnalyticsData, error) {
+	return nil, nil
 }
 
 // BG-17 fix: Add notification history methods

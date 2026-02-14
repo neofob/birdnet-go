@@ -42,11 +42,14 @@ func (m *MockDatastore) Optimize(context.Context) error                  { retur
 func (m *MockDatastore) GetAllNotes() ([]datastore.Note, error) {
 	return make([]datastore.Note, 0), nil
 }
-func (m *MockDatastore) GetTopBirdsData(string, float64) ([]datastore.Note, error) {
+func (m *MockDatastore) GetTopBirdsData(string, float64, int) ([]datastore.Note, error) {
 	return make([]datastore.Note, 0), nil
 }
 func (m *MockDatastore) GetHourlyOccurrences(string, string, float64) ([24]int, error) {
 	return [24]int{}, nil
+}
+func (m *MockDatastore) GetBatchHourlyOccurrences(string, []string, float64) (map[string][24]int, error) {
+	return make(map[string][24]int), nil
 }
 func (m *MockDatastore) SpeciesDetections(string, string, string, int, bool, int, int) ([]datastore.Note, error) {
 	return make([]datastore.Note, 0), nil
@@ -143,6 +146,9 @@ func (m *MockDatastore) GetNewSpeciesDetections(context.Context, string, string,
 }
 func (m *MockDatastore) GetSpeciesFirstDetectionInPeriod(context.Context, string, string, int, int) ([]datastore.NewSpeciesData, error) {
 	return make([]datastore.NewSpeciesData, 0), nil
+}
+func (m *MockDatastore) GetSpeciesDiversityData(context.Context, string, string) ([]datastore.DailyAnalyticsData, error) {
+	return nil, nil
 }
 func (m *MockDatastore) SearchDetections(*datastore.SearchFilters) ([]datastore.DetectionRecord, int, error) {
 	return make([]datastore.DetectionRecord, 0), 0, nil

@@ -8,6 +8,7 @@
   import type { AxisDomain } from 'd3-axis';
   import type { ZoomTransform } from 'd3-zoom';
 
+  import { t } from '$lib/i18n';
   import BaseChart from './BaseChart.svelte';
   import { getLocalDateString } from '$lib/utils/date';
   import { createTimeScale, createLinearScale } from './utils/scales';
@@ -56,7 +57,6 @@
     showRelative = false,
     enableZoom = true,
     enableBrush = false,
-    onSpeciesToggle,
     onDateRangeChange,
   }: Props = $props();
 
@@ -64,7 +64,6 @@
   let tooltip: ChartTooltip | null = null;
   let zoomTransform: ZoomTransform | null = null;
   let chartContainer: HTMLDivElement | null = null;
-  // let brushSelection: [Date, Date] | null = null;
 
   // Prepare data with colors
   const chartData = $derived.by(() => {
@@ -243,7 +242,7 @@
     addAxisLabel(
       chartGroup,
       {
-        text: 'Date',
+        text: t('analytics.advanced.charts.dailyTrend.axisDate'),
         orientation: 'bottom',
         offset: 35,
         width: innerWidth,
@@ -255,7 +254,9 @@
     addAxisLabel(
       chartGroup,
       {
-        text: showRelative ? 'Percentage of Total Detections' : 'Detection Count',
+        text: showRelative
+          ? t('analytics.advanced.charts.dailyTrend.axisPercentage')
+          : t('analytics.advanced.charts.dailyTrend.axisCount'),
         orientation: 'left',
         offset: 45,
         width: innerWidth,
@@ -298,6 +299,7 @@
         .append('path')
         .datum(species.data)
         .attr('class', `area-${species.species.replace(/\s+/g, '-')}`)
+        .attr('data-species', species.species)
         .attr('d', areaGenerator)
         .style('fill', species.color ?? '#999999')
         .style('opacity', 0.1)
@@ -308,6 +310,7 @@
         .append('path')
         .datum(species.data)
         .attr('class', `line-${species.species.replace(/\s+/g, '-')}`)
+        .attr('data-species', species.species)
         .attr('d', lineGenerator)
         .style('fill', 'none')
         .style('stroke', species.color ?? '#999999')
@@ -317,7 +320,8 @@
       // Add data points
       const pointsGroup = linesGroup
         .append('g')
-        .attr('class', `points-${species.species.replace(/\s+/g, '-')}`);
+        .attr('class', `points-${species.species.replace(/\s+/g, '-')}`)
+        .attr('data-species', species.species);
 
       pointsGroup
         .selectAll('circle')
@@ -337,9 +341,14 @@
           const tooltipData = {
             title: species.commonName,
             items: [
-              { label: 'Date', value: getLocalDateString(d.date) },
               {
-                label: showRelative ? 'Percentage' : 'Detections',
+                label: t('analytics.advanced.charts.tooltips.date'),
+                value: getLocalDateString(d.date),
+              },
+              {
+                label: showRelative
+                  ? t('analytics.advanced.charts.tooltips.percentage')
+                  : t('analytics.advanced.charts.tooltips.detections'),
                 value: showRelative ? `${d.count.toFixed(1)}%` : d.count.toString(),
               },
             ],
@@ -410,10 +419,9 @@
           if (selection) {
             const [x1, x2] = selection;
             const dateRange: [Date, Date] = [xScale.invert(x1), xScale.invert(x2)];
-            // brushSelection = dateRange;
             onDateRangeChange?.(dateRange);
           } else {
-            // brushSelection = null;
+            // Brush cleared
           }
         },
       });
@@ -434,11 +442,35 @@
         position: { x: innerWidth - 150, y: 20 },
         itemHeight: 20,
         onToggle: (id, visible) => {
-          const species = processedForLegend.find(
-            (s: SpeciesTrendData) => (s.id || s.species) === id
-          );
-          if (species) {
-            onSpeciesToggle?.(species.species, visible);
+          // Toggle visibility of the corresponding line, area, and points
+          // Use chartArea (clipped group) since that's where species elements live
+          if (visible) {
+            // Restore correct opacity per element type
+            chartArea
+              .selectAll(`path[data-species="${id}"][class^="area-"]`)
+              .transition()
+              .duration(300)
+              .style('opacity', 0.1)
+              .style('pointer-events', 'all');
+            chartArea
+              .selectAll(`path[data-species="${id}"][class^="line-"]`)
+              .transition()
+              .duration(300)
+              .style('opacity', 0.8)
+              .style('pointer-events', 'all');
+            chartArea
+              .selectAll(`g[data-species="${id}"] circle`)
+              .transition()
+              .duration(300)
+              .style('opacity', 0.7)
+              .style('pointer-events', 'all');
+          } else {
+            chartArea
+              .selectAll(`[data-species="${id}"]`)
+              .transition()
+              .duration(300)
+              .style('opacity', 0)
+              .style('pointer-events', 'none');
           }
         },
       });
@@ -453,25 +485,11 @@
   // Without these reads, the effect won't re-run when data changes.
   // This is because $derived is lazy and snippets only render once.
   $effect(() => {
-    // Force evaluation of reactive dependencies by accessing them
-    // These assignments are CRITICAL - they make the effect track these values
-    const currentData = data; // Track the data prop changes
-    const processed = processedData; // Track computed processed data
-    const chartScales = scales; // Track scale changes
-    const ctx = chartContext; // Get the D3 context from snippet
-
-    // CRITICAL: Force reactive dependency tracking without logging
-    void {
-      dataLength: currentData.length,
-      hasChartContext: !!ctx,
-      processedDataLength: processed.length,
-      hasScales: !!chartScales,
-    };
-
-    if (ctx && processed.length > 0 && chartScales) {
-      drawChart(ctx);
-    } else if (ctx && ctx.chartGroup && (!processed.length || !chartScales)) {
-      ctx.chartGroup.selectAll('*').remove();
+    // Simply access reactive values - Svelte 5 tracks automatically
+    if (chartContext && processedData.length > 0 && scales) {
+      drawChart(chartContext);
+    } else if (chartContext?.chartGroup) {
+      chartContext.chartGroup.selectAll('*').remove();
     }
   });
 

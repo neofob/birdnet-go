@@ -5,7 +5,11 @@
 
   import TimeOfDaySpeciesChart from '../components/charts/d3/TimeOfDaySpeciesChart.svelte';
   import DailySpeciesTrendChart from '../components/charts/d3/DailySpeciesTrendChart.svelte';
+  import SpeciesDiversityChart from '../components/charts/d3/SpeciesDiversityChart.svelte';
   import SpeciesSelector from '$lib/components/ui/SpeciesSelector.svelte';
+  import SelectDropdown from '$lib/desktop/components/forms/SelectDropdown.svelte';
+  import Checkbox from '$lib/desktop/components/forms/Checkbox.svelte';
+  import Input from '$lib/desktop/components/ui/Input.svelte';
   import type { Species, SpeciesId } from '$lib/types/species';
   import { createSpeciesId } from '$lib/types/species';
   import { getLogger } from '$lib/utils/logger';
@@ -64,6 +68,23 @@
     total: number;
   }
 
+  interface DiversityDataItem {
+    date: string;
+    unique_species: number;
+  }
+
+  interface DiversityResponse {
+    start_date: string;
+    end_date: string;
+    data: DiversityDataItem[];
+    max_diversity: number;
+  }
+
+  interface DiversityDatum {
+    date: Date;
+    uniqueSpecies: number;
+  }
+
   // Component state
   let isLoading = $state(false);
   let error = $state<string | null>(null);
@@ -82,6 +103,7 @@
   let speciesController: AbortController | null = null;
   let timeOfDayController: AbortController | null = null;
   let dailyTrendController: AbortController | null = null;
+  let diversityController: AbortController | null = null;
 
   // Chart options
   let showRelativeTrends = $state(false);
@@ -91,6 +113,16 @@
   // Chart data
   let timeOfDayData = $state<TimeOfDaySpeciesData[]>([]);
   let dailyTrendData = $state<DailyTrendSpeciesData[]>([]);
+  let diversityData = $state<DiversityDatum[]>([]);
+
+  // Date range options for custom Select component
+  const dateRangeOptions = $derived([
+    { value: 'week', label: t('analytics.advanced.dateRangeOptions.week') },
+    { value: 'month', label: t('analytics.advanced.dateRangeOptions.month') },
+    { value: 'quarter', label: t('analytics.advanced.dateRangeOptions.quarter') },
+    { value: 'year', label: t('analytics.advanced.dateRangeOptions.year') },
+    { value: 'custom', label: t('analytics.advanced.dateRangeOptions.custom') },
+  ]);
 
   // Computed date range
   const computedDateRange = $derived(
@@ -177,11 +209,11 @@
                     : 'rare';
             return {
               id: createSpeciesId(item.scientific_name ?? `species-${index}`),
-              commonName: item.common_name ?? 'Unknown',
-              scientificName: item.scientific_name ?? 'Unknown',
+              commonName: item.common_name ?? t('common.unknown'),
+              scientificName: item.scientific_name ?? t('common.unknown'),
               frequency: frequency as 'very-common' | 'common' | 'uncommon' | 'rare',
-              category: 'Birds', // TODO: Add category data from API
-              description: `${count} detections`,
+              category: t('analytics.advanced.categories.birds'),
+              description: t('analytics.advanced.detections', { count }),
               count, // Keep count for backwards compatibility
             };
           })
@@ -369,19 +401,63 @@
     }
   }
 
+  // Fetch species diversity data (independent of species selection)
+  async function fetchDiversityData() {
+    try {
+      if (diversityController) {
+        diversityController.abort();
+      }
+      diversityController = new AbortController();
+
+      const [start, end] = computedDateRange;
+      const params = new URLSearchParams({
+        start_date: formatDateForAPI(start),
+        end_date: formatDateForAPI(end),
+      });
+
+      const response = await fetch(buildAppUrl(`/api/v2/analytics/species/diversity?${params}`), {
+        signal: diversityController.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data: unknown = await response.json();
+
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('Invalid diversity response: expected an object');
+      }
+
+      const result = data as DiversityResponse;
+
+      diversityData = (result.data ?? [])
+        .map(item => {
+          const date = parseLocalDateString(item.date);
+          if (!date || isNaN(date.getTime())) return null;
+          return { date, uniqueSpecies: item.unique_species };
+        })
+        .filter((item): item is DiversityDatum => item !== null);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+      logger.error('Error fetching diversity data:', err);
+    }
+  }
+
   // Fetch all data
   async function fetchAllData() {
     isLoading = true;
     error = null;
 
     try {
-      // First fetch species, then fetch chart data only if species are selected
-      await fetchAvailableSpecies();
+      // Fetch species list and diversity data in parallel (diversity is species-independent)
+      await Promise.all([fetchAvailableSpecies(), fetchDiversityData()]);
 
       if (selectedSpecies.length > 0) {
         await Promise.all([fetchTimeOfDayData(), fetchDailyTrendData()]);
       } else {
-        // Clear chart data if no species selected
+        // Clear species-dependent chart data if no species selected
         timeOfDayData = [];
         dailyTrendData = [];
       }
@@ -405,16 +481,13 @@
     fetchAllData();
   }
 
-  // Initialize on mount
+  // Initialize default custom date inputs on mount
   onMount(() => {
-    // Set initial date range
     const today = new Date();
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     startDate = formatDateForAPI(monthAgo);
     endDate = formatDateForAPI(today);
-
-    fetchAllData();
   });
 
   // Watch for changes that require data refresh
@@ -434,7 +507,9 @@
 <div class="col-span-12 space-y-6" role="region" aria-label="Advanced Analytics">
   <!-- Error Display -->
   {#if error}
-    <div class="alert alert-error">
+    <div
+      class="p-4 bg-red-50 border border-red-300 text-red-800 rounded-lg flex items-center gap-3"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         class="stroke-current shrink-0 h-6 w-6"
@@ -453,45 +528,33 @@
   {/if}
 
   <!-- Controls Section -->
-  <div class="card bg-base-100 shadow-xs">
-    <div class="card-body overflow-visible">
-      <h2 class="card-title text-lg mb-4">{t('analytics.advanced.chartControls')}</h2>
+  <div class="bg-base-100 rounded-xl shadow-sm border border-base-200">
+    <div class="p-6 overflow-visible">
+      <h2 class="text-lg font-semibold mb-4">{t('analytics.advanced.chartControls')}</h2>
 
       <!-- Top Row: Date Range and Chart Options -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
         <!-- Date Range Selection -->
         <div class="space-y-2">
-          <label class="label" for="date-range-select">
-            <span class="label-text font-medium">{t('analytics.advanced.dateRange')}</span>
-          </label>
-          <select bind:value={dateRange} class="select w-full" id="date-range-select">
-            <option value="week">{t('analytics.advanced.dateRangeOptions.week')}</option>
-            <option value="month">{t('analytics.advanced.dateRangeOptions.month')}</option>
-            <option value="quarter">{t('analytics.advanced.dateRangeOptions.quarter')}</option>
-            <option value="year">{t('analytics.advanced.dateRangeOptions.year')}</option>
-            <option value="custom">{t('analytics.advanced.dateRangeOptions.custom')}</option>
-          </select>
+          <SelectDropdown
+            bind:value={dateRange}
+            options={dateRangeOptions}
+            label={t('analytics.advanced.dateRange')}
+            variant="select"
+            size="sm"
+            menuSize="sm"
+          />
 
           {#if dateRange === 'custom'}
             <div class="grid grid-cols-2 gap-2 mt-2">
-              <label for="startDateInput" class="sr-only">Start date</label>
-              <input
-                id="startDateInput"
-                type="date"
-                bind:value={startDate}
-                class="input input-sm"
-                max={endDate}
-                aria-label="Start date"
-              />
-              <label for="endDateInput" class="sr-only">End date</label>
-              <input
-                id="endDateInput"
-                type="date"
-                bind:value={endDate}
-                class="input input-sm"
-                min={startDate}
-                aria-label="End date"
-              />
+              <label for="startDateInput" class="sr-only"
+                >{t('analytics.advanced.filters.startDate')}</label
+              >
+              <Input id="startDateInput" type="date" bind:value={startDate} max={endDate} />
+              <label for="endDateInput" class="sr-only"
+                >{t('analytics.advanced.filters.endDate')}</label
+              >
+              <Input id="endDateInput" type="date" bind:value={endDate} min={startDate} />
             </div>
           {/if}
         </div>
@@ -503,28 +566,23 @@
           </div>
 
           <div class="flex flex-wrap gap-x-6 gap-y-2">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                bind:checked={showRelativeTrends}
-                class="checkbox checkbox-sm"
-              />
-              <span class="label-text text-sm"
-                >{t('analytics.advanced.options.relativeTrends')}</span
-              >
-            </label>
+            <Checkbox
+              bind:checked={showRelativeTrends}
+              label={t('analytics.advanced.options.relativeTrends')}
+              size="sm"
+            />
 
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" bind:checked={enableZoom} class="checkbox checkbox-sm" />
-              <span class="label-text text-sm">{t('analytics.advanced.options.zoomPan')}</span>
-            </label>
+            <Checkbox
+              bind:checked={enableZoom}
+              label={t('analytics.advanced.options.zoomPan')}
+              size="sm"
+            />
 
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" bind:checked={enableBrush} class="checkbox checkbox-sm" />
-              <span class="label-text text-sm"
-                >{t('analytics.advanced.options.brushSelection')}</span
-              >
-            </label>
+            <Checkbox
+              bind:checked={enableBrush}
+              label={t('analytics.advanced.options.brushSelection')}
+              size="sm"
+            />
           </div>
         </div>
       </div>
@@ -580,7 +638,9 @@
                     </div>
                   </div>
                   {#if species.count !== undefined}
-                    <div class="badge badge-ghost badge-sm">
+                    <div
+                      class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-base-200/50 text-base-content"
+                    >
                       {t('analytics.advanced.detections', { count: species.count ?? 0 })}
                     </div>
                   {/if}
@@ -594,17 +654,17 @@
   </div>
 
   <!-- Charts Section -->
-  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+  <div class="grid grid-cols-1 gap-6">
     <!-- Time of Day Chart -->
-    <div class="card bg-base-100 shadow-xs">
-      <div class="card-body">
-        <h2 class="card-title">{t('analytics.advanced.charts.timeOfDay.title')}</h2>
+    <div class="bg-base-100 rounded-xl shadow-sm border border-base-200">
+      <div class="p-6">
+        <h2 class="text-lg font-semibold">{t('analytics.advanced.charts.timeOfDay.title')}</h2>
         <p class="text-sm text-base-content opacity-70 mb-4">
           {t('analytics.advanced.charts.timeOfDay.description')}
         </p>
 
         <div class="h-96 relative">
-          <TimeOfDaySpeciesChart data={timeOfDayData} {selectedSpecies} width={600} height={384} />
+          <TimeOfDaySpeciesChart data={timeOfDayData} {selectedSpecies} width={1200} height={384} />
 
           {#if isLoading}
             <div
@@ -613,7 +673,9 @@
               aria-busy="true"
               aria-label={t('analytics.advanced.aria.loadingAnalytics')}
             >
-              <span class="loading loading-spinner loading-lg text-primary"></span>
+              <div
+                class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"
+              ></div>
               <span class="sr-only">{t('analytics.advanced.aria.loadingAnalytics')}</span>
             </div>
           {:else if timeOfDayData.length === 0}
@@ -633,9 +695,9 @@
     </div>
 
     <!-- Daily Trend Chart -->
-    <div class="card bg-base-100 shadow-xs">
-      <div class="card-body">
-        <h2 class="card-title">{t('analytics.advanced.charts.dailyTrend.title')}</h2>
+    <div class="bg-base-100 rounded-xl shadow-sm border border-base-200">
+      <div class="p-6">
+        <h2 class="text-lg font-semibold">{t('analytics.advanced.charts.dailyTrend.title')}</h2>
         <p class="text-sm text-base-content opacity-70 mb-4">
           {t('analytics.advanced.charts.dailyTrend.description')}
         </p>
@@ -649,7 +711,7 @@
             {enableZoom}
             {enableBrush}
             onDateRangeChange={handleDateRangeChange}
-            width={600}
+            width={1200}
             height={384}
           />
 
@@ -660,7 +722,9 @@
               aria-busy="true"
               aria-label={t('analytics.advanced.aria.loadingTrends')}
             >
-              <span class="loading loading-spinner loading-lg text-primary"></span>
+              <div
+                class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"
+              ></div>
               <span class="sr-only">{t('analytics.advanced.aria.loadingTrends')}</span>
             </div>
           {:else if dailyTrendData.length === 0}
@@ -679,25 +743,55 @@
       </div>
     </div>
   </div>
+
+  <!-- Species Diversity Chart (Full Width) -->
+  <div class="bg-base-100 rounded-xl shadow-sm border border-base-200">
+    <div class="p-6">
+      <h2 class="text-lg font-semibold">{t('analytics.advanced.charts.diversity.title')}</h2>
+      <p class="text-sm text-base-content opacity-70 mb-4">
+        {t('analytics.advanced.charts.diversity.description')}
+      </p>
+
+      <div class="h-96 relative">
+        <SpeciesDiversityChart
+          data={diversityData}
+          dateRange={computedDateRange}
+          width={1200}
+          height={384}
+        />
+
+        {#if isLoading}
+          <div
+            class="absolute inset-0 bg-base-100/80 backdrop-blur-xs flex items-center justify-center rounded-lg"
+            role="status"
+            aria-busy="true"
+            aria-label={t('analytics.advanced.aria.loadingDiversity')}
+          >
+            <div
+              class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"
+            ></div>
+            <span class="sr-only">{t('analytics.advanced.aria.loadingDiversity')}</span>
+          </div>
+        {:else if diversityData.length === 0}
+          <div
+            class="absolute inset-0 flex items-center justify-center text-base-content opacity-60 rounded-lg"
+            role="status"
+            aria-label={t('analytics.advanced.charts.diversity.noData')}
+          >
+            <div class="text-center">
+              <p class="text-lg mb-2">{t('analytics.advanced.charts.diversity.noData')}</p>
+              <p class="text-sm">{t('analytics.advanced.charts.diversity.noDataHint')}</p>
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
-  /* Ensure cards can expand naturally with content */
-  .card {
-    min-height: fit-content;
-  }
-
-  /* Smooth transitions for interactive elements */
-  .checkbox,
-  .select,
-  .input {
-    transition: all 0.2s ease;
-  }
-
-  /* Ensure species selector has proper spacing */
-  .card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+  /* Card-like containers */
+  .bg-base-100 {
+    transition: box-shadow 0.2s ease;
   }
 </style>

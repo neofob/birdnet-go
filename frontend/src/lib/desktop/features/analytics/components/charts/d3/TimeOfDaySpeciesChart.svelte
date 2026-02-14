@@ -6,6 +6,7 @@
   import { max, scaleLinear } from 'd3';
   import type { Selection, AxisDomain } from 'd3';
 
+  import { t } from '$lib/i18n';
   import BaseChart from './BaseChart.svelte';
   import { createLinearScale } from './utils/scales';
   import { createAxis, styleAxis, addAxisLabel, createHourAxisFormatter } from './utils/axes';
@@ -33,13 +34,7 @@
     onSpeciesToggle?: (_species: string, _visible: boolean) => void;
   }
 
-  let {
-    data = [],
-    width = 800,
-    height = 400,
-    selectedSpecies = [],
-    onSpeciesToggle,
-  }: Props = $props();
+  let { data = [], width = 800, height = 400, selectedSpecies = [] }: Props = $props();
 
   // Component state
   let tooltip: ChartTooltip | null = null;
@@ -159,7 +154,7 @@
     addAxisLabel(
       chartGroup,
       {
-        text: 'Time of Day',
+        text: t('analytics.advanced.charts.timeOfDay.axisTime'),
         orientation: 'bottom',
         offset: 35,
         width: innerWidth,
@@ -171,7 +166,7 @@
     addAxisLabel(
       chartGroup,
       {
-        text: 'Detection Count',
+        text: t('analytics.advanced.charts.timeOfDay.axisCount'),
         orientation: 'left',
         offset: 45,
         width: innerWidth,
@@ -198,6 +193,7 @@
       .enter()
       .append('path')
       .attr('class', 'species-line')
+      .attr('data-species', d => d.species)
       .attr('d', d => line(d.data))
       .style('fill', 'none')
       .style('stroke', d => d.color ?? '#999999')
@@ -229,6 +225,7 @@
         .enter()
         .append('circle')
         .attr('class', `points-${species.species.replace(/\s+/g, '-')}`)
+        .attr('data-species', species.species)
         .attr('cx', d => xScale(d.hour))
         .attr('cy', d => yScale(d.count))
         .attr('r', 0)
@@ -242,9 +239,9 @@
           const tooltipData = {
             title: `${species.commonName}`,
             items: [
-              { label: 'Time', value: `${d.hour}:00` },
-              { label: 'Detections', value: d.count },
-              { label: 'Species', value: species.species },
+              { label: t('analytics.advanced.charts.tooltips.time'), value: `${d.hour}:00` },
+              { label: t('analytics.advanced.charts.tooltips.detections'), value: d.count },
+              { label: t('analytics.advanced.charts.tooltips.species'), value: species.species },
             ],
             x: event.clientX,
             y: event.clientY,
@@ -269,14 +266,10 @@
     addCrosshair(chartGroup, {
       width: innerWidth,
       height: innerHeight,
-      onMove: (x, y) => {
+      onMove: (x, _y, event) => {
         const hour = Math.round(xScale.invert(x));
-        /* const _count = Math.round(yScale.invert(y)); */
 
         if (hour >= 0 && hour <= 23) {
-          // Track hovered hour for potential future use
-          // hoveredHour = hour;
-
           // Show crosshair tooltip with all species data at this hour
           const hourData = visibleData
             .map(species => {
@@ -299,8 +292,8 @@
                 value: item.count.toString(),
                 color: item.color,
               })),
-              x: x + 60, // Offset from chart area
-              y: y + 60,
+              x: event.clientX,
+              y: event.clientY,
             };
 
             tooltip?.show(tooltipData);
@@ -326,10 +319,13 @@
         position: { x: innerWidth - 150, y: 20 },
         itemHeight: 20,
         onToggle: (id, visible) => {
-          const species = visibleData.find(s => s.species === id);
-          if (species) {
-            onSpeciesToggle?.(species.species, visible);
-          }
+          // Toggle visibility of the corresponding line and points
+          chartGroup
+            .selectAll(`[data-species="${id}"]`)
+            .transition()
+            .duration(300)
+            .style('opacity', visible ? 0.8 : 0)
+            .style('pointer-events', visible ? 'all' : 'none');
         },
       });
     }
@@ -343,25 +339,11 @@
   // Without these reads, the effect won't re-run when data changes.
   // This is because $derived is lazy and snippets only render once.
   $effect(() => {
-    // Force evaluation of reactive dependencies by accessing them
-    // These assignments are CRITICAL - they make the effect track these values
-    const currentData = data; // Track the data prop changes
-    const visible = visibleData; // Track computed visible data
-    const chartScales = scales; // Track scale changes
-    const ctx = chartContext; // Get the D3 context from snippet
-
-    // CRITICAL: Force reactive dependency tracking without logging
-    void {
-      dataLength: currentData.length,
-      hasChartContext: !!ctx,
-      visibleDataLength: visible.length,
-      hasScales: !!chartScales,
-    };
-
-    if (ctx && visible.length > 0 && chartScales) {
-      drawChart(ctx);
-    } else if (ctx && ctx.chartGroup && (!visible.length || !chartScales)) {
-      ctx.chartGroup.selectAll('*').remove();
+    // Simply access reactive values - Svelte 5 tracks automatically
+    if (chartContext && visibleData.length > 0 && scales) {
+      drawChart(chartContext);
+    } else if (chartContext?.chartGroup) {
+      chartContext.chartGroup.selectAll('*').remove();
     }
   });
 
