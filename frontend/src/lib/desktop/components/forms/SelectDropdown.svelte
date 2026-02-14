@@ -20,6 +20,8 @@
     clearable?: boolean;
     disabled?: boolean;
     required?: boolean;
+    /** Optional id for the control element (for label association) */
+    id?: string;
     label?: string;
     helpText?: string;
     className?: string;
@@ -55,6 +57,7 @@
     clearable = false,
     disabled = false,
     required = false,
+    id,
     label,
     helpText,
     className = '',
@@ -73,8 +76,9 @@
     renderSelected,
   }: Props = $props();
 
-  // Generate unique field ID
-  let fieldId = `select-dropdown-${Math.random().toString(36).substring(2, 11)}`;
+  // Use provided id or generate unique field ID (only generate once)
+  let generatedId = `select-dropdown-${Math.random().toString(36).substring(2, 11)}`;
+  let fieldId = $derived(id || generatedId);
 
   // State - must be declared before derived values that use them
   let isOpen = $state(false);
