@@ -1,5 +1,10 @@
 # Go Coding Standards
 
+## Project Requirements
+
+- **Go Version**: 1.26
+- **Release Notes**: [https://go.dev/doc/go1.26](https://go.dev/doc/go1.26)
+
 ## Quick Reference
 
 - Use `internal/errors` package (never standard `errors`)
@@ -8,6 +13,89 @@
 - No magic numbers - use constants
 - Document all exports
 - **Zero linter tolerance** - fix all issues before commit
+
+## Go 1.26 Features
+
+### Enhanced new() Function
+
+Use `new()` with expressions for pointer initialization:
+
+```go
+// ✅ Go 1.26 - new() accepts expressions
+existingFirstSeen: new(time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC))
+
+// ❌ Old pattern - wrapper functions unnecessary
+func ptr[T any](v T) *T { return &v }
+existingFirstSeen: ptr(time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC))
+```
+
+### Green Tea GC (Default)
+
+- **10-40% reduction in GC overhead** (enabled by default)
+- Additional 10% improvement on newer CPUs (Intel Ice Lake, AMD Zen 4+)
+- Opt-out: `GOEXPERIMENT=nogreenteagc` (will be removed in Go 1.27)
+
+### Performance Improvements
+
+- **30% faster cgo calls** - reduced baseline overhead
+- **Faster io.ReadAll()** - ~2x improvement with better allocation strategy
+- **JPEG decoder/encoder** - new, faster, more accurate implementation
+- **Reduced fmt allocations** for unformatted strings
+
+### Modern Standard Library
+
+- **strings.Cut()** - replaces `strings.Index` + slicing patterns:
+
+  ```go
+  // ✅ Go 1.26 - cleaner and more efficient
+  if host, port, found := strings.Cut(rawURL, ":"); found {
+      return host
+  }
+
+  // ❌ Old pattern
+  if colonIdx := strings.Index(rawURL, ":"); colonIdx != -1 {
+      return rawURL[:colonIdx]
+  }
+  ```
+
+- **errors.AsType()** - type-safe version of `errors.As()`:
+
+  ```go
+  // ✅ Go 1.26 - type-safe
+  if pathErr := errors.AsType[*fs.PathError](err); pathErr != nil {
+      // Use pathErr
+  }
+
+  // ❌ Old pattern
+  var pathErr *fs.PathError
+  if errors.As(err, &pathErr) {
+      // Use pathErr
+  }
+  ```
+
+- **bytes.Buffer.Peek()** - read without advancing position
+
+### Preallocation Patterns
+
+Preallocate slice capacity when size is known:
+
+```go
+// ✅ Preallocate capacity
+fields := make([]logger.Field, 0, 5+len(extraFields))
+fields = append(fields, baseFields...)
+fields = append(fields, extraFields...)
+
+// ❌ Multiple reallocations
+fields := []logger.Field{}
+fields = append(fields, baseFields...)
+fields = append(fields, extraFields...)
+```
+
+### Security & Cryptography
+
+- **Post-quantum ML-KEM** enabled by default in crypto/tls
+- **crypto/hpke** - Hybrid Public Key Encryption (RFC 9180)
+- **Secure randomness** - Random parameter in crypto functions now ignored (always secure)
 
 ## Import Rules
 
@@ -39,6 +127,7 @@
 - `t.Cleanup()` runs after all defers, providing more predictable cleanup order
 - Particularly important for tests that restore global state
 - Example:
+
   ```go
   func TestWithGlobalState(t *testing.T) {
       // ❌ Wrong - defer may run at unpredictable times
@@ -61,6 +150,7 @@
   - Share mutable data structures without synchronization
   - Use shared map references without cloning
 - **Always clone shared test data** in subtests:
+
   ```go
   import "maps"
 
@@ -86,6 +176,7 @@
 - Always call `b.ReportAllocs()` before `b.ResetTimer()` to track allocations
 - Use `b.Loop()` (Go 1.24+) for cleaner benchmark loops (optional)
 - Benchmark example:
+
   ```go
   func BenchmarkValidation(b *testing.B) {
       cfg := &Config{...}
@@ -294,9 +385,9 @@ data, err := jsonv2.Marshal(response)
 - `for i := range n` for loops
 - Pre-compile regex at package level
 - Store interfaces in `atomic.Value` directly
-- Use `os.Root` for filesystem sandboxing (https://go.dev/blog/osroot)
-- Use `sync.WaitGroup.Go()` for goroutines (https://pkg.go.dev/sync#WaitGroup.Go)
-- Use `testing/synctest` for concurrent tests (https://go.dev/blog/synctest)
+- Use `os.Root` for filesystem sandboxing (<https://go.dev/blog/osroot>)
+- Use `sync.WaitGroup.Go()` for goroutines (<https://pkg.go.dev/sync#WaitGroup.Go>)
+- Use `testing/synctest` for concurrent tests (<https://go.dev/blog/synctest>)
 
 ## Standard Library First
 
