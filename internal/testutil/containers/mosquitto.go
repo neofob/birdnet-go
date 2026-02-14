@@ -16,6 +16,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/tphakala/birdnet-go/internal/errors"
 )
 
 // MosquittoContainer wraps a testcontainers Eclipse Mosquitto MQTT broker instance.
@@ -110,7 +111,8 @@ func NewMosquittoContainer(ctx context.Context, config *MosquittoConfig) (*Mosqu
 	// Get host and port
 	host, err := container.Host(ctx)
 	if err != nil {
-		_ = container.Terminate(ctx)
+		// Use background context for cleanup to ensure it succeeds even if parent ctx expired
+		_ = container.Terminate(context.Background())
 		if configFile != "" {
 			_ = os.Remove(configFile)
 		}
@@ -119,7 +121,8 @@ func NewMosquittoContainer(ctx context.Context, config *MosquittoConfig) (*Mosqu
 
 	mappedPort, err := container.MappedPort(ctx, "1883")
 	if err != nil {
-		_ = container.Terminate(ctx)
+		// Use background context for cleanup to ensure it succeeds even if parent ctx expired
+		_ = container.Terminate(context.Background())
 		if configFile != "" {
 			_ = os.Remove(configFile)
 		}
@@ -139,7 +142,8 @@ func NewMosquittoContainer(ctx context.Context, config *MosquittoConfig) (*Mosqu
 
 	// Verify broker is ready with health check
 	if err := mc.HealthCheck(ctx); err != nil {
-		_ = container.Terminate(ctx)
+		// Use background context for cleanup to ensure it succeeds even if parent ctx expired
+		_ = container.Terminate(context.Background())
 		if configFile != "" {
 			_ = os.Remove(configFile)
 		}
@@ -264,7 +268,8 @@ func (c *MosquittoContainer) ClearRetainedMessages(ctx context.Context) error {
 
 	var mu sync.Mutex
 	retainedTopics := make([]string, 0)
-	done := make(chan bool, 1)
+	messagesReceived := make(chan struct{})
+	var receiveOnce sync.Once
 
 	// Subscribe to all topics to find retained messages
 	token := client.Subscribe("#", 0, func(client mqtt.Client, msg mqtt.Message) {
@@ -272,6 +277,11 @@ func (c *MosquittoContainer) ClearRetainedMessages(ctx context.Context) error {
 			mu.Lock()
 			retainedTopics = append(retainedTopics, msg.Topic())
 			mu.Unlock()
+			// Signal that we've received at least one message
+			// Use sync.Once to ensure we only signal once
+			receiveOnce.Do(func() {
+				close(messagesReceived)
+			})
 		}
 	})
 	if !token.WaitTimeout(5 * time.Second) {
@@ -282,14 +292,29 @@ func (c *MosquittoContainer) ClearRetainedMessages(ctx context.Context) error {
 	}
 
 	// Wait for retained messages with timeout
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		done <- true
-	}()
+	// Use a more generous timeout (500ms) to allow for all retained messages to arrive
+	// If no retained messages exist, this will timeout (which is expected behavior)
+	waitCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
 
 	select {
-	case <-done:
-		// Timeout reached
+	case <-messagesReceived:
+		// At least one retained message received, give a bit more time for others
+		// Use a shorter grace period (50ms) for additional messages
+		graceTimer := time.NewTimer(50 * time.Millisecond)
+		defer graceTimer.Stop()
+		select {
+		case <-graceTimer.C:
+			// Grace period elapsed, proceed with clearing
+		case <-ctx.Done():
+			return fmt.Errorf("context cancelled while waiting for retained messages: %w", ctx.Err())
+		}
+	case <-waitCtx.Done():
+		// Check if the parent context was cancelled (not just the wait timeout)
+		if ctx.Err() != nil {
+			return fmt.Errorf("context cancelled while waiting for retained messages: %w", ctx.Err())
+		}
+		// Timeout reached with no messages - this is fine, means no retained messages exist
 	case <-ctx.Done():
 		return fmt.Errorf("context cancelled while waiting for retained messages: %w", ctx.Err())
 	}
@@ -310,7 +335,7 @@ func (c *MosquittoContainer) ClearRetainedMessages(ctx context.Context) error {
 	mu.Unlock()
 
 	for _, topic := range topicsCopy {
-		token := client.Publish(topic, 0, true, nil)
+		token := client.Publish(topic, 0, true, []byte{})
 		if !token.WaitTimeout(5 * time.Second) {
 			return fmt.Errorf("publish timeout for topic %s after 5s", topic)
 		}
@@ -324,23 +349,23 @@ func (c *MosquittoContainer) ClearRetainedMessages(ctx context.Context) error {
 
 // Terminate stops and removes the Mosquitto container.
 // Also cleans up the temporary config file if one was created.
+// Returns combined errors if both operations fail.
 func (c *MosquittoContainer) Terminate(ctx context.Context) error {
-	var terminateErr error
+	var errs []error
 
 	// Terminate container
 	if c.container != nil {
 		if err := c.container.Terminate(ctx); err != nil {
-			terminateErr = fmt.Errorf("failed to terminate container: %w", err)
+			errs = append(errs, fmt.Errorf("failed to terminate container: %w", err))
 		}
 	}
 
 	// Clean up temp config file
 	if c.configFile != "" {
 		if err := os.Remove(c.configFile); err != nil && !os.IsNotExist(err) {
-			// Log warning but don't override container termination error
-			fmt.Printf("Warning: failed to remove temp config file %s: %v\n", c.configFile, err)
+			errs = append(errs, fmt.Errorf("failed to remove temp config file %s: %w", c.configFile, err))
 		}
 	}
 
-	return terminateErr
+	return errors.Join(errs...)
 }
