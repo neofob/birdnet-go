@@ -47,8 +47,9 @@ func setupIntegrationTestDB(t *testing.T) *datastore.DataStore {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	// Create the notes table
-	err = db.AutoMigrate(&datastore.Note{})
+	// Create the notes and note_reviews table schemas
+	// note_reviews is now required for analytics queries that filter out false positives
+	err = db.AutoMigrate(&datastore.Note{}, &datastore.NoteReview{})
 	require.NoError(t, err)
 
 	// Create indexes for performance
