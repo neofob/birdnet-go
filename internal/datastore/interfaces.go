@@ -862,8 +862,18 @@ func (ds *DataStore) SaveHourlyWeather(hourlyWeather *HourlyWeather) error {
 			Build()
 	}
 
-	// Use upsert to avoid duplicates for the same timestamp
-	result := ds.DB.Where("time = ?", hourlyWeather.Time).
+	// Use upsert to avoid duplicates for the same timestamp.
+	// Compare using Unix epoch seconds to handle legacy records with local
+	// timezone offsets alongside new UTC records.
+	var whereClause string
+	switch strings.ToLower(ds.Dialector().Name()) {
+	case DialectMySQL:
+		whereClause = "UNIX_TIMESTAMP(time) = UNIX_TIMESTAMP(?)"
+	default: // SQLite
+		whereClause = "strftime('%s', time) = strftime('%s', ?)"
+	}
+
+	result := ds.DB.Where(whereClause, hourlyWeather.Time).
 		Assign(*hourlyWeather).
 		FirstOrCreate(hourlyWeather)
 
@@ -923,10 +933,19 @@ func (ds *DataStore) GetHourlyWeatherInLocation(date string, loc *time.Location)
 	utcStart := dayStart.UTC()
 	utcEnd := dayEnd.UTC()
 
-	// Query using time range instead of date string extraction
-	// This ensures we get all weather records that fall within the local date,
-	// regardless of timezone differences between storage and display
-	err = ds.DB.Where("time >= ? AND time < ?", utcStart, utcEnd).
+	// Convert timestamps to Unix epoch seconds for comparison.
+	// This handles legacy records stored with local timezone offsets (e.g., +13:00)
+	// as well as new records stored in UTC (+00:00). SQLite's default string
+	// comparison produces incorrect results when timezone offsets differ.
+	var whereClause string
+	switch strings.ToLower(ds.Dialector().Name()) {
+	case DialectMySQL:
+		whereClause = "UNIX_TIMESTAMP(time) >= UNIX_TIMESTAMP(?) AND UNIX_TIMESTAMP(time) < UNIX_TIMESTAMP(?)"
+	default: // SQLite
+		whereClause = "strftime('%s', time) >= strftime('%s', ?) AND strftime('%s', time) < strftime('%s', ?)"
+	}
+
+	err = ds.DB.Where(whereClause, utcStart, utcEnd).
 		Order("time ASC").
 		Find(&hourlyWeather).Error
 
