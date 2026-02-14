@@ -145,10 +145,11 @@ func RangeOverInteger(m dsl.Matcher) {
 		`for $i := 0; $i < $n; $i++ { $*body }`,
 	).
 		Where(
-			!m["n"].Text.Matches(`.*\.N$`), // Exclude b.N (benchmark) patterns
+			!m["n"].Text.Matches(`.*\.N$`) &&
+				!m["n"].Text.Matches(`\.(NumField|NumMethod|NumIn|NumOut)\(\)$`),
 		).
 		Report("use for $i := range $n instead of for $i := 0; $i < $n; $i++ (Go 1.22+)").
-		Suggest("for $i := range $n { $*body }")
+		Suggest("for $i := range $n { $body }")
 }
 
 // AppendWithoutValues detects append calls with no values which have no effect.
@@ -164,4 +165,37 @@ func AppendWithoutValues(m dsl.Matcher) {
 		`append($s)`,
 	).
 		Report("append with single argument has no effect; did you forget the values to append?")
+}
+
+// NewWithExpression detects the slice-literal hack for getting a pointer to a value
+// and suggests using Go 1.26's enhanced new() built-in.
+//
+// Old pattern (slice hack):
+//
+//	field := &[]string{"hello"}[0]
+//	field := &[]int{42}[0]
+//	field := &[]time.Duration{5 * time.Second}[0]
+//
+// New pattern (Go 1.26+):
+//
+//	field := new("hello")
+//	field := new(42)
+//	field := new(5 * time.Second)
+//
+// Benefits:
+//   - Eliminates the obscure slice-literal-index hack
+//   - Clearer intent: "pointer to this value"
+//   - No intermediate slice allocation
+//   - Works with any expression, including function calls
+//
+// See: https://go.dev/doc/go1.26#language
+func NewWithExpression(m dsl.Matcher) {
+	// Pattern: &[]T{v}[0] - the well-known slice hack for pointer-to-value
+	// Note: Report-only, no autofix. The replacement new($val) must preserve the type of $typ,
+	// which requires new($typ($val)) for type conversions. Since we can't reliably determine
+	// when a type conversion is needed, we report without suggesting an autofix.
+	m.Match(
+		`&[]$typ{$val}[0]`,
+	).
+		Report("consider using new($typ($val)) instead of &[]$typ{$val}[0] (Go 1.26+); verify type compatibility")
 }

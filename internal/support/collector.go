@@ -1407,8 +1407,10 @@ func (c *Collector) getLogSearchPaths() []string {
 
 	// Validate and add paths safely
 	addPathIfValid := func(basePath, subPath string) {
-		// Ensure basePath is not empty and doesn't contain path traversal attempts
-		if basePath == "" || strings.Contains(basePath, "..") {
+		// Ensure basePath is not empty
+		// Note: basePath is from internal config (c.dataPath, c.configPath), not user input.
+		// Path traversal protection happens below via absBase prefix check.
+		if basePath == "" {
 			return
 		}
 
