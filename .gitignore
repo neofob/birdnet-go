@@ -23,6 +23,9 @@ output/soundscape.wav.csv
 birdnet.db
 birdnet.db-shm
 birdnet.db-wal
+/*.db
+/*.db-shm
+/*.db-wal
 birdnet.txt
 custom_confidence_list.txt
 node_modules
