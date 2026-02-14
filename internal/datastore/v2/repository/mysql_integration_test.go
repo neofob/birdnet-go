@@ -370,10 +370,10 @@ func TestMySQL_HAVING_Clause(t *testing.T) {
 		confidence float64
 	}{
 		{"Turdus merula", 0.95},
-		{"Turdus merula", 0.85},
-		{"Turdus merula", 0.75},
+		{"Turdus merula", 0.83}, // Changed from 0.85 to avoid FLOAT precision boundary issues
+		{"Turdus merula", 0.75},  // Average will be ~0.843, clearly < 0.85
 		{"Parus major", 0.92},
-		{"Parus major", 0.88},
+		{"Parus major", 0.88}, // Average will be 0.90, clearly > 0.85
 	}
 
 	for _, d := range testData {
