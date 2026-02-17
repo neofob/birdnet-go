@@ -181,7 +181,8 @@ describe('addAxisLabel', () => {
     expect(label.getAttribute('aria-hidden')).toBe('true');
 
     // Check styles
-    expect(label.style.fill).toBe('#333');
+    // jsdom 28+ normalizes hex colors to rgb() format
+    expect(label.style.fill).toBe('rgb(51, 51, 51)');
     expect(label.style.fontSize).toBe('12px');
     // jsdom 27.4.0+ may quote font-family values, strip quotes for comparison
     expect(label.style.fontFamily.replace(/^["']|["']$/g, '')).toBe('Arial');
@@ -271,7 +272,8 @@ describe('addAxisLabel', () => {
 
     const label = container.querySelector('.axis-label') as SVGTextElement;
 
-    expect(label.style.fill).toBe('#ff0000');
+    // jsdom 28+ normalizes hex colors to rgb() format
+    expect(label.style.fill).toBe('rgb(255, 0, 0)');
     expect(label.style.fontSize).toBe('16px');
     // jsdom 27.4.0+ quotes font-family values with spaces, strip quotes for comparison
     expect(label.style.fontFamily.replace(/^["']|["']$/g, '')).toBe('Times New Roman');
@@ -408,11 +410,12 @@ describe('createGridLines', () => {
     const firstXLine = xGridLines[0] as SVGLineElement;
     const firstYLine = yGridLines[0] as SVGLineElement;
 
-    expect(firstXLine.style.stroke).toBe('#ff0000');
+    // jsdom 28+ normalizes hex colors to rgb() format
+    expect(firstXLine.style.stroke).toBe('rgb(255, 0, 0)');
     expect(firstXLine.style.strokeDasharray).toBe('2,2');
     expect(firstXLine.style.opacity).toBe('0.3');
 
-    expect(firstYLine.style.stroke).toBe('#ff0000');
+    expect(firstYLine.style.stroke).toBe('rgb(255, 0, 0)');
     expect(firstYLine.style.strokeDasharray).toBe('2,2');
     expect(firstYLine.style.opacity).toBe('0.3');
   });
