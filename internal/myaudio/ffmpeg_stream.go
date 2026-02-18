@@ -773,43 +773,8 @@ func (s *FFmpegStream) startProcess() error {
 	// Get FFmpeg format settings
 	sampleRate, numChannels, format := getFFmpegFormat(conf.SampleRate, conf.NumChannels, conf.BitDepth)
 
-	// Build FFmpeg command arguments
-	args := []string{
-		"-rtsp_transport", s.transport,
-	}
-
-	// Get RTSP settings
-	rtspSettings := conf.Setting().Realtime.RTSP
-
-	// Check if user has already provided a timeout parameter
-	hasUserTimeout, userTimeoutValue := detectUserTimeout(rtspSettings.FFmpegParameters)
-
-	// Add default timeout if user hasn't provided one
-	if !hasUserTimeout {
-		args = append(args, "-timeout", strconv.FormatInt(defaultTimeoutMicroseconds, 10))
-	}
-
-	// Add custom FFmpeg parameters from configuration (before input)
-	if len(rtspSettings.FFmpegParameters) > 0 {
-		// Validate user timeout if provided
-		if hasUserTimeout {
-			if err := s.validateUserTimeout(userTimeoutValue); err != nil {
-				// Log warning but continue - prefer working stream with default timeout
-				// over failing completely due to user configuration error
-				getStreamLogger().Warn("invalid user timeout, using default",
-					logger.String("url", privacy.SanitizeStreamUrl(s.source.SafeString)),
-					logger.String("user_timeout", userTimeoutValue),
-					logger.Error(err),
-					logger.String("component", "ffmpeg-stream"),
-					logger.String("operation", "validate_timeout"))
-				// Add default timeout before user parameters
-				args = append(args, "-timeout", strconv.FormatInt(defaultTimeoutMicroseconds, 10))
-			}
-		}
-		args = append(args, rtspSettings.FFmpegParameters...)
-	}
-
-	// Validate input source before building command to prevent empty input errors
+	// Validate input source before building command to prevent nil dereference in
+	// buildFFmpegInputArgs (which accesses s.source.SafeString and s.source.Type).
 	if s.source == nil {
 		return errors.Newf("FFmpeg source is nil, cannot start process").
 			Category(errors.CategoryValidation).
@@ -817,6 +782,12 @@ func (s *FFmpegStream) startProcess() error {
 			Context("operation", "start_process").
 			Build()
 	}
+
+	// Get RTSP settings for custom FFmpeg parameters
+	rtspSettings := conf.Setting().Realtime.RTSP
+
+	// Build FFmpeg command arguments (protocol-aware)
+	args := s.buildFFmpegInputArgs(rtspSettings.FFmpegParameters)
 
 	// Get and validate connection string
 	connStr, err := s.source.GetConnectionString()
@@ -901,7 +872,6 @@ func (s *FFmpegStream) startProcess() error {
 			logger.String("transport", s.transport),
 			logger.String("ffmpeg_path", settings.FfmpegPath),
 			logger.Int("args_count", len(args)),
-			logger.Bool("has_user_timeout", hasUserTimeout),
 			logger.String("operation", "start_process_debug"))
 	}
 
@@ -926,6 +896,67 @@ func (s *FFmpegStream) startProcess() error {
 		logger.String("operation", "start_process"))
 
 	return nil
+}
+
+// buildFFmpegInputArgs constructs the FFmpeg input arguments for this stream.
+// RTSP-specific flags like -rtsp_transport are only added for RTSP streams;
+// applying them to HTTP/HLS/RTMP/UDP streams causes FFmpeg to exit immediately
+// with "Option rtsp_transport not found".
+func (s *FFmpegStream) buildFFmpegInputArgs(ffmpegParameters []string) []string {
+	args := []string{}
+
+	// Only add -rtsp_transport for RTSP streams. HTTP, HLS, RTMP and UDP streams
+	// do not support this option and FFmpeg will fail with "Option rtsp_transport not found".
+	if s.source != nil && s.source.Type == SourceTypeRTSP {
+		args = append(args, "-rtsp_transport", s.transport)
+	}
+
+	// Check if user has already provided a timeout parameter
+	hasUserTimeout, userTimeoutValue := detectUserTimeout(ffmpegParameters)
+
+	// Add default timeout if user hasn't provided one
+	if !hasUserTimeout {
+		args = append(args, "-timeout", strconv.FormatInt(defaultTimeoutMicroseconds, 10))
+	}
+
+	// Add custom FFmpeg parameters from configuration (before input)
+	if len(ffmpegParameters) > 0 {
+		if hasUserTimeout {
+			if err := s.validateUserTimeout(userTimeoutValue); err != nil {
+				// Invalid user timeout: log warning, use default, and filter out the bad flag.
+				// Do NOT append the original parameters unmodified — the invalid -timeout value
+				// would override the default we just added, causing FFmpeg to fail.
+				getStreamLogger().Warn("invalid user timeout, using default",
+					logger.String("url", privacy.SanitizeStreamUrl(s.source.SafeString)),
+					logger.String("user_timeout", userTimeoutValue),
+					logger.Error(err),
+					logger.String("component", "ffmpeg-stream"),
+					logger.String("operation", "validate_timeout"))
+				args = append(args, "-timeout", strconv.FormatInt(defaultTimeoutMicroseconds, 10))
+				// Append all params except the invalid -timeout flag and its value.
+				// Use a skip flag to drop both the flag name and the following value.
+				skipNext := false
+				for _, param := range ffmpegParameters {
+					if skipNext {
+						skipNext = false
+						continue
+					}
+					if param == "-timeout" {
+						skipNext = true
+						continue
+					}
+					args = append(args, param)
+				}
+			} else {
+				// Valid user timeout: append everything as-is
+				args = append(args, ffmpegParameters...)
+			}
+		} else {
+			args = append(args, ffmpegParameters...)
+		}
+	}
+
+	return args
 }
 
 // handleSilenceTimeout checks if stream has stopped producing data and triggers restart

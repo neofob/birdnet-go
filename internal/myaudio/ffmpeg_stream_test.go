@@ -11,6 +11,9 @@ import (
 	"github.com/tphakala/birdnet-go/internal/conf"
 )
 
+// ffmpegTimeoutFlag is the FFmpeg flag name for connection timeout used in tests.
+const ffmpegTimeoutFlag = "-timeout"
+
 func TestFFmpegStream_NewStream(t *testing.T) {
 	t.Parallel()
 
@@ -703,7 +706,7 @@ func TestFFmpegStream_TimeoutBehaviorIntegration(t *testing.T) {
 
 			// Add default timeout if user hasn't provided one
 			if !hasUserTimeout {
-				args = append(args, "-timeout", "30000000")
+				args = append(args, ffmpegTimeoutFlag, "30000000")
 			}
 
 			// Add user parameters
@@ -719,7 +722,7 @@ func TestFFmpegStream_TimeoutBehaviorIntegration(t *testing.T) {
 			// Check if default timeout was added
 			hasDefaultTimeout := false
 			for i, arg := range args {
-				if arg == "-timeout" && i+1 < len(args) && args[i+1] == "30000000" {
+				if arg == ffmpegTimeoutFlag && i+1 < len(args) && args[i+1] == "30000000" {
 					hasDefaultTimeout = true
 					break
 				}
@@ -729,14 +732,59 @@ func TestFFmpegStream_TimeoutBehaviorIntegration(t *testing.T) {
 				"Default timeout presence should match expected for test: %s", tt.name)
 
 			// Verify the args contain expected elements
-			assert.Contains(t, args, "-rtsp_transport", "Should always contain transport parameter")
-			assert.Contains(t, args, "tcp", "Should always contain transport value")
+			// -rtsp_transport is only added for RTSP streams; this test simulates RTSP explicitly.
+			assert.Contains(t, args, "-rtsp_transport", "RTSP stream should contain transport parameter")
+			assert.Contains(t, args, "tcp", "RTSP stream should contain transport value")
 
 			// Verify timeout is present in some form
-			hasAnyTimeout := slices.Contains(args, "-timeout")
+			hasAnyTimeout := slices.Contains(args, ffmpegTimeoutFlag)
 			assert.True(t, hasAnyTimeout, "Should always have a timeout parameter")
 		})
 	}
+}
+
+// TestBuildFFmpegInputArgs_InvalidTimeout verifies that an invalid user-provided timeout
+// is filtered out and replaced by the default, not passed through to FFmpeg alongside it.
+// Regression test for: https://github.com/tphakala/birdnet-go/pull/1990
+func TestBuildFFmpegInputArgs_InvalidTimeout(t *testing.T) {
+	t.Parallel()
+
+	audioChan := make(chan UnifiedAudioData, 1)
+	defer close(audioChan)
+	stream := NewFFmpegStream("rtsp://192.168.1.100/stream", "tcp", audioChan)
+	require.NotNil(t, stream)
+
+	// User-provided params with an invalid timeout value ("abc")
+	params := []string{"-timeout", "abc", "-loglevel", "debug"}
+	args := stream.buildFFmpegInputArgs(params)
+
+	// The default timeout must be present
+	timeoutIdx := -1
+	for i, a := range args {
+		if a == ffmpegTimeoutFlag {
+			timeoutIdx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, timeoutIdx, "-timeout flag must be present")
+
+	// The value after -timeout must NOT be "abc" (invalid was replaced by default)
+	require.Less(t, timeoutIdx+1, len(args), "-timeout must have a following value")
+	assert.NotEqual(t, "abc", args[timeoutIdx+1],
+		"invalid timeout value must not reach FFmpeg; got value %q", args[timeoutIdx+1])
+
+	// -timeout must appear only ONCE (no duplicate from invalid param leaking through)
+	count := 0
+	for _, a := range args {
+		if a == ffmpegTimeoutFlag {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "-timeout must appear exactly once; got %d occurrences in %v", count, args)
+
+	// Other user params (non-timeout) must still be present
+	assert.Contains(t, args, "-loglevel")
+	assert.Contains(t, args, "debug")
 }
 
 // TestDetectUserTimeout tests the helper function for detecting user timeouts
@@ -1026,4 +1074,99 @@ func TestFFmpegStream_ConcurrentLastDataTimeAccess(t *testing.T) {
 	finalTime := stream.lastDataTime
 	stream.lastDataMu.RUnlock()
 	assert.False(t, finalTime.IsZero(), "After concurrent updates, lastDataTime should not be zero")
+}
+
+// TestBuildFFmpegInputArgs verifies that protocol-specific flags are only added
+// for the correct stream types.
+func TestBuildFFmpegInputArgs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		url               string
+		transport         string
+		ffmpegParams      []string
+		wantRTSPTransport bool
+		wantTimeout       bool
+	}{
+		{
+			name:              "rtsp_stream_includes_rtsp_transport",
+			url:               "rtsp://192.168.1.100/stream",
+			transport:         "tcp",
+			ffmpegParams:      []string{},
+			wantRTSPTransport: true,
+			wantTimeout:       true,
+		},
+		{
+			name:              "http_stream_excludes_rtsp_transport",
+			url:               "http://192.168.1.183/stream",
+			transport:         "tcp",
+			ffmpegParams:      []string{"-f", "s16le", "-ar", "48000", "-ac", "1"},
+			wantRTSPTransport: false,
+			wantTimeout:       true,
+		},
+		{
+			name:              "https_stream_excludes_rtsp_transport",
+			url:               "https://stream.example.com/audio",
+			transport:         "tcp",
+			ffmpegParams:      []string{},
+			wantRTSPTransport: false,
+			wantTimeout:       true,
+		},
+		{
+			name:              "hls_stream_excludes_rtsp_transport",
+			url:               "http://example.com/stream.m3u8",
+			transport:         "tcp",
+			ffmpegParams:      []string{},
+			wantRTSPTransport: false,
+			wantTimeout:       true,
+		},
+		{
+			name:              "rtsp_stream_with_user_timeout_no_default_timeout",
+			url:               "rtsp://192.168.1.100/stream",
+			transport:         "udp",
+			ffmpegParams:      []string{"-timeout", "5000000"},
+			wantRTSPTransport: true,
+			wantTimeout:       true,
+		},
+		{
+			name:              "http_stream_with_user_timeout_no_default_timeout",
+			url:               "http://192.168.1.183/stream",
+			transport:         "tcp",
+			ffmpegParams:      []string{"-timeout", "5000000", "-f", "s16le"},
+			wantRTSPTransport: false,
+			wantTimeout:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			audioChan := make(chan UnifiedAudioData, 1)
+			defer close(audioChan)
+			stream := NewFFmpegStream(tt.url, tt.transport, audioChan)
+			require.NotNil(t, stream)
+
+			args := stream.buildFFmpegInputArgs(tt.ffmpegParams)
+
+			hasRTSPTransport := slices.Contains(args, "-rtsp_transport")
+			hasTimeout := slices.Contains(args, ffmpegTimeoutFlag)
+
+			assert.Equal(t, tt.wantRTSPTransport, hasRTSPTransport,
+				"rtsp_transport flag presence mismatch")
+			assert.Equal(t, tt.wantTimeout, hasTimeout,
+				"timeout flag presence mismatch")
+
+			// For non-RTSP streams, verify user params ARE present
+			if !tt.wantRTSPTransport {
+				for _, p := range tt.ffmpegParams {
+					if p != ffmpegTimeoutFlag {
+						assert.Contains(t, args, p,
+							"custom param %q should be in args", p)
+					}
+				}
+			}
+		})
+	}
 }
