@@ -568,8 +568,9 @@ export interface WebhookEndpointConfig {
   url: string;
   method?: string; // POST, PUT, PATCH (default: POST)
   headers?: Record<string, string>;
-  timeout?: number;
+  timeout?: string; // Duration string, e.g. "30s"
   auth?: WebhookAuthConfig;
+  [key: string]: unknown; // passthrough for backend-only fields
 }
 
 // Push provider configuration (shoutrrr type for user-friendly UI)
@@ -580,7 +581,9 @@ export interface PushProviderConfig {
   urls?: string[]; // For shoutrrr providers
   endpoints?: WebhookEndpointConfig[]; // For webhook providers
   filter?: PushFilterConfig;
-  timeout?: number;
+  timeout?: string; // Duration string, e.g. "30s"
+  // Allow additional backend-only fields to pass through
+  [key: string]: unknown;
 }
 
 // Push settings for notification delivery
@@ -590,6 +593,8 @@ export interface PushSettings {
   // Detection filtering settings
   minConfidenceThreshold?: number; // 0.0-1.0, 0 = disabled
   speciesCooldownMinutes?: number; // 0 = disabled
+  // Allow additional backend-only fields to pass through (default_timeout, circuit_breaker, etc.)
+  [key: string]: unknown;
 }
 
 // Notification templates
