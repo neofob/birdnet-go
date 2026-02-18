@@ -2,8 +2,14 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net"
 	"net/http"
+	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -167,6 +173,181 @@ func (c *Controller) SetupNotificationRoutes() {
 
 	// Test endpoints for notification system (authenticated)
 	notificationsGroup.POST("/test/new-species", c.CreateTestNewSpeciesNotification)
+
+	// NTFY server connectivity probe (authenticated)
+	notificationsGroup.GET("/check-ntfy-server", c.CheckNtfyServer)
+}
+
+// ntfyServerCheckTimeout is the per-scheme timeout for the connectivity probe.
+const ntfyServerCheckTimeout = 5 * time.Second
+
+// blockedNtfyHosts contains IP addresses that must not be probed.
+// These are cloud metadata service addresses unrelated to ntfy servers.
+var blockedNtfyHosts = []string{
+	"169.254.169.254", // AWS/GCP/Azure instance metadata service
+	"fd00:ec2::254",   // AWS IPv6 metadata service
+}
+
+// hostnameLabelPattern validates a single DNS hostname label (RFC 952 / RFC 1123).
+var hostnameLabelPattern = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$`)
+
+// NtfyServerCheckResponse is the JSON response for the NTFY server check endpoint.
+type NtfyServerCheckResponse struct {
+	Recommended string `json:"recommended"` // "https", "http", or "unreachable"
+	HTTPS       bool   `json:"https"`
+	HTTP        bool   `json:"http"`
+}
+
+// CheckNtfyServer probes an NTFY server host for HTTPS and HTTP connectivity.
+// It tries HTTPS first; on failure it falls back to HTTP.
+// GET /api/v2/notifications/check-ntfy-server?host=<hostname[:port]>
+func (c *Controller) CheckNtfyServer(ctx echo.Context) error {
+	host := ctx.QueryParam("host")
+	if host == "" {
+		return ctx.JSON(http.StatusBadRequest, map[string]string{
+			"error": "host parameter is required",
+		})
+	}
+
+	if !isValidNtfyHost(host) {
+		return ctx.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid host parameter",
+		})
+	}
+
+	resp := probeNtfyServer(ctx.Request().Context(), host)
+	return ctx.JSON(http.StatusOK, resp)
+}
+
+// isValidNtfyHost returns true if host is a safe, valid hostname or IP (with optional port).
+// It uses net.SplitHostPort for port handling and net.ParseIP / hostname pattern for the host part.
+func isValidNtfyHost(host string) bool {
+	if host == "" || len(host) > 260 {
+		return false
+	}
+
+	// Reject if a scheme is included — we expect a bare host or host:port
+	if strings.Contains(host, "://") {
+		return false
+	}
+
+	// Strip port and brackets (if any) before comparing against blocked hosts
+	hostOnly := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		hostOnly = h
+	}
+	// Strip brackets from bare IPv6 (e.g. [fd00:ec2::254] → fd00:ec2::254)
+	hostOnly = strings.TrimPrefix(strings.TrimSuffix(hostOnly, "]"), "[")
+	if slices.Contains(blockedNtfyHosts, hostOnly) {
+		return false
+	}
+
+	// Try parsing as host:port — if it works, validate both parts
+	if h, port, err := net.SplitHostPort(host); err == nil {
+		p, err := strconv.Atoi(port)
+		if err != nil || p < 1 || p > 65535 {
+			return false
+		}
+		return isValidHostname(h)
+	}
+
+	// No port: entire string is the host
+	return isValidHostname(host)
+}
+
+// isValidHostname validates a bare hostname or IP address (no port).
+func isValidHostname(h string) bool {
+	// IPv6 with brackets: [::1]
+	if strings.HasPrefix(h, "[") && strings.HasSuffix(h, "]") {
+		inner := h[1 : len(h)-1]
+		return net.ParseIP(inner) != nil
+	}
+	// IPv4 or bare IPv6
+	if net.ParseIP(h) != nil {
+		return true
+	}
+	// DNS hostname: labels separated by dots
+	labels := strings.Split(h, ".")
+	if len(labels) == 0 {
+		return false
+	}
+	for _, label := range labels {
+		if label == "" || !hostnameLabelPattern.MatchString(label) {
+			return false
+		}
+	}
+	return true
+}
+
+// isNtfyHealthResponse returns true if the HTTP response looks like a healthy ntfy
+// /v1/health reply: HTTP 200 with a JSON body containing {"healthy": true}.
+// This prevents false positives from unrelated HTTP servers (e.g. nginx)
+// that happen to respond on the probed host/port, and rejects unhealthy ntfy instances.
+func isNtfyHealthResponse(r *http.Response) bool {
+	if r.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1024))
+	if err != nil {
+		return false
+	}
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		return false
+	}
+	healthy, ok := result["healthy"].(bool)
+	return ok && healthy
+}
+
+// probeNtfyServer tests HTTPS then HTTP connectivity to the given host.
+// It validates the response is from an ntfy server by checking for the
+// /v1/health JSON response with a "healthy" key, preventing false positives
+// from unrelated HTTP servers running on the same host/port.
+func probeNtfyServer(ctx context.Context, host string) NtfyServerCheckResponse {
+	resp := NtfyServerCheckResponse{Recommended: "unreachable"}
+
+	// Normalize bare IPv6 addresses (e.g. ::1 → [::1]) for RFC 3986 URL compliance.
+	// Addresses already bracketed or with ports (handled by SplitHostPort) pass through.
+	hostForURL := host
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+			hostForURL = "[" + host + "]"
+		}
+	}
+
+	client := &http.Client{
+		Timeout: ntfyServerCheckTimeout,
+		// Don't follow redirects — ntfy health endpoint does not redirect
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	tryURL := func(rawURL string) bool {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
+		if err != nil {
+			return false
+		}
+		r, err := client.Do(req)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = r.Body.Close() }()
+		return isNtfyHealthResponse(r)
+	}
+
+	if tryURL("https://" + hostForURL + "/v1/health") {
+		resp.HTTPS = true
+		resp.Recommended = "https"
+		return resp
+	}
+
+	if tryURL("http://" + hostForURL + "/v1/health") {
+		resp.HTTP = true
+		resp.Recommended = "http"
+	}
+
+	return resp
 }
 
 // StreamNotifications handles the SSE connection for real-time notification streaming

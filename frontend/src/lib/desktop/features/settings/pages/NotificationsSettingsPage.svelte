@@ -100,6 +100,11 @@
     // ntfy
     ntfyServer: string;
     ntfyTopic: string;
+    ntfyProtocol: 'https' | 'http';
+    ntfyUsername: string;
+    ntfyPassword: string;
+    ntfyCheckHost: string; // host value at time probe was triggered (for race guard)
+    ntfyCheckStatus: 'idle' | 'checking' | 'https' | 'http' | 'unreachable';
     // Gotify
     gotifyServer: string;
     gotifyToken: string;
@@ -143,6 +148,11 @@
     telegramChatId: '',
     ntfyServer: 'ntfy.sh',
     ntfyTopic: '',
+    ntfyProtocol: 'https',
+    ntfyUsername: '',
+    ntfyPassword: '',
+    ntfyCheckHost: '',
+    ntfyCheckStatus: 'idle',
     gotifyServer: '',
     gotifyToken: '',
     pushoverApiToken: '',
@@ -191,6 +201,24 @@
     { value: 'basic', label: t('settings.notifications.push.services.webhook.auth.basic') },
   ]);
 
+  // NTFY protocol options
+  const ntfyProtocolOptions = $derived([
+    { value: 'https', label: 'HTTPS' },
+    { value: 'http', label: 'HTTP' },
+  ]);
+
+  /** Wraps a bare IPv6 address in brackets for use in URLs. */
+  function normalizeNtfyHost(host: string): string {
+    const trimmed = host.trim();
+    // Only wrap in brackets for bare IPv6 addresses (2+ colons).
+    // A single colon means host:port (e.g. 192.168.1.100:8080) — don't wrap.
+    const colonCount = (trimmed.match(/:/g) || []).length;
+    if (colonCount >= 2 && !trimmed.startsWith('[')) {
+      return `[${trimmed}]`;
+    }
+    return trimmed;
+  }
+
   // Generate shoutrrr URL from service-specific inputs
   function generateShoutrrrUrl(): string {
     switch (selectedService) {
@@ -213,15 +241,28 @@
         return '';
       }
       case 'ntfy': {
-        // Shoutrrr format: ntfy://{server}/{topic} or ntfy://{topic} for ntfy.sh
-        if (serviceFormData.ntfyTopic) {
-          const server = serviceFormData.ntfyServer || 'ntfy.sh';
-          if (server === 'ntfy.sh') {
-            return `ntfy://${serviceFormData.ntfyTopic}`;
-          }
-          return `ntfy://${server}/${serviceFormData.ntfyTopic}`;
+        if (!serviceFormData.ntfyTopic) return '';
+        const server = serviceFormData.ntfyServer?.trim() || 'ntfy.sh';
+        const isPublic = server === 'ntfy.sh';
+
+        // Build user info for auth (encode special chars)
+        const user = serviceFormData.ntfyUsername?.trim() || '';
+        const pass = serviceFormData.ntfyPassword?.trim() || '';
+        const auth = user
+          ? pass
+            ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@`
+            : `${encodeURIComponent(user)}@`
+          : '';
+
+        // Public ntfy.sh: always HTTPS, no scheme param, never include auth
+        if (isPublic) {
+          return `ntfy://${serviceFormData.ntfyTopic}`;
         }
-        return '';
+
+        // Custom server: add ?scheme=http when HTTP selected
+        const normalizedServer = normalizeNtfyHost(server);
+        const schemeParam = serviceFormData.ntfyProtocol === 'http' ? '?scheme=http' : '';
+        return `ntfy://${auth}${normalizedServer}/${serviceFormData.ntfyTopic}${schemeParam}`;
       }
       case 'gotify': {
         // Shoutrrr format: gotify://{server}/{token}
@@ -561,6 +602,11 @@
       telegramChatId: '',
       ntfyServer: 'ntfy.sh',
       ntfyTopic: '',
+      ntfyProtocol: 'https',
+      ntfyUsername: '',
+      ntfyPassword: '',
+      ntfyCheckHost: '',
+      ntfyCheckStatus: 'idle',
       gotifyServer: '',
       gotifyToken: '',
       pushoverApiToken: '',
@@ -607,20 +653,40 @@
     // so for most services we just show the raw URL in custom mode
     switch (service) {
       case 'ntfy': {
-        // ntfy://topic or ntfy://server/topic
-        // Use safeRegexTest with length limit to prevent ReDoS
-        // eslint-disable-next-line security/detect-unsafe-regex -- Protected by safeRegexTest length limit
-        const ntfyPattern = /^ntfy:\/\/([^/]+)(?:\/(.+))?$/;
+        // Handles:
+        //   ntfy://topic
+        //   ntfy://server/topic
+        //   ntfy://server/topic?scheme=http
+        //   ntfy://user:pass@server/topic?scheme=http
+        /* eslint-disable security/detect-unsafe-regex -- Protected by safeRegexTest length limit */
+        const ntfyPattern =
+          /^ntfy:\/\/(?:([^:@/?]+)(?::([^@/?]*))?@)?([^/?]+)(?:\/([^?]*))?(?:\?(.*))?$/;
+        /* eslint-enable security/detect-unsafe-regex */
         if (safeRegexTest(ntfyPattern, url, 500)) {
           // Non-null assertion safe: safeRegexTest guarantees pattern matches
           const match = url.match(ntfyPattern)!;
-          if (match[2]) {
-            serviceFormData.ntfyServer = match[1];
-            serviceFormData.ntfyTopic = match[2];
+          const [, user, pass, hostOrTopic, pathPart, queryString] = match;
+
+          serviceFormData.ntfyUsername = user ? decodeURIComponent(user) : '';
+          serviceFormData.ntfyPassword = pass ? decodeURIComponent(pass) : '';
+
+          // Parse scheme from query string
+          const params = new URLSearchParams(queryString || '');
+          const scheme = params.get('scheme');
+          serviceFormData.ntfyProtocol = scheme === 'http' ? 'http' : 'https';
+
+          // Use !== undefined (not truthiness) — empty string path means server-only URL
+          if (pathPart !== undefined) {
+            // ntfy://server/topic[?...]
+            serviceFormData.ntfyServer = hostOrTopic;
+            serviceFormData.ntfyTopic = pathPart;
           } else {
+            // ntfy://topic — public ntfy.sh shorthand
             serviceFormData.ntfyServer = 'ntfy.sh';
-            serviceFormData.ntfyTopic = match[1];
+            serviceFormData.ntfyTopic = hostOrTopic;
           }
+          serviceFormData.ntfyCheckStatus = 'idle';
+          serviceFormData.ntfyCheckHost = '';
         }
         break;
       }
@@ -841,6 +907,36 @@
       }, 5000);
     } finally {
       testingProvider = false;
+    }
+  }
+
+  async function checkNtfyServer() {
+    const host = normalizeNtfyHost(serviceFormData.ntfyServer?.trim() || '');
+    if (!host || host === 'ntfy.sh') return;
+
+    // Record which host this probe is for (race guard)
+    serviceFormData.ntfyCheckHost = host;
+    serviceFormData.ntfyCheckStatus = 'checking';
+
+    try {
+      const result = await api.get<{ recommended: string; https: boolean; http: boolean }>(
+        `/api/v2/notifications/check-ntfy-server?host=${encodeURIComponent(host)}`
+      );
+
+      // Discard result if host changed while probe was in flight
+      if (serviceFormData.ntfyCheckHost !== host) return;
+
+      const rec = result.recommended;
+      if (rec === 'https' || rec === 'http') {
+        serviceFormData.ntfyProtocol = rec;
+        serviceFormData.ntfyCheckStatus = rec;
+      } else {
+        serviceFormData.ntfyCheckStatus = 'unreachable';
+      }
+    } catch {
+      if (serviceFormData.ntfyCheckHost === host) {
+        serviceFormData.ntfyCheckStatus = 'unreachable';
+      }
     }
   }
 
@@ -1274,11 +1370,88 @@
                     value={serviceFormData.ntfyServer}
                     label={t('settings.notifications.push.services.ntfy.server.label')}
                     placeholder={t('settings.notifications.push.services.ntfy.server.placeholder')}
-                    onchange={value => (serviceFormData.ntfyServer = value)}
+                    onchange={value => {
+                      serviceFormData.ntfyServer = value;
+                      serviceFormData.ntfyCheckStatus = 'idle';
+                      serviceFormData.ntfyCheckHost = '';
+                      // Clear credentials when switching servers to prevent leaking
+                      // auth from a private server to a different host
+                      serviceFormData.ntfyUsername = '';
+                      serviceFormData.ntfyPassword = '';
+                    }}
                   />
                   <p class="text-xs text-[var(--color-base-content)] opacity-60 -mt-2">
                     {t('settings.notifications.push.services.ntfy.server.helpText')}
                   </p>
+
+                  {#if serviceFormData.ntfyServer && serviceFormData.ntfyServer !== 'ntfy.sh'}
+                    <!-- Protocol selector + Test Connection button -->
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                      <SelectDropdown
+                        bind:value={serviceFormData.ntfyProtocol}
+                        options={ntfyProtocolOptions}
+                        variant="select"
+                        size="sm"
+                        menuSize="sm"
+                        onChange={() => (serviceFormData.ntfyCheckStatus = 'idle')}
+                      />
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline"
+                        disabled={serviceFormData.ntfyCheckStatus === 'checking'}
+                        onclick={checkNtfyServer}
+                      >
+                        {#if serviceFormData.ntfyCheckStatus === 'checking'}
+                          <span class="loading loading-spinner loading-xs"></span>
+                        {/if}
+                        {t('settings.notifications.push.services.ntfy.testConnection')}
+                      </button>
+                      {#if serviceFormData.ntfyCheckStatus === 'https'}
+                        <span class="text-xs text-success"
+                          >{t('settings.notifications.push.services.ntfy.connectionOk.https')}</span
+                        >
+                      {:else if serviceFormData.ntfyCheckStatus === 'http'}
+                        <span class="text-xs text-warning"
+                          >{t('settings.notifications.push.services.ntfy.connectionOk.http')}</span
+                        >
+                      {:else if serviceFormData.ntfyCheckStatus === 'unreachable'}
+                        <span class="text-xs text-error"
+                          >{t('settings.notifications.push.services.ntfy.connectionFailed')}</span
+                        >
+                      {/if}
+                    </div>
+
+                    <!-- Optional authentication -->
+                    <details class="mt-2">
+                      <summary
+                        class="text-sm cursor-pointer opacity-70 hover:opacity-100 select-none"
+                      >
+                        {t('settings.notifications.push.services.ntfy.auth.label')}
+                      </summary>
+                      <div class="mt-2 space-y-2">
+                        <TextInput
+                          id="ntfy-username"
+                          value={serviceFormData.ntfyUsername}
+                          label={t('settings.notifications.push.services.ntfy.auth.username.label')}
+                          placeholder={t(
+                            'settings.notifications.push.services.ntfy.auth.username.placeholder'
+                          )}
+                          onchange={value => (serviceFormData.ntfyUsername = value)}
+                        />
+                        <TextInput
+                          id="ntfy-password"
+                          type="password"
+                          value={serviceFormData.ntfyPassword}
+                          label={t('settings.notifications.push.services.ntfy.auth.password.label')}
+                          placeholder={t(
+                            'settings.notifications.push.services.ntfy.auth.password.placeholder'
+                          )}
+                          onchange={value => (serviceFormData.ntfyPassword = value)}
+                        />
+                      </div>
+                    </details>
+                  {/if}
+
                   <TextInput
                     id="ntfy-topic"
                     value={serviceFormData.ntfyTopic}
