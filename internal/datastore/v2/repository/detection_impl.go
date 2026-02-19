@@ -19,6 +19,10 @@ const (
 	SortFieldDetectedAt = "detected_at"
 	// SortFieldConfidence allows sorting by confidence score.
 	SortFieldConfidence = "confidence"
+	// SortFieldSpecies allows sorting by species scientific name (requires JOIN on labels).
+	SortFieldSpecies = "species"
+	// SortFieldStatus allows sorting by verification status (requires JOIN on detection_reviews).
+	SortFieldStatus = "status"
 )
 
 // defaultDBBatchSize is the batch size for bulk database operations.
@@ -564,18 +568,37 @@ func (r *detectionRepository) buildSearchJoins(query *gorm.DB, filters *SearchFi
 
 // applySearchOrdering applies sorting and pagination to the query.
 func (r *detectionRepository) applySearchOrdering(query *gorm.DB, filters *SearchFilters) *gorm.DB {
-	// Sorting
-	sortField := SortFieldDetectedAt
-	if filters.SortBy == SortFieldConfidence {
-		sortField = SortFieldConfidence
-	}
-	order := sortField
+	// Determine sort direction suffix
+	dir := " ASC"
 	if filters.SortDesc {
-		order += " DESC"
-	} else {
-		order += " ASC"
+		dir = " DESC"
 	}
-	query = query.Order(order)
+
+	// Sorting
+	switch filters.SortBy {
+	case SortFieldConfidence:
+		query = query.Order("confidence" + dir)
+	case SortFieldSpecies:
+		// Only add labels JOIN if not already joined by buildSearchJoins (text query filter)
+		labTable := r.labelsTable()
+		if filters.Query == "" {
+			query = query.Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.label_id",
+				labTable, labTable, r.tableName()))
+		}
+		query = query.Order(labTable + ".scientific_name" + dir)
+	case SortFieldStatus:
+		// Only add reviews JOIN if not already joined by buildSearchJoins (verified filter)
+		revTable := r.reviewsTable()
+		if filters.Verified == nil {
+			query = query.Joins(fmt.Sprintf("LEFT JOIN %s ON %s.detection_id = %s.id",
+				revTable, revTable, r.tableName()))
+		}
+		query = query.Order(fmt.Sprintf(
+			"CASE WHEN %s.verified = 'correct' THEN 0 WHEN %s.verified IS NULL OR %s.verified = '' THEN 1 ELSE 2 END",
+			revTable, revTable, revTable) + dir)
+	default: // SortFieldDetectedAt or empty
+		query = query.Order("detected_at" + dir)
+	}
 
 	// Pagination
 	if filters.Limit > 0 {

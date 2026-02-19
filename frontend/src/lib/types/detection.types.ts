@@ -69,6 +69,13 @@ export interface DetectionsListData {
   };
 }
 
+export type DetectionSortBy =
+  | 'date_desc'
+  | 'date_asc'
+  | 'species_asc'
+  | 'confidence_desc'
+  | 'status';
+
 export interface DetectionQueryParams {
   queryType?: 'hourly' | 'species' | 'search' | 'all';
   date?: string;
@@ -80,6 +87,7 @@ export interface DetectionQueryParams {
   end_date?: string;
   numResults?: number;
   offset?: number;
+  sortBy?: DetectionSortBy;
 }
 
 export interface DetectionReviewRequest {

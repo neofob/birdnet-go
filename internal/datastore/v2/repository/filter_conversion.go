@@ -624,12 +624,30 @@ func ConvertAdvancedFilters(
 		Offset:   filters.Offset,
 		MinID:    filters.MinID,
 
-		// Sort
-		SortBy:   SortFieldDetectedAt,
+		// Sort (mapped below)
 		SortDesc: !filters.SortAscending,
 
 		// Timezone for hour calculations
 		TimezoneOffset: GetTimezoneOffset(tz),
+	}
+
+	// Map SortBy string to v2 sort field constants
+	switch strings.ToLower(filters.SortBy) {
+	case "date_asc":
+		sf.SortBy = SortFieldDetectedAt
+		sf.SortDesc = false
+	case "species_asc":
+		sf.SortBy = SortFieldSpecies
+		sf.SortDesc = false
+	case "confidence_desc":
+		sf.SortBy = SortFieldConfidence
+		sf.SortDesc = true
+	case "status":
+		sf.SortBy = SortFieldStatus
+		sf.SortDesc = false
+	default: // "date_desc" or empty — use SortAscending for backward compatibility
+		sf.SortBy = SortFieldDetectedAt
+		// sf.SortDesc already set from !filters.SortAscending above
 	}
 
 	// Time conversions

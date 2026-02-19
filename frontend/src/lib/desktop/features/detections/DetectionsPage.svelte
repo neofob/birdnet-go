@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fetchWithCSRF } from '$lib/utils/api';
-  import type { DetectionsListData, DetectionQueryParams } from '$lib/types/detection.types';
+  import type {
+    DetectionsListData,
+    DetectionQueryParams,
+    DetectionSortBy,
+  } from '$lib/types/detection.types';
   import DetectionsCard from './components/DetectionsCard.svelte';
   import { getLogger } from '$lib/utils/logger';
   import { getLocalDateString } from '$lib/utils/date';
@@ -14,8 +18,17 @@
   let error = $state<string | null>(null);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Local storage key for user preference
+  // Local storage keys for user preferences
   const RESULTS_PER_PAGE_KEY = 'birdnet-detections-results-per-page';
+  const SORT_BY_KEY = 'birdnet-detections-sort-by';
+
+  const ALLOWED_SORT_VALUES = new Set<string>([
+    'date_desc',
+    'date_asc',
+    'species_asc',
+    'confidence_desc',
+    'status',
+  ]);
 
   // Get saved preference from localStorage
   function getSavedResultsPerPage(): number {
@@ -54,6 +67,18 @@
       numResults = getSavedResultsPerPage();
     }
 
+    // Parse and validate sortBy from URL or localStorage
+    const sortByParam = params.get('sortBy');
+    let sortBy: DetectionSortBy | undefined;
+    if (sortByParam && ALLOWED_SORT_VALUES.has(sortByParam)) {
+      sortBy = sortByParam as DetectionSortBy;
+    } else if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(SORT_BY_KEY);
+      if (saved && ALLOWED_SORT_VALUES.has(saved)) {
+        sortBy = saved as DetectionSortBy;
+      }
+    }
+
     return {
       queryType,
       date: params.get('date') || getLocalDateString(),
@@ -63,6 +88,7 @@
       search: search || undefined,
       numResults,
       offset: parseInt(params.get('offset') || '0'),
+      sortBy,
     };
   }
 
@@ -163,6 +189,25 @@
     }, 300); // 300ms debounce delay
   }
 
+  // Handle sort change from DetectionsList
+  function handleSortChange(newSortBy: DetectionSortBy) {
+    // Save preference to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SORT_BY_KEY, newSortBy);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (newSortBy && newSortBy !== 'date_desc') {
+      params.set('sortBy', newSortBy);
+    } else {
+      params.delete('sortBy');
+    }
+    params.set('offset', '0'); // Reset to first page
+
+    window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+    fetchDetections();
+  }
+
   // Handle details click
   function handleDetailsClick(id: number) {
     // Navigate to detection details page
@@ -225,5 +270,6 @@
     onDetailsClick={handleDetailsClick}
     onRefresh={fetchDetections}
     onNumResultsChange={handleNumResultsChange}
+    onSortChange={handleSortChange}
   />
 </div>
