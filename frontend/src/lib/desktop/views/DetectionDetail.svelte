@@ -442,13 +442,13 @@
             <div class="flex-1 min-w-0">
               <h1
                 id="species-heading"
-                class="text-2xl md:text-3xl font-semibold text-base-content mb-1 truncate"
+                class="text-2xl md:text-3xl font-semibold text-base-content mb-1 break-words"
               >
                 {detection.commonName}
                 <span class="sr-only">detection details</span>
               </h1>
               <p
-                class="text-base md:text-lg text-base-content opacity-60 italic truncate"
+                class="text-base md:text-lg text-base-content opacity-60 italic break-words"
                 aria-label="Scientific name"
               >
                 {detection.scientificName}
