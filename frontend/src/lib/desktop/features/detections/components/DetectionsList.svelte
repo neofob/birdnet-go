@@ -256,7 +256,7 @@
           size="xs"
           menuSize="sm"
           variant="button"
-          className="w-16"
+          className="w-20"
           onChange={handleNumResultsChange}
         />
       </div>
