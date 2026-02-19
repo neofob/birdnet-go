@@ -964,7 +964,7 @@
 
 <div
   bind:this={playerContainer}
-  class={cn('relative group', className)}
+  class={cn('relative group overflow-hidden', className)}
   style={responsive
     ? ''
     : `width: ${typeof width === 'number' ? width + 'px' : width}; height: ${typeof height === 'number' ? height + 'px' : height};`}
