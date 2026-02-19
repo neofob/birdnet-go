@@ -580,13 +580,13 @@ func (r *detectionRepository) applySearchOrdering(query *gorm.DB, filters *Searc
 		query = query.Order("confidence" + dir)
 	case SortFieldSpecies:
 		// JOIN labels table and sort by scientific_name
-		query = query.Joins("LEFT JOIN " + tableLabels + " ON " + tableLabels + ".id = " + r.tableName() + ".label_id").
-			Order(tableLabels + ".scientific_name" + dir)
+		query = query.Joins("LEFT JOIN " + r.labelsTable() + " ON " + r.labelsTable() + ".id = " + r.tableName() + ".label_id").
+			Order(r.labelsTable() + ".scientific_name" + dir)
 	case SortFieldStatus:
 		// JOIN detection_reviews table and sort by verification status:
 		// correct (0) → unreviewed (1) → false_positive (2)
-		query = query.Joins("LEFT JOIN detection_reviews ON detection_reviews.detection_id = " + r.tableName() + ".id").
-			Order("CASE WHEN detection_reviews.verified = 'correct' THEN 0 WHEN detection_reviews.verified IS NULL OR detection_reviews.verified = '' THEN 1 ELSE 2 END ASC")
+		query = query.Joins("LEFT JOIN " + r.reviewsTable() + " ON " + r.reviewsTable() + ".detection_id = " + r.tableName() + ".id").
+			Order("CASE WHEN " + r.reviewsTable() + ".verified = 'correct' THEN 0 WHEN " + r.reviewsTable() + ".verified IS NULL OR " + r.reviewsTable() + ".verified = '' THEN 1 ELSE 2 END ASC")
 	default: // SortFieldDetectedAt or empty
 		query = query.Order("detected_at" + dir)
 	}
