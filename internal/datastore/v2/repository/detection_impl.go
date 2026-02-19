@@ -579,14 +579,23 @@ func (r *detectionRepository) applySearchOrdering(query *gorm.DB, filters *Searc
 	case SortFieldConfidence:
 		query = query.Order("confidence" + dir)
 	case SortFieldSpecies:
-		// JOIN labels table and sort by scientific_name
-		query = query.Joins("LEFT JOIN " + r.labelsTable() + " ON " + r.labelsTable() + ".id = " + r.tableName() + ".label_id").
-			Order(r.labelsTable() + ".scientific_name" + dir)
+		// Only add labels JOIN if not already joined by buildSearchJoins (text query filter)
+		labTable := r.labelsTable()
+		if filters.Query == "" {
+			query = query.Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.label_id",
+				labTable, labTable, r.tableName()))
+		}
+		query = query.Order(labTable + ".scientific_name" + dir)
 	case SortFieldStatus:
-		// JOIN detection_reviews table and sort by verification status:
-		// correct (0) → unreviewed (1) → false_positive (2)
-		query = query.Joins("LEFT JOIN " + r.reviewsTable() + " ON " + r.reviewsTable() + ".detection_id = " + r.tableName() + ".id").
-			Order("CASE WHEN " + r.reviewsTable() + ".verified = 'correct' THEN 0 WHEN " + r.reviewsTable() + ".verified IS NULL OR " + r.reviewsTable() + ".verified = '' THEN 1 ELSE 2 END ASC")
+		// Only add reviews JOIN if not already joined by buildSearchJoins (verified filter)
+		revTable := r.reviewsTable()
+		if filters.Verified == nil {
+			query = query.Joins(fmt.Sprintf("LEFT JOIN %s ON %s.detection_id = %s.id",
+				revTable, revTable, r.tableName()))
+		}
+		query = query.Order(fmt.Sprintf(
+			"CASE WHEN %s.verified = 'correct' THEN 0 WHEN %s.verified IS NULL OR %s.verified = '' THEN 1 ELSE 2 END",
+			revTable, revTable, revTable) + dir)
 	default: // SortFieldDetectedAt or empty
 		query = query.Order("detected_at" + dir)
 	}

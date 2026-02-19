@@ -128,8 +128,11 @@ func (ds *DataStore) SearchNotesAdvanced(filters *AdvancedSearchFilters) ([]Note
 	case "confidence_desc":
 		query = query.Order("confidence DESC")
 	case "status":
-		query = query.Joins("LEFT JOIN note_reviews ON note_reviews.note_id = notes.id").
-			Order("CASE WHEN note_reviews.verified = 'correct' THEN 0 WHEN note_reviews.verified IS NULL OR note_reviews.verified = '' THEN 1 ELSE 2 END ASC")
+		// Only add note_reviews JOIN if not already joined by applyVerifiedFilter
+		if filters.Verified == nil {
+			query = query.Joins("LEFT JOIN note_reviews ON note_reviews.note_id = notes.id")
+		}
+		query = query.Order("CASE WHEN note_reviews.verified = 'correct' THEN 0 WHEN note_reviews.verified IS NULL OR note_reviews.verified = '' THEN 1 ELSE 2 END ASC")
 	default: // "date_desc" or empty — use SortAscending for backward compatibility
 		if filters.SortAscending {
 			query = query.Order("date ASC, time ASC")

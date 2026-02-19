@@ -203,8 +203,11 @@
       sortField = field;
       sortDirection = field === 'dateTime' ? 'desc' : 'asc';
     }
-    // Trigger backend sort via parent callback
-    onSortChange?.(toBackendSortBy(sortField, sortDirection));
+    const newBackendSort = toBackendSortBy(sortField, sortDirection);
+    // For columns with a fixed backend direction, snap the visual direction to match
+    const parsed = parseSortBy(newBackendSort);
+    sortDirection = parsed.direction;
+    onSortChange?.(newBackendSort);
   }
 
   // Mobile audio player state

@@ -296,7 +296,7 @@ func (c *Controller) parseDetectionQueryParams(ctx echo.Context) (*detectionQuer
 			"status":          {},
 		}
 		if _, ok := allowedSortBy[params.SortBy]; !ok {
-			allowedKeys := slices.Collect(maps.Keys(allowedSortBy))
+			allowedKeys := slices.Sorted(maps.Keys(allowedSortBy))
 			return nil, echo.NewHTTPError(http.StatusBadRequest,
 				fmt.Sprintf("invalid sortBy parameter '%s'. Allowed values: %v", params.SortBy, allowedKeys))
 		}
