@@ -119,6 +119,7 @@ Performance Optimizations:
   let detectionsError = $state<string | null>(null);
   let showThumbnails = $state(true); // Default to true for backward compatibility
   let summaryLimit = $state(30); // Default from backend (conf/defaults.go) - species count limit for daily summary
+  let configLoaded = $state(false); // Gates reactive preloading until config is loaded
 
   // SSE throttling timer
   let sseFetchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -350,6 +351,8 @@ Performance Optimizations:
     } catch (error) {
       logger.error('Error fetching dashboard config:', error);
       // Keep default values on error
+    } finally {
+      configLoaded = true;
     }
   }
 
@@ -589,15 +592,17 @@ Performance Optimizations:
       persistDate(selectedDate);
     }
 
-    fetchDailySummary();
+    // Load dashboard config first so summaryLimit is set before fetching daily summary
+    // and adjacent date preloads. Uses .then() instead of async/await because onMount
+    // must return a sync cleanup function.
+    fetchDashboardConfig().then(() => {
+      fetchDailySummary();
+      // Adjacent date preloading is handled by the $effect gated on configLoaded
+    });
     fetchRecentDetections();
-    fetchDashboardConfig();
 
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
-
-    // Initial preload of adjacent dates (reactive effect will handle subsequent preloads)
-    triggerAdjacentPreload(selectedDate);
 
     // Handle browser navigation (back/forward)
     const handlePopState = () => {
@@ -1082,10 +1087,10 @@ Performance Optimizations:
     }, 150); // Wait 150ms for settling
   }
 
-  // Reactive preloading - triggers when selectedDate changes
+  // Reactive preloading - triggers when selectedDate changes or config finishes loading
   $effect(() => {
-    // Only preload if we have a valid selectedDate and not during initial load
-    if (selectedDate) {
+    // Gate on configLoaded to prevent preloading with default summaryLimit before config is fetched
+    if (selectedDate && configLoaded) {
       triggerAdjacentPreload(selectedDate);
     }
   });
