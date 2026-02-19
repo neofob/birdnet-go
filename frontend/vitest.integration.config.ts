@@ -35,6 +35,16 @@ export default defineConfig({
       $lib: '/src/lib',
     },
   },
+  // Pre-bundle dependencies that are imported by app components to prevent
+  // Vite from triggering a mid-test page reload when it discovers them.
+  optimizeDeps: {
+    include: [
+      'reconnecting-eventsource',
+      '@lucide/svelte',
+      'hls.js',
+      'svelte-portal',
+    ],
+  },
   server: {
     proxy: {
       // Proxy API calls to the real backend
