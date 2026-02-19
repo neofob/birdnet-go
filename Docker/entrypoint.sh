@@ -6,7 +6,35 @@ APP_UID=${BIRDNET_UID:-1000}
 APP_GID=${BIRDNET_GID:-1000}
 APP_USER="birdnet"
 
+# SKIP_CHOWN: set to "true" to skip all ownership changes (useful for NFS mounts)
+SKIP_CHOWN="$(echo "${SKIP_CHOWN:-false}" | tr '[:upper:]' '[:lower:]')"
+
 echo "Starting BirdNET-Go with UID:$APP_UID, GID:$APP_GID"
+
+# Check ownership of a path and chown only if it differs from expected UID:GID.
+# Usage: check_and_chown [-R] <path>
+check_and_chown() {
+    local recursive=false
+    if [ "$1" = "-R" ]; then
+        recursive=true
+        shift
+    fi
+    local target="$1"
+
+    # Skip if path doesn't exist (also handle dangling symlinks for chown -h)
+    [ -e "$target" ] || [ -L "$target" ] || return 0
+
+    if [ "$recursive" = true ]; then
+        # Chown only files/dirs with mismatched ownership, avoiding redundant operations
+        find "$target" -not \( -uid "$APP_UID" -a -gid "$APP_GID" \) -exec chown -h "$APP_UID":"$APP_GID" -- {} +
+    else
+        local owner
+        owner=$(stat -c "%u:%g" -- "$target" 2>/dev/null) || return 0
+        if [ "$owner" != "$APP_UID:$APP_GID" ]; then
+            chown -h "$APP_UID":"$APP_GID" -- "$target"
+        fi
+    fi
+}
 
 # Detect if we're running as root or in rootless mode
 CURRENT_UID=$(id -u)
@@ -38,9 +66,14 @@ if [ "$RUNNING_AS_ROOT" = true ]; then
 
     # Ensure /config and /data are accessible to the user
     mkdir -p /config /data/clips /data/models
-    chown -R "$APP_UID":"$APP_GID" /config
-    chown "$APP_UID":"$APP_GID" /data
-    chown "$APP_UID":"$APP_GID" /data/*
+    if [ "$SKIP_CHOWN" = "true" ]; then
+        echo "SKIP_CHOWN is set, skipping ownership changes for /config and /data"
+    else
+        check_and_chown -R /config
+        check_and_chown /data
+        # Chown items in /data one level deep, only those with mismatched ownership
+        find /data -mindepth 1 -maxdepth 1 -not \( -uid "$APP_UID" -a -gid "$APP_GID" \) -exec chown -h "$APP_UID":"$APP_GID" -- {} +
+    fi
 else
     # Running in rootless mode (already running as target user)
     echo "Running in rootless mode (current UID: $CURRENT_UID)"
@@ -72,31 +105,18 @@ if [ ! -z "$BIRDNET_MODELPATH" ]; then
     fi
 fi
 
-# Only chown clips directory if running as root and any subdirectories have wrong ownership
+# Only chown clips directory if running as root and ownership differs
 if [ "$RUNNING_AS_ROOT" = true ]; then
-    NEEDS_CHOWN=false
-    if [ -d "/data/clips" ] && [ "$(ls -A /data/clips)" ]; then
-        for subdir in /data/clips/*/; do
-            if [ -d "$subdir" ]; then
-                CURRENT_UID=$(stat -c %u "$subdir" 2>/dev/null || echo "0")
-                CURRENT_GID=$(stat -c %g "$subdir" 2>/dev/null || echo "0")
-                if [ "$CURRENT_UID" != "$APP_UID" ] || [ "$CURRENT_GID" != "$APP_GID" ]; then
-                    NEEDS_CHOWN=true
-                    break
-                fi
-            fi
-        done
-    fi
-
-    if [ "$NEEDS_CHOWN" = true ]; then
-        echo "Fixing ownership of clips directory..."
-        chown -R "$APP_UID":"$APP_GID" /data/clips
+    if [ "$SKIP_CHOWN" != "true" ]; then
+        check_and_chown -R /data/clips
     fi
 
     # Create config directory and symlink for the user
     USER_HOME=$(getent passwd "$APP_UID" | cut -d: -f6)
     mkdir -p "$USER_HOME/.config"
-    chown "$APP_UID":"$APP_GID" "$USER_HOME/.config"
+    if [ "$SKIP_CHOWN" != "true" ]; then
+        check_and_chown "$USER_HOME/.config"
+    fi
     if [ ! -L "$USER_HOME/.config/birdnet-go" ]; then
         gosu "$USER_NAME" ln -sf /config "$USER_HOME/.config/birdnet-go"
     fi
