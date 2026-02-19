@@ -24,7 +24,7 @@ Source: Apache-2.0
 
 ### filippo.io/edwards25519
 
-License: https://github.com/FiloSottile/edwards25519/blob/v1.1.0/LICENSE
+License: https://github.com/FiloSottile/edwards25519/blob/v1.1.1/LICENSE
 Source: BSD-3-Clause
 
 ### github.com/antonholmquist/jason
@@ -40,6 +40,11 @@ Source: MIT
 ### github.com/cespare/xxhash/v2
 
 License: https://github.com/cespare/xxhash/blob/v2.3.0/LICENSE.txt
+Source: MIT
+
+### github.com/creack/pty
+
+License: https://github.com/creack/pty/blob/v1.1.24/LICENSE
 Source: MIT
 
 ### github.com/davecgh/go-spew/spew
