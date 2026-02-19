@@ -236,6 +236,11 @@ jobs:
           sudo mv libtensorflowlite_c.so.2.17.1 /usr/lib/libtensorflowlite_c.so
           rm -f tflite_c_${TFLITE_VERSION}_linux_amd64.tar.gz
 
+      - name: Install FFmpeg and Sox for integration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg sox
+
       - name: Set environment variables for CGO
         run: |
           echo "CGO_ENABLED=1" >> $GITHUB_ENV
@@ -243,14 +248,16 @@ jobs:
 
       - name: Run testcontainer integration tests
         run: |
-          # Run integration tests that use testcontainers
+          # Run integration tests that use testcontainers and the integration build tag
           # Testcontainers automatically manage MySQL, Mosquitto, and MediaMTX containers
           go test -tags=integration -race -timeout 300s -v \
             ./internal/datastore/v2/repository/... \
             ./internal/mqtt/... \
+            ./internal/myaudio/streamingtest/... \
+            ./internal/spectrogram/... \
             ./internal/testutil/containers/... \
             2>&1
-        timeout-minutes: 8
+        timeout-minutes: 10
 
   integration-tests:
     needs: [unit-tests, testcontainer-tests]
