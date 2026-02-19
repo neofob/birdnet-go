@@ -38,7 +38,7 @@
   import SortableHeader from '$lib/desktop/components/ui/SortableHeader.svelte';
   import ViewToggle from '$lib/desktop/components/ui/ViewToggle.svelte';
   import { t } from '$lib/i18n';
-  import type { Detection, DetectionsListData } from '$lib/types/detection.types';
+  import type { DetectionSortBy, DetectionsListData } from '$lib/types/detection.types';
   import { cn } from '$lib/utils/cn';
   import { XCircle } from '@lucide/svelte';
   import { untrack } from 'svelte';
@@ -57,6 +57,7 @@
     onDetailsClick?: (_id: number) => void;
     onRefresh?: () => void;
     onNumResultsChange?: (_numResults: number) => void;
+    onSortChange?: (_sortBy: DetectionSortBy) => void;
     className?: string;
   }
 
@@ -68,6 +69,7 @@
     onDetailsClick,
     onRefresh,
     onNumResultsChange,
+    onSortChange,
     className = '',
   }: Props = $props();
 
@@ -146,9 +148,46 @@
     }
   }
 
-  // --- Sort state ---
-  let sortField = $state<SortField>('dateTime');
-  let sortDirection = $state<SortDirection>('desc');
+  // --- Sort state (driven by backend via URL params) ---
+
+  /** Map backend sortBy value to frontend field + direction */
+  function parseSortBy(sortBy?: string): { field: SortField; direction: SortDirection } {
+    switch (sortBy) {
+      case 'date_asc':
+        return { field: 'dateTime', direction: 'asc' };
+      case 'species_asc':
+        return { field: 'species', direction: 'asc' };
+      case 'confidence_desc':
+        return { field: 'confidence', direction: 'desc' };
+      case 'status':
+        return { field: 'status', direction: 'asc' };
+      default:
+        return { field: 'dateTime', direction: 'desc' };
+    }
+  }
+
+  /** Map frontend field + direction to backend sortBy value */
+  function toBackendSortBy(field: SortField, direction: SortDirection): DetectionSortBy {
+    switch (field) {
+      case 'dateTime':
+        return direction === 'asc' ? 'date_asc' : 'date_desc';
+      case 'species':
+        return 'species_asc';
+      case 'confidence':
+        return 'confidence_desc';
+      case 'status':
+        return 'status';
+    }
+  }
+
+  // Initialize from URL sortBy parameter
+  const initialSort = parseSortBy(
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('sortBy') ?? undefined)
+      : undefined
+  );
+  let sortField = $state<SortField>(initialSort.field);
+  let sortDirection = $state<SortDirection>(initialSort.direction);
 
   const SORT_FIELDS: Set<string> = new Set<string>(['dateTime', 'species', 'confidence', 'status']);
 
@@ -164,47 +203,9 @@
       sortField = field;
       sortDirection = field === 'dateTime' ? 'desc' : 'asc';
     }
+    // Trigger backend sort via parent callback
+    onSortChange?.(toBackendSortBy(sortField, sortDirection));
   }
-
-  /** Verification status sort order: correct > unverified > false_positive */
-  const STATUS_ORDER: Record<string, number> = {
-    correct: 0,
-    unverified: 1,
-    false_positive: 2,
-  };
-
-  /** Sort detections client-side within the current page */
-  const sortedDetections = $derived.by(() => {
-    if (!data) return [];
-    const items = [...data.notes];
-
-    items.sort((a: Detection, b: Detection) => {
-      let cmp = 0;
-
-      switch (sortField) {
-        case 'dateTime': {
-          // Compare date+time as string (YYYY-MM-DD HH:MM:SS sorts lexicographically)
-          const aKey = `${a.date} ${a.time}`;
-          const bKey = `${b.date} ${b.time}`;
-          cmp = aKey.localeCompare(bKey);
-          break;
-        }
-        case 'species':
-          cmp = a.commonName.localeCompare(b.commonName);
-          break;
-        case 'confidence':
-          cmp = a.confidence - b.confidence;
-          break;
-        case 'status':
-          cmp = (STATUS_ORDER[a.verified] ?? 1) - (STATUS_ORDER[b.verified] ?? 1);
-          break;
-      }
-
-      return sortDirection === 'asc' ? cmp : -cmp;
-    });
-
-    return items;
-  });
 
   // Mobile audio player state
   let showMobilePlayer = $state(false);
@@ -338,7 +339,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-base-200">
-              {#each sortedDetections as detection (detection.id)}
+              {#each data.notes as detection (detection.id)}
                 <tr>
                   <DetectionRow
                     {detection}
@@ -351,13 +352,13 @@
             </tbody>
           </table>
         {:else}
-          <DetectionsCardView detections={sortedDetections} {onRefresh} />
+          <DetectionsCardView detections={data.notes} {onRefresh} />
         {/if}
       </div>
 
       <!-- Mobile: card layout (always mobile cards on small screens) -->
       <div class="md:hidden space-y-2">
-        {#each sortedDetections as detection (detection.id)}
+        {#each data.notes as detection (detection.id)}
           <DetectionCardMobile
             {detection}
             {onDetailsClick}

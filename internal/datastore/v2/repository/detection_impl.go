@@ -19,6 +19,10 @@ const (
 	SortFieldDetectedAt = "detected_at"
 	// SortFieldConfidence allows sorting by confidence score.
 	SortFieldConfidence = "confidence"
+	// SortFieldSpecies allows sorting by species scientific name (requires JOIN on labels).
+	SortFieldSpecies = "species"
+	// SortFieldStatus allows sorting by verification status (requires JOIN on detection_reviews).
+	SortFieldStatus = "status"
 )
 
 // defaultDBBatchSize is the batch size for bulk database operations.
@@ -564,18 +568,28 @@ func (r *detectionRepository) buildSearchJoins(query *gorm.DB, filters *SearchFi
 
 // applySearchOrdering applies sorting and pagination to the query.
 func (r *detectionRepository) applySearchOrdering(query *gorm.DB, filters *SearchFilters) *gorm.DB {
-	// Sorting
-	sortField := SortFieldDetectedAt
-	if filters.SortBy == SortFieldConfidence {
-		sortField = SortFieldConfidence
-	}
-	order := sortField
+	// Determine sort direction suffix
+	dir := " ASC"
 	if filters.SortDesc {
-		order += " DESC"
-	} else {
-		order += " ASC"
+		dir = " DESC"
 	}
-	query = query.Order(order)
+
+	// Sorting
+	switch filters.SortBy {
+	case SortFieldConfidence:
+		query = query.Order("confidence" + dir)
+	case SortFieldSpecies:
+		// JOIN labels table and sort by scientific_name
+		query = query.Joins("LEFT JOIN " + tableLabels + " ON " + tableLabels + ".id = " + r.tableName() + ".label_id").
+			Order(tableLabels + ".scientific_name" + dir)
+	case SortFieldStatus:
+		// JOIN detection_reviews table and sort by verification status:
+		// correct (0) → unreviewed (1) → false_positive (2)
+		query = query.Joins("LEFT JOIN detection_reviews ON detection_reviews.detection_id = " + r.tableName() + ".id").
+			Order("CASE WHEN detection_reviews.verified = 'correct' THEN 0 WHEN detection_reviews.verified IS NULL OR detection_reviews.verified = '' THEN 1 ELSE 2 END ASC")
+	default: // SortFieldDetectedAt or empty
+		query = query.Order("detected_at" + dir)
+	}
 
 	// Pagination
 	if filters.Limit > 0 {

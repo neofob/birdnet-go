@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DetectionsListData } from '$lib/types/detection.types';
+  import type { DetectionsListData, DetectionSortBy } from '$lib/types/detection.types';
   import DetectionsList from './DetectionsList.svelte';
 
   interface Props {
@@ -10,6 +10,7 @@
     onDetailsClick: (_id: number) => void;
     onRefresh: () => void;
     onNumResultsChange: (_numResults: number) => void;
+    onSortChange?: (_sortBy: DetectionSortBy) => void;
   }
 
   let {
@@ -20,6 +21,7 @@
     onDetailsClick,
     onRefresh,
     onNumResultsChange,
+    onSortChange,
   }: Props = $props();
 </script>
 
@@ -33,6 +35,7 @@
       {onDetailsClick}
       {onRefresh}
       {onNumResultsChange}
+      {onSortChange}
     />
   </div>
 </section>

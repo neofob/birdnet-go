@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -219,6 +220,8 @@ type detectionQueryParams struct {
 	Verified   string
 	Location   string
 	Locked     string
+	// Sorting
+	SortBy string
 	// Include additional data
 	IncludeWeather bool
 }
@@ -226,11 +229,12 @@ type detectionQueryParams struct {
 // advancedSearchCacheKey generates a deterministic cache key for advanced search queries.
 // Includes all filter parameters to avoid cache collisions.
 func (p *detectionQueryParams) advancedSearchCacheKey() string {
-	return fmt.Sprintf("adv_search:%s:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s",
+	return fmt.Sprintf("adv_search:%s:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s",
 		p.Search, p.NumResults, p.Offset,
 		p.Confidence, p.TimeOfDay, p.HourRange,
 		p.Verified, p.Location, p.Locked,
-		p.Species, p.Date, p.StartDate+":"+p.EndDate)
+		p.Species, p.Date, p.StartDate+":"+p.EndDate,
+		p.SortBy)
 }
 
 // parseDetectionQueryParams extracts and validates query parameters from the request
@@ -250,6 +254,8 @@ func (c *Controller) parseDetectionQueryParams(ctx echo.Context) (*detectionQuer
 		Verified:   ctx.QueryParam("verified"),
 		Location:   ctx.QueryParam("location"),
 		Locked:     ctx.QueryParam("locked"),
+		// Sorting
+		SortBy: ctx.QueryParam("sortBy"),
 		// Include weather data
 		IncludeWeather: ctx.QueryParam("includeWeather") == QueryValueTrue,
 	}
@@ -279,6 +285,22 @@ func (c *Controller) parseDetectionQueryParams(ctx echo.Context) (*detectionQuer
 		return nil, err
 	}
 	params.Offset = offset
+
+	// Validate sortBy parameter
+	if params.SortBy != "" {
+		allowedSortBy := map[string]struct{}{
+			"date_desc":       {},
+			"date_asc":        {},
+			"species_asc":     {},
+			"confidence_desc": {},
+			"status":          {},
+		}
+		if _, ok := allowedSortBy[params.SortBy]; !ok {
+			allowedKeys := slices.Collect(maps.Keys(allowedSortBy))
+			return nil, echo.NewHTTPError(http.StatusBadRequest,
+				fmt.Sprintf("invalid sortBy parameter '%s'. Allowed values: %v", params.SortBy, allowedKeys))
+		}
+	}
 
 	// Validate hour parameter based on query type
 	if params.QueryType == "hourly" {
@@ -512,10 +534,11 @@ func (c *Controller) GetDetections(ctx echo.Context) error {
 
 // getDetectionsByQueryType retrieves detections based on the query type
 func (c *Controller) getDetectionsByQueryType(params *detectionQueryParams) ([]datastore.Note, int64, error) {
-	// Check if advanced filters are present
+	// Check if advanced filters are present (non-default sort counts as advanced)
 	hasAdvancedFilters := params.Confidence != "" || params.TimeOfDay != "" ||
 		params.HourRange != "" || params.Verified != "" ||
-		params.Location != "" || params.Locked != ""
+		params.Location != "" || params.Locked != "" ||
+		(params.SortBy != "" && params.SortBy != "date_desc")
 
 	switch params.QueryType {
 	case "hourly":
@@ -903,6 +926,9 @@ func (c *Controller) buildAdvancedSearchFilters(params *detectionQueryParams) da
 		locked := params.Locked == QueryValueTrue
 		filters.Locked = &locked
 	}
+
+	// Apply sorting
+	filters.SortBy = params.SortBy
 
 	return filters
 }
