@@ -38,6 +38,7 @@ type MigrationStatusResponse struct {
 	CanStart           bool       `json:"can_start"`
 	CanPause           bool       `json:"can_pause"`
 	CanResume          bool       `json:"can_resume"`
+	CanRetryValidation bool       `json:"can_retry_validation"`
 	CanCancel          bool       `json:"can_cancel"`
 	CanRollback        bool       `json:"can_rollback"`
 	IsDualWriteActive  bool       `json:"is_dual_write_active"`
@@ -164,6 +165,7 @@ func (c *Controller) initMigrationRoutes() {
 	protectedGroup.POST("/start", c.StartMigration)
 	protectedGroup.POST("/pause", c.PauseMigration)
 	protectedGroup.POST("/resume", c.ResumeMigration)
+	protectedGroup.POST("/retry-validation", c.RetryValidation)
 	protectedGroup.POST("/cancel", c.CancelMigration)
 	protectedGroup.POST("/rollback", c.RollbackMigration)
 
@@ -275,11 +277,10 @@ func (c *Controller) GetMigrationStatus(ctx echo.Context) error {
 
 	// Determine available actions based on state
 	canStart := state.State == entities.MigrationStatusIdle
-	canPause := state.State == entities.MigrationStatusDualWrite ||
-		state.State == entities.MigrationStatusMigrating
-	canResume := state.State == entities.MigrationStatusPaused
-	canCancel := state.State != entities.MigrationStatusIdle &&
-		state.State != entities.MigrationStatusCompleted
+	canPause := state.CanPause()
+	canResume := state.CanResume()
+	canRetryValidation := state.CanRetryValidation()
+	canCancel := state.CanCancel()
 	canRollback := state.State == entities.MigrationStatusCompleted
 
 	// Get cleanup state
@@ -313,6 +314,7 @@ func (c *Controller) GetMigrationStatus(ctx echo.Context) error {
 		CanStart:               canStart,
 		CanPause:               canPause,
 		CanResume:              canResume,
+		CanRetryValidation:     canRetryValidation,
 		CanCancel:              canCancel,
 		CanRollback:            canRollback,
 		IsDualWriteActive:      isDualWriteActive,
@@ -519,6 +521,57 @@ func (c *Controller) ResumeMigration(ctx echo.Context) error {
 		Success: true,
 		Message: "Migration resumed",
 		State:   string(actualState),
+	})
+}
+
+// RetryValidation handles POST /api/v2/system/database/migration/retry-validation
+func (c *Controller) RetryValidation(ctx echo.Context) error {
+	ip, path := ctx.RealIP(), ctx.Request().URL.Path
+	c.logInfoIfEnabled("Retrying migration validation", logger.String("path", path), logger.String("ip", ip))
+
+	sm := getStateManager()
+	worker := getMigrationWorker()
+
+	if sm == nil {
+		return c.HandleError(ctx, fmt.Errorf("migration not configured"),
+			"Migration is not configured", http.StatusServiceUnavailable)
+	}
+
+	// Transition FAILED → VALIDATING
+	if err := sm.RetryValidation(); err != nil {
+		c.logErrorIfEnabled("Failed to retry validation",
+			logger.Error(err), logger.String("path", path), logger.String("ip", ip))
+		return c.HandleError(ctx, err, "Failed to retry validation", http.StatusConflict)
+	}
+
+	// Resume or restart the worker so it picks up the VALIDATING state
+	if worker != nil {
+		if worker.IsPaused() {
+			worker.Resume()
+		} else if !worker.IsRunning() {
+			workerCtx, workerCancel := context.WithCancel(context.Background())
+			SetMigrationWorkerCancel(workerCancel)
+			if err := worker.Start(workerCtx); err != nil {
+				workerCancel()
+				c.logWarnIfEnabled("Failed to restart migration worker",
+					logger.Error(err), logger.String("path", path), logger.String("ip", ip))
+			}
+		}
+	}
+
+	// Clear any previous error
+	if err := sm.ClearError(); err != nil {
+		c.logWarnIfEnabled("Failed to clear error message",
+			logger.Error(err), logger.String("path", path), logger.String("ip", ip))
+	}
+
+	c.logInfoIfEnabled("Migration validation retry initiated",
+		logger.String("path", path), logger.String("ip", ip))
+
+	return ctx.JSON(http.StatusOK, MigrationActionResponse{
+		Success: true,
+		Message: "Validation retry initiated",
+		State:   string(entities.MigrationStatusValidating),
 	})
 }
 

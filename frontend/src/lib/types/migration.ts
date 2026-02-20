@@ -32,6 +32,7 @@ export interface MigrationStatus {
   can_start: boolean;
   can_pause: boolean;
   can_resume: boolean;
+  can_retry_validation: boolean;
   can_cancel: boolean;
   dirty_id_count: number;
   error_message?: string;

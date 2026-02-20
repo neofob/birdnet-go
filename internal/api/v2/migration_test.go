@@ -152,6 +152,7 @@ func TestGetMigrationStatus_Idle(t *testing.T) {
 	assert.True(t, response.CanStart)
 	assert.False(t, response.CanPause)
 	assert.False(t, response.CanResume)
+	assert.False(t, response.CanRetryValidation)
 	assert.False(t, response.CanCancel)
 	assert.False(t, response.WorkerRunning)
 	assert.False(t, response.WorkerPaused)
@@ -385,6 +386,99 @@ func TestCancelMigration_NotRunning(t *testing.T) {
 	err := controller.CancelMigration(ctx)
 	require.NoError(t, err) // Error is handled in response
 	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+// TestRetryValidation_Success tests retrying validation after failure.
+// Note: Not parallel due to global state modification.
+func TestRetryValidation_Success(t *testing.T) {
+	t.Attr("component", "migration")
+	t.Attr("type", "unit")
+	t.Attr("feature", "retry-validation")
+
+	e, controller, sm := setupMigrationTestEnvironment(t)
+
+	// Setup: get to FAILED state
+	require.NoError(t, sm.StartMigration(100))
+	require.NoError(t, sm.TransitionToDualWrite())
+	require.NoError(t, sm.TransitionToMigrating())
+	require.NoError(t, sm.TransitionToValidating())
+	require.NoError(t, sm.Fail())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/system/database/migration/retry-validation", http.NoBody)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	err := controller.RetryValidation(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response MigrationActionResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response.Success)
+	assert.Equal(t, string(entities.MigrationStatusValidating), response.State)
+
+	// Verify state was updated
+	state, err := sm.GetState()
+	require.NoError(t, err)
+	assert.Equal(t, entities.MigrationStatusValidating, state.State)
+}
+
+// TestRetryValidation_NotFailed tests retrying validation when not in failed state.
+// Note: Not parallel due to global state modification.
+func TestRetryValidation_NotFailed(t *testing.T) {
+	t.Attr("component", "migration")
+	t.Attr("type", "unit")
+	t.Attr("feature", "retry-validation")
+
+	e, controller, _ := setupMigrationTestEnvironment(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/system/database/migration/retry-validation", http.NoBody)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	err := controller.RetryValidation(ctx)
+	require.NoError(t, err) // Error is handled in response
+	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+// TestGetMigrationStatus_Failed tests getting migration status when in failed state.
+// Note: Not parallel due to global state modification.
+func TestGetMigrationStatus_Failed(t *testing.T) {
+	t.Attr("component", "migration")
+	t.Attr("type", "unit")
+	t.Attr("feature", "status")
+
+	e, controller, sm := setupMigrationTestEnvironment(t)
+
+	// Setup: get to FAILED state
+	require.NoError(t, sm.StartMigration(100))
+	require.NoError(t, sm.TransitionToDualWrite())
+	require.NoError(t, sm.TransitionToMigrating())
+	require.NoError(t, sm.TransitionToValidating())
+	require.NoError(t, sm.Fail())
+	require.NoError(t, sm.SetError("validation failed: v2 count (95) is less than legacy count (100)"))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/system/database/migration/status", http.NoBody)
+	rec := httptest.NewRecorder()
+	ctx := e.NewContext(req, rec)
+
+	err := controller.GetMigrationStatus(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response MigrationStatusResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.Equal(t, string(entities.MigrationStatusFailed), response.State)
+	assert.False(t, response.CanStart)
+	assert.False(t, response.CanPause)
+	assert.False(t, response.CanResume)
+	assert.True(t, response.CanRetryValidation)
+	assert.True(t, response.CanCancel)
+	assert.Contains(t, response.ErrorMessage, "validation failed")
 }
 
 // TestFormatDuration tests the duration formatting helper.

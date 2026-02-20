@@ -827,7 +827,8 @@
           "paused": "Paused",
           "validating": "Validating",
           "cutover": "Cutover in Progress",
-          "completed": "Migration Complete"
+          "completed": "Migration Complete",
+          "failed": "Validation Failed"
         },
         "progress": {
           "title": "Migration Progress",
@@ -861,7 +862,8 @@
           "pause": "Pause",
           "resume": "Resume",
           "cancel": "Cancel",
-          "rollback": "Rollback"
+          "rollback": "Rollback",
+          "retryValidation": "Retry Validation"
         },
         "confirmDialog": {
           "title": "Start Database Migration",
@@ -887,6 +889,7 @@
           "resumeFailed": "Failed to resume migration",
           "cancelFailed": "Failed to cancel migration",
           "rollbackFailed": "Failed to rollback migration",
+          "retryValidationFailed": "Failed to retry validation",
           "fetchFailed": "Failed to fetch migration status"
         },
         "worker": {

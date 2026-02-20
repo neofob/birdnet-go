@@ -358,3 +358,148 @@ func TestStateManager_GetProgress(t *testing.T) {
 	assert.Equal(t, int64(1000), total)
 	assert.Equal(t, uint(500), lastID)
 }
+
+func TestStateManager_Fail(t *testing.T) {
+	sm, cleanup := setupStateManager(t)
+	defer cleanup()
+
+	// Setup: get to VALIDATING state
+	require.NoError(t, sm.StartMigration(1000))
+	require.NoError(t, sm.TransitionToDualWrite())
+	require.NoError(t, sm.TransitionToMigrating())
+	require.NoError(t, sm.TransitionToValidating())
+
+	// Fail
+	err := sm.Fail()
+	require.NoError(t, err)
+
+	state, err := sm.GetState()
+	require.NoError(t, err)
+	assert.Equal(t, entities.MigrationStatusFailed, state.State)
+}
+
+func TestStateManager_Fail_FailsFromWrongState(t *testing.T) {
+	sm, cleanup := setupStateManager(t)
+	defer cleanup()
+
+	// Setup: get to DUAL_WRITE state
+	require.NoError(t, sm.StartMigration(1000))
+	require.NoError(t, sm.TransitionToDualWrite())
+
+	// Fail should fail from DUAL_WRITE (only valid from VALIDATING)
+	err := sm.Fail()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected validating")
+}
+
+func TestStateManager_RetryValidation(t *testing.T) {
+	sm, cleanup := setupStateManager(t)
+	defer cleanup()
+
+	// Setup: get to FAILED state
+	require.NoError(t, sm.StartMigration(1000))
+	require.NoError(t, sm.TransitionToDualWrite())
+	require.NoError(t, sm.TransitionToMigrating())
+	require.NoError(t, sm.TransitionToValidating())
+	require.NoError(t, sm.Fail())
+
+	// RetryValidation
+	err := sm.RetryValidation()
+	require.NoError(t, err)
+
+	state, err := sm.GetState()
+	require.NoError(t, err)
+	assert.Equal(t, entities.MigrationStatusValidating, state.State)
+}
+
+func TestStateManager_RetryValidation_FailsFromWrongState(t *testing.T) {
+	sm, cleanup := setupStateManager(t)
+	defer cleanup()
+
+	// Try to retry from idle
+	err := sm.RetryValidation()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected failed")
+}
+
+func TestStateManager_Cancel_FromFailed(t *testing.T) {
+	sm, cleanup := setupStateManager(t)
+	defer cleanup()
+
+	// Setup: get to FAILED state
+	require.NoError(t, sm.StartMigration(1000))
+	require.NoError(t, sm.TransitionToDualWrite())
+	require.NoError(t, sm.TransitionToMigrating())
+	require.NoError(t, sm.TransitionToValidating())
+	require.NoError(t, sm.Fail())
+
+	// Cancel from FAILED
+	err := sm.Cancel()
+	require.NoError(t, err)
+
+	state, err := sm.GetState()
+	require.NoError(t, err)
+	assert.Equal(t, entities.MigrationStatusIdle, state.State)
+}
+
+func TestStateManager_Pause_FailsFromValidating(t *testing.T) {
+	sm, cleanup := setupStateManager(t)
+	defer cleanup()
+
+	// Setup: get to VALIDATING state
+	require.NoError(t, sm.StartMigration(1000))
+	require.NoError(t, sm.TransitionToDualWrite())
+	require.NoError(t, sm.TransitionToMigrating())
+	require.NoError(t, sm.TransitionToValidating())
+
+	// Pause should fail from VALIDATING (must use Fail() instead)
+	err := sm.Pause()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot pause")
+}
+
+func TestMigrationState_CanRetryValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		state    entities.MigrationStatus
+		expected bool
+	}{
+		{entities.MigrationStatusIdle, false},
+		{entities.MigrationStatusDualWrite, false},
+		{entities.MigrationStatusPaused, false},
+		{entities.MigrationStatusMigrating, false},
+		{entities.MigrationStatusValidating, false},
+		{entities.MigrationStatusFailed, true},
+		{entities.MigrationStatusCompleted, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.state), func(t *testing.T) {
+			t.Parallel()
+			state := &entities.MigrationState{State: tt.state}
+			assert.Equal(t, tt.expected, state.CanRetryValidation())
+		})
+	}
+}
+
+func TestMigrationState_FailedIsNotActive(t *testing.T) {
+	t.Parallel()
+
+	state := &entities.MigrationState{State: entities.MigrationStatusFailed}
+	assert.False(t, state.IsActive())
+}
+
+func TestMigrationState_FailedCanCancel(t *testing.T) {
+	t.Parallel()
+
+	state := &entities.MigrationState{State: entities.MigrationStatusFailed}
+	assert.True(t, state.CanCancel())
+}
+
+func TestMigrationState_FailedCannotResume(t *testing.T) {
+	t.Parallel()
+
+	state := &entities.MigrationState{State: entities.MigrationStatusFailed}
+	assert.False(t, state.CanResume())
+}

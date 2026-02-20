@@ -42,6 +42,7 @@
     onStart: () => void;
     onPause: () => Promise<void>;
     onResume: () => Promise<void>;
+    onRetryValidation: () => Promise<void>;
     onCancel: () => Promise<void>;
     onRefreshPrerequisites: () => Promise<void>;
   }
@@ -55,6 +56,7 @@
     onStart,
     onPause,
     onResume,
+    onRetryValidation,
     onCancel,
     onRefreshPrerequisites,
   }: Props = $props();
@@ -77,6 +79,7 @@
     validating: 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]',
     cutover: 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]',
     completed: 'bg-[var(--color-success)]/10 text-[var(--color-success)]',
+    failed: 'bg-[var(--color-error)]/10 text-[var(--color-error)]',
   };
 
   async function handlePause() {
@@ -92,6 +95,15 @@
     actionLoading = true;
     try {
       await onResume();
+    } finally {
+      actionLoading = false;
+    }
+  }
+
+  async function handleRetryValidation() {
+    actionLoading = true;
+    try {
+      await onRetryValidation();
     } finally {
       actionLoading = false;
     }
@@ -243,6 +255,50 @@
           >
             <Play class="size-4" />
             {t('system.database.migration.actions.resume')}
+          </button>
+          <button
+            class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2
+                   text-sm font-medium rounded-lg transition-colors
+                   bg-[var(--color-error)]/10 text-[var(--color-error)]
+                   hover:bg-[var(--color-error)]/20
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+            onclick={() => (showCancelConfirm = true)}
+            disabled={!status.can_cancel || actionLoading}
+          >
+            <Square class="size-4" />
+            {t('system.database.migration.actions.cancel')}
+          </button>
+        </div>
+      </div>
+    {:else if status?.state === 'failed'}
+      <!-- Failed State (validation failure) -->
+      <div class="space-y-4">
+        <!-- Error indicator -->
+        <div class="p-3 rounded-lg bg-[var(--color-error)]/10 flex items-start gap-3" role="alert" aria-live="assertive">
+          <AlertCircle class="size-5 shrink-0 text-[var(--color-error)] mt-0.5" />
+          <div class="text-sm text-[var(--color-base-content)]">
+            <p class="font-medium text-[var(--color-error)]">
+              {t('system.database.migration.status.failed')}
+            </p>
+            {#if status.error_message}
+              <p class="mt-1">{status.error_message}</p>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="flex gap-2">
+          <button
+            class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2
+                   text-sm font-medium rounded-lg transition-colors
+                   bg-[var(--color-primary)] text-[var(--color-primary-content)]
+                   hover:bg-[var(--color-primary)]/90
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+            onclick={handleRetryValidation}
+            disabled={!status.can_retry_validation || actionLoading}
+          >
+            <RefreshCw class="size-4" />
+            {t('system.database.migration.actions.retryValidation')}
           </button>
           <button
             class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2

@@ -14,6 +14,7 @@ const (
 	MigrationStatusValidating   MigrationStatus = "validating"
 	MigrationStatusCutover      MigrationStatus = "cutover"
 	MigrationStatusCompleted    MigrationStatus = "completed"
+	MigrationStatusFailed       MigrationStatus = "failed"
 )
 
 // MigrationPhase represents which phase of migration is currently active.
@@ -83,4 +84,10 @@ func (m *MigrationState) CanResume() bool {
 // CanCancel returns true if the migration can be cancelled.
 func (m *MigrationState) CanCancel() bool {
 	return m.State != MigrationStatusCompleted && m.State != MigrationStatusIdle
+}
+
+// CanRetryValidation returns true if validation can be retried.
+// This is only possible when migration has failed due to validation errors.
+func (m *MigrationState) CanRetryValidation() bool {
+	return m.State == MigrationStatusFailed
 }
