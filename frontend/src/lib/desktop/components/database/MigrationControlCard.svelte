@@ -274,7 +274,7 @@
       <!-- Failed State (validation failure) -->
       <div class="space-y-4">
         <!-- Error indicator -->
-        <div class="p-3 rounded-lg bg-[var(--color-error)]/10 flex items-start gap-3">
+        <div class="p-3 rounded-lg bg-[var(--color-error)]/10 flex items-start gap-3" role="alert" aria-live="assertive">
           <AlertCircle class="size-5 shrink-0 text-[var(--color-error)] mt-0.5" />
           <div class="text-sm text-[var(--color-base-content)]">
             <p class="font-medium text-[var(--color-error)]">

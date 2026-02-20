@@ -37,10 +37,10 @@ type MigrationStatusResponse struct {
 	WorkerPaused       bool       `json:"worker_paused"`
 	CanStart           bool       `json:"can_start"`
 	CanPause           bool       `json:"can_pause"`
-	CanResume              bool       `json:"can_resume"`
-	CanRetryValidation     bool       `json:"can_retry_validation"`
-	CanCancel              bool       `json:"can_cancel"`
-	CanRollback            bool       `json:"can_rollback"`
+	CanResume          bool       `json:"can_resume"`
+	CanRetryValidation bool       `json:"can_retry_validation"`
+	CanCancel          bool       `json:"can_cancel"`
+	CanRollback        bool       `json:"can_rollback"`
 	IsDualWriteActive  bool       `json:"is_dual_write_active"`
 	ShouldReadFromV2   bool       `json:"should_read_from_v2"`
 	IsV2OnlyMode       bool       `json:"is_v2_only_mode"`
@@ -277,12 +277,10 @@ func (c *Controller) GetMigrationStatus(ctx echo.Context) error {
 
 	// Determine available actions based on state
 	canStart := state.State == entities.MigrationStatusIdle
-	canPause := state.State == entities.MigrationStatusDualWrite ||
-		state.State == entities.MigrationStatusMigrating
-	canResume := state.State == entities.MigrationStatusPaused
-	canRetryValidation := state.State == entities.MigrationStatusFailed
-	canCancel := state.State != entities.MigrationStatusIdle &&
-		state.State != entities.MigrationStatusCompleted
+	canPause := state.CanPause()
+	canResume := state.CanResume()
+	canRetryValidation := state.CanRetryValidation()
+	canCancel := state.CanCancel()
 	canRollback := state.State == entities.MigrationStatusCompleted
 
 	// Get cleanup state
