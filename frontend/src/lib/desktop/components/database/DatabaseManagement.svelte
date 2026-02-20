@@ -216,6 +216,18 @@
     }
   }
 
+  async function retryValidation(): Promise<void> {
+    try {
+      await api.post('/api/v2/system/database/migration/retry-validation');
+      await fetchMigrationStatus();
+    } catch (e) {
+      migrationStatus.error =
+        e instanceof ApiError
+          ? e.message
+          : t('system.database.migration.errors.retryValidationFailed');
+    }
+  }
+
   async function cancelMigration(): Promise<void> {
     try {
       await api.post('/api/v2/system/database/migration/cancel');
@@ -329,6 +341,7 @@
       onStart={() => (showConfirmDialog = true)}
       onPause={pauseMigration}
       onResume={resumeMigration}
+      onRetryValidation={retryValidation}
       onCancel={cancelMigration}
       onRefreshPrerequisites={fetchPrerequisites}
     />

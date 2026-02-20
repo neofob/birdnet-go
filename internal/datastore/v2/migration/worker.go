@@ -50,8 +50,13 @@ const ProgressLogRecordThreshold = 1000
 // validationMaxRetries is the maximum number of validation retry attempts.
 const validationMaxRetries = 5
 
-// validationCatchUpThreshold is the max record difference to attempt auto-recovery.
-const validationCatchUpThreshold = 100
+// validationCatchUpPercent is the max record difference as a percentage of legacy count
+// to attempt auto-recovery. For example, 5.0 means up to 5% difference is recoverable.
+const validationCatchUpPercent = 5.0
+
+// validationCatchUpMinThreshold is the minimum absolute threshold for catch-up,
+// used when the percentage-based threshold would be too small for small datasets.
+const validationCatchUpMinThreshold = 100
 
 // validationPreDelay is the delay before validation to let dual-writes complete.
 const validationPreDelay = 3 * time.Second
@@ -377,6 +382,14 @@ func (w *Worker) runIteration(ctx context.Context) runAction {
 	switch state.State {
 	case entities.MigrationStatusValidating:
 		return w.handleValidatingState(ctx)
+	case entities.MigrationStatusFailed:
+		// Worker was resumed after a failed validation via RetryValidation().
+		// The state manager already transitioned FAILED → VALIDATING before
+		// the worker was woken up, but if we see FAILED here the retry hasn't
+		// transitioned yet. Wait briefly for the state transition.
+		w.logger.Debug("migration in failed state, waiting for retry")
+		time.Sleep(time.Second)
+		return runActionContinue
 	case entities.MigrationStatusCutover:
 		return w.handleCutoverState(ctx)
 	case entities.MigrationStatusCompleted:
@@ -454,11 +467,13 @@ func (w *Worker) handleValidatingState(ctx context.Context) runAction {
 
 		// Check if this is a recoverable count mismatch
 		diff := legacyCount - v2Count
-		if diff > 0 && diff <= validationCatchUpThreshold {
+		threshold := max(int64(float64(legacyCount)*validationCatchUpPercent/100.0), validationCatchUpMinThreshold)
+		if diff > 0 && diff <= threshold {
 			w.logger.Info("validation: count mismatch, attempting catch-up",
 				logger.Int64("legacy_count", legacyCount),
 				logger.Int64("v2_count", v2Count),
 				logger.Int64("difference", diff),
+				logger.Int64("threshold", threshold),
 				logger.Int("attempt", attempt))
 
 			// Run catch-up to migrate new records
@@ -474,11 +489,12 @@ func (w *Worker) handleValidatingState(ctx context.Context) runAction {
 		// Non-recoverable error or large difference - fail
 		w.logger.Error("validation failed", logger.Error(err),
 			logger.Int64("legacy_count", legacyCount),
-			logger.Int64("v2_count", v2Count))
+			logger.Int64("v2_count", v2Count),
+			logger.Int64("threshold", threshold))
 		if setErr := w.stateManager.SetError(fmt.Sprintf("validation failed: %v", err)); setErr != nil {
 			w.logger.Warn("failed to set error in state", logger.Error(setErr))
 		}
-		w.pauseOnValidationFailure()
+		w.failOnValidation()
 		return runActionContinue
 	}
 
@@ -488,7 +504,7 @@ func (w *Worker) handleValidatingState(ctx context.Context) runAction {
 	if setErr := w.stateManager.SetError("validation failed after maximum retry attempts"); setErr != nil {
 		w.logger.Warn("failed to set error in state", logger.Error(setErr))
 	}
-	w.pauseOnValidationFailure()
+	w.failOnValidation()
 	return runActionContinue
 }
 
@@ -813,10 +829,11 @@ func (w *Worker) resetConsecutiveErrors() {
 	w.mu.Unlock()
 }
 
-// pauseOnValidationFailure pauses migration after validation fails.
-func (w *Worker) pauseOnValidationFailure() {
-	if pauseErr := w.stateManager.Pause(); pauseErr != nil {
-		w.logger.Warn("failed to pause after validation failure", logger.Error(pauseErr))
+// failOnValidation transitions migration to FAILED state after validation fails.
+// The worker is paused internally so the goroutine blocks waiting for a retry signal.
+func (w *Worker) failOnValidation() {
+	if failErr := w.stateManager.Fail(); failErr != nil {
+		w.logger.Warn("failed to transition to failed state after validation failure", logger.Error(failErr))
 	}
 	w.mu.Lock()
 	w.paused = true

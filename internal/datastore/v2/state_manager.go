@@ -95,8 +95,9 @@ func (m *StateManager) TransitionToDualWrite() error {
 	return m.transitionState(entities.MigrationStatusInitializing, entities.MigrationStatusDualWrite)
 }
 
-// Pause transitions from DUAL_WRITE, MIGRATING, or VALIDATING to PAUSED.
+// Pause transitions from DUAL_WRITE or MIGRATING to PAUSED.
 // Uses atomic update to ensure multi-process safety.
+// Note: VALIDATING state uses Fail() instead of Pause() for validation failures.
 func (m *StateManager) Pause() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -104,7 +105,6 @@ func (m *StateManager) Pause() error {
 	pausableStates := []entities.MigrationStatus{
 		entities.MigrationStatusDualWrite,
 		entities.MigrationStatusMigrating,
-		entities.MigrationStatusValidating,
 	}
 
 	result := m.db.Model(&entities.MigrationState{}).
@@ -139,6 +139,21 @@ func (m *StateManager) Pause() error {
 // and continue from ID 50001, eventually transitioning back through MIGRATING → VALIDATING.
 func (m *StateManager) Resume() error {
 	return m.transitionState(entities.MigrationStatusPaused, entities.MigrationStatusDualWrite)
+}
+
+// Fail transitions from VALIDATING to FAILED.
+// This is called when validation fails with a non-recoverable error.
+// Unlike Pause, this indicates a validation failure that requires explicit
+// retry rather than a simple resume.
+func (m *StateManager) Fail() error {
+	return m.transitionState(entities.MigrationStatusValidating, entities.MigrationStatusFailed)
+}
+
+// RetryValidation transitions from FAILED back to VALIDATING.
+// This allows re-running validation after a failure, without restarting the
+// entire migration from DUAL_WRITE (which Resume would do from PAUSED).
+func (m *StateManager) RetryValidation() error {
+	return m.transitionState(entities.MigrationStatusFailed, entities.MigrationStatusValidating)
 }
 
 // TransitionToMigrating transitions from DUAL_WRITE to MIGRATING.
@@ -200,6 +215,7 @@ func (m *StateManager) Cancel() error {
 		entities.MigrationStatusInitializing,
 		entities.MigrationStatusDualWrite,
 		entities.MigrationStatusPaused,
+		entities.MigrationStatusFailed,
 		entities.MigrationStatusMigrating,
 		entities.MigrationStatusValidating,
 		entities.MigrationStatusCutover,
