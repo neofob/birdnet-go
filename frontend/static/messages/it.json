@@ -55,7 +55,8 @@
       "clear": "Pulisci",
       "edit-config": "Modifica config.",
       "add-action": "Aggiungi azione",
-      "learnMore": "Scopri di più"
+      "learnMore": "Scopri di più",
+      "create": "Crea"
     },
     "ui": {
       "loading": "Caricamento...",
@@ -1105,7 +1106,8 @@
       "security": "Sicurezza",
       "species": "Specie",
       "notifications": "Notifiche",
-      "support": "Supporto"
+      "support": "Supporto",
+      "alertrules": "Regole di allerta"
     },
     "notFound": {
       "title": "Impostazioni Non Trovate",
@@ -2820,6 +2822,119 @@
       "sqlitePlaceholder": "Inserisci percorso database SQLite",
       "mysqlHostPlaceholder": "Inserisci host MySQL",
       "mysqlUsernamePlaceholder": "Inserisci nome utente MySQL"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Regole",
+        "history": "Cronologia"
+      },
+      "sections": {
+        "rules": {
+          "title": "Regole di allerta",
+          "description": "Configura le regole che attivano notifiche in base a eventi e metriche."
+        },
+        "history": {
+          "title": "Cronologia allerte",
+          "description": "Visualizza gli eventi di allerta passati e i relativi risultati."
+        }
+      },
+      "filters": {
+        "objectType": "Tipo di oggetto",
+        "status": "Stato",
+        "allTypes": "Tutti i tipi",
+        "allStates": "Tutti gli stati",
+        "enabled": "Attivato",
+        "disabled": "Disattivato"
+      },
+      "builtIn": "Predefinito",
+      "enabled": "Attivato",
+      "disabled": "Disattivato",
+      "trigger": "Trigger",
+      "conditions": "Condizioni",
+      "actions": "Azioni",
+      "cooldown": "Tempo di attesa",
+      "noConditions": "Nessuna condizione",
+      "noActions": "Nessuna azione",
+      "noRules": "Nessuna regola di allerta configurata.",
+      "noMatchingRules": "Nessuna regola corrisponde ai filtri correnti.",
+      "noHistory": "Nessuna cronologia allerte.",
+      "confirmDelete": "Sei sicuro di voler eliminare la regola \"{name}\"?",
+      "newRule": "Nuova regola",
+      "resetDefaults": "Ripristina predefiniti",
+      "resetting": "Ripristino...",
+      "clearHistory": "Cancella cronologia",
+      "clearing": "Cancellazione...",
+      "historyCount": "{total} voci totali",
+      "actionsExecuted": "Azioni eseguite",
+      "actionLabels": {
+        "edit": "Modifica regola",
+        "enable": "Attiva regola",
+        "disable": "Disattiva regola",
+        "test": "Testa regola",
+        "delete": "Elimina regola"
+      },
+      "status": {
+        "enabled": "Regola attivata",
+        "disabled": "Regola disattivata",
+        "deleted": "Regola eliminata",
+        "testFired": "Allerta di test inviata",
+        "defaultsReset": "Predefiniti ripristinati",
+        "historyCleared": "Cronologia cancellata",
+        "created": "Regola creata",
+        "updated": "Regola aggiornata",
+        "exported": "Regole esportate",
+        "imported": "{imported} di {total} regole importate"
+      },
+      "errors": {
+        "loadFailed": "Caricamento delle regole di allerta non riuscito",
+        "historyFailed": "Caricamento della cronologia allerte non riuscito",
+        "toggleFailed": "Attivazione/disattivazione della regola non riuscita",
+        "deleteFailed": "Eliminazione della regola non riuscita",
+        "testFailed": "Test della regola non riuscito",
+        "resetFailed": "Ripristino dei predefiniti non riuscito",
+        "clearHistoryFailed": "Cancellazione della cronologia non riuscita",
+        "saveFailed": "Salvataggio della regola non riuscito",
+        "exportFailed": "Esportazione delle regole non riuscita",
+        "importFailed": "Importazione delle regole non riuscita",
+        "schemaLoadFailed": "Impossibile caricare lo schema degli avvisi. Aggiornare la pagina."
+      },
+      "editor": {
+        "createTitle": "Crea regola di allerta",
+        "editTitle": "Modifica regola di allerta",
+        "name": "Nome",
+        "namePlaceholder": "Inserisci il nome della regola",
+        "description": "Descrizione",
+        "descriptionPlaceholder": "Descrizione facoltativa",
+        "enabled": "Attivato",
+        "triggerSection": "Trigger",
+        "objectType": "Tipo di oggetto",
+        "triggerType": "Tipo di trigger",
+        "triggerEvent": "Evento",
+        "triggerMetric": "Metrica",
+        "event": "Evento",
+        "metric": "Metrica",
+        "conditionsSection": "Condizioni",
+        "property": "Proprietà",
+        "operator": "Operatore",
+        "value": "Valore",
+        "valuePlaceholder": "Inserisci il valore",
+        "duration": "Durata (s)",
+        "addCondition": "Aggiungi condizione",
+        "removeCondition": "Rimuovi condizione",
+        "actionsSection": "Azioni",
+        "actionBell": "Notifica in-app",
+        "actionPush": "Notifica push",
+        "optionsSection": "Opzioni",
+        "cooldownMinutes": "Tempo di attesa (minuti)",
+        "templateTitle": "Modello titolo",
+        "templateTitlePlaceholder": "Lascia vuoto per il predefinito",
+        "templateMessage": "Modello messaggio",
+        "templateMessagePlaceholder": "Lascia vuoto per il predefinito"
+      },
+      "export": "Esporta",
+      "import": "Importa",
+      "exporting": "Esportazione...",
+      "importing": "Importazione..."
     }
   },
   "auth": {

@@ -55,7 +55,8 @@
       "clear": "Vymazať",
       "edit-config": "Upraviť konfiguráciu",
       "add-action": "Pridať akciu",
-      "learnMore": "Dozvedieť sa viac"
+      "learnMore": "Dozvedieť sa viac",
+      "create": "Vytvoriť"
     },
     "ui": {
       "loading": "Načítava sa...",
@@ -1132,7 +1133,8 @@
       "security": "Zabezpečenie",
       "species": "Druhy",
       "notifications": "Upozornenia",
-      "support": "Podpora"
+      "support": "Podpora",
+      "alertrules": "Pravidlá upozornení"
     },
     "notFound": {
       "title": "Nastavenia sa nenašli",
@@ -2847,6 +2849,119 @@
       "sqlitePlaceholder": "Zadajte cestu k databáze SQLite",
       "mysqlHostPlaceholder": "Zadajte MySQL host",
       "mysqlUsernamePlaceholder": "Zadajte MySQL meno používateľa"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Pravidlá",
+        "history": "História"
+      },
+      "sections": {
+        "rules": {
+          "title": "Pravidlá upozornení",
+          "description": "Nakonfigurujte pravidlá, ktoré spúšťajú upozornenia na základe udalostí a metrík."
+        },
+        "history": {
+          "title": "História upozornení",
+          "description": "Zobrazte predchádzajúce udalosti upozornení a ich výsledky."
+        }
+      },
+      "filters": {
+        "objectType": "Typ objektu",
+        "status": "Stav",
+        "allTypes": "Všetky typy",
+        "allStates": "Všetky stavy",
+        "enabled": "Povolené",
+        "disabled": "Zakázané"
+      },
+      "builtIn": "Vstavaný",
+      "enabled": "Povolené",
+      "disabled": "Zakázané",
+      "trigger": "Spúšťač",
+      "conditions": "Podmienky",
+      "actions": "Akcie",
+      "cooldown": "Doba čakania",
+      "noConditions": "Žiadne podmienky",
+      "noActions": "Žiadne akcie",
+      "noRules": "Žiadne pravidlá upozornení nie sú nakonfigurované.",
+      "noMatchingRules": "Žiadne pravidlá nezodpovedajú aktuálnym filtrom.",
+      "noHistory": "Žiadna história upozornení.",
+      "confirmDelete": "Ste si istí, že chcete odstrániť pravidlo \"{name}\"?",
+      "newRule": "Nové pravidlo",
+      "resetDefaults": "Obnoviť predvolené",
+      "resetting": "Obnovovanie...",
+      "clearHistory": "Vymazať históriu",
+      "clearing": "Mazanie...",
+      "historyCount": "{total} záznamov celkom",
+      "actionsExecuted": "Vykonané akcie",
+      "actionLabels": {
+        "edit": "Upraviť pravidlo",
+        "enable": "Povoliť pravidlo",
+        "disable": "Zakázať pravidlo",
+        "test": "Testovať pravidlo",
+        "delete": "Odstrániť pravidlo"
+      },
+      "status": {
+        "enabled": "Pravidlo povolené",
+        "disabled": "Pravidlo zakázané",
+        "deleted": "Pravidlo odstránené",
+        "testFired": "Testovacie upozornenie odoslané",
+        "defaultsReset": "Predvolené obnovené",
+        "historyCleared": "História vymazaná",
+        "created": "Pravidlo vytvorené",
+        "updated": "Pravidlo aktualizované",
+        "exported": "Pravidlá exportované",
+        "imported": "{imported} z {total} pravidiel importovaných"
+      },
+      "errors": {
+        "loadFailed": "Nepodarilo sa načítať pravidlá upozornení",
+        "historyFailed": "Nepodarilo sa načítať históriu upozornení",
+        "toggleFailed": "Nepodarilo sa prepnúť pravidlo",
+        "deleteFailed": "Nepodarilo sa odstrániť pravidlo",
+        "testFailed": "Nepodarilo sa otestovať pravidlo",
+        "resetFailed": "Nepodarilo sa obnoviť predvolené",
+        "clearHistoryFailed": "Nepodarilo sa vymazať históriu",
+        "saveFailed": "Nepodarilo sa uložiť pravidlo",
+        "exportFailed": "Nepodarilo sa exportovať pravidlá",
+        "importFailed": "Nepodarilo sa importovať pravidlá",
+        "schemaLoadFailed": "Nepodarilo sa načítať schému upozornení. Obnovte stránku."
+      },
+      "editor": {
+        "createTitle": "Vytvoriť pravidlo upozornenia",
+        "editTitle": "Upraviť pravidlo upozornenia",
+        "name": "Názov",
+        "namePlaceholder": "Zadajte názov pravidla",
+        "description": "Popis",
+        "descriptionPlaceholder": "Voliteľný popis",
+        "enabled": "Povolené",
+        "triggerSection": "Spúšťač",
+        "objectType": "Typ objektu",
+        "triggerType": "Typ spúšťača",
+        "triggerEvent": "Udalosť",
+        "triggerMetric": "Metrika",
+        "event": "Udalosť",
+        "metric": "Metrika",
+        "conditionsSection": "Podmienky",
+        "property": "Vlastnosť",
+        "operator": "Operátor",
+        "value": "Hodnota",
+        "valuePlaceholder": "Zadajte hodnotu",
+        "duration": "Trvanie (s)",
+        "addCondition": "Pridať podmienku",
+        "removeCondition": "Odstrániť podmienku",
+        "actionsSection": "Akcie",
+        "actionBell": "Upozornenie v aplikácii",
+        "actionPush": "Push upozornenie",
+        "optionsSection": "Možnosti",
+        "cooldownMinutes": "Doba čakania (minúty)",
+        "templateTitle": "Šablóna titulku",
+        "templateTitlePlaceholder": "Ponechajte prázdne pre predvolené",
+        "templateMessage": "Šablóna správy",
+        "templateMessagePlaceholder": "Ponechajte prázdne pre predvolené"
+      },
+      "export": "Exportovať",
+      "import": "Importovať",
+      "exporting": "Exportovanie...",
+      "importing": "Importovanie..."
     }
   },
   "auth": {

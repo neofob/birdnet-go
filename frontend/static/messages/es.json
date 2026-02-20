@@ -65,7 +65,8 @@
       "clear": "Limpiar",
       "edit-config": "Editar configuración",
       "add-action": "Añadir acción",
-      "learnMore": "Más información"
+      "learnMore": "Más información",
+      "create": "Crear"
     },
     "ui": {
       "loading": "Cargando...",
@@ -1133,7 +1134,8 @@
       "notifications": "Notificaciones",
       "security": "Seguridad",
       "species": "Especies",
-      "support": "Soporte"
+      "support": "Soporte",
+      "alertrules": "Reglas de alerta"
     },
     "notFound": {
       "title": "Configuración no encontrada",
@@ -2848,6 +2850,119 @@
       "hasChanges": "Esta pestaña tiene cambios sin guardar",
       "setAsDefault": "Establecer como predeterminado",
       "defaultIndicator": "Fuente de entrada predeterminada"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Reglas",
+        "history": "Historial"
+      },
+      "sections": {
+        "rules": {
+          "title": "Reglas de alerta",
+          "description": "Configurar reglas que activan notificaciones basadas en eventos y métricas."
+        },
+        "history": {
+          "title": "Historial de alertas",
+          "description": "Ver eventos de alerta pasados y sus resultados."
+        }
+      },
+      "filters": {
+        "objectType": "Tipo de objeto",
+        "status": "Estado",
+        "allTypes": "Todos los tipos",
+        "allStates": "Todos los estados",
+        "enabled": "Activado",
+        "disabled": "Desactivado"
+      },
+      "builtIn": "Integrado",
+      "enabled": "Activado",
+      "disabled": "Desactivado",
+      "trigger": "Disparador",
+      "conditions": "Condiciones",
+      "actions": "Acciones",
+      "cooldown": "Tiempo de espera",
+      "noConditions": "Sin condiciones",
+      "noActions": "Sin acciones",
+      "noRules": "No hay reglas de alerta configuradas.",
+      "noMatchingRules": "Ninguna regla coincide con los filtros actuales.",
+      "noHistory": "Sin historial de alertas.",
+      "confirmDelete": "¿Está seguro de que desea eliminar la regla \"{name}\"?",
+      "newRule": "Nueva regla",
+      "resetDefaults": "Restablecer valores predeterminados",
+      "resetting": "Restableciendo...",
+      "clearHistory": "Borrar historial",
+      "clearing": "Borrando...",
+      "historyCount": "{total} entradas en total",
+      "actionsExecuted": "Acciones ejecutadas",
+      "actionLabels": {
+        "edit": "Editar regla",
+        "enable": "Activar regla",
+        "disable": "Desactivar regla",
+        "test": "Probar regla",
+        "delete": "Eliminar regla"
+      },
+      "status": {
+        "enabled": "Regla activada",
+        "disabled": "Regla desactivada",
+        "deleted": "Regla eliminada",
+        "testFired": "Alerta de prueba disparada",
+        "defaultsReset": "Valores predeterminados restablecidos",
+        "historyCleared": "Historial borrado",
+        "created": "Regla creada",
+        "updated": "Regla actualizada",
+        "exported": "Reglas exportadas",
+        "imported": "{imported} de {total} reglas importadas"
+      },
+      "errors": {
+        "loadFailed": "Error al cargar las reglas de alerta",
+        "historyFailed": "Error al cargar el historial de alertas",
+        "toggleFailed": "Error al alternar la regla",
+        "deleteFailed": "Error al eliminar la regla",
+        "testFailed": "Error al probar la regla",
+        "resetFailed": "Error al restablecer los valores predeterminados",
+        "clearHistoryFailed": "Error al borrar el historial",
+        "saveFailed": "Error al guardar la regla",
+        "exportFailed": "Error al exportar las reglas",
+        "importFailed": "Error al importar las reglas",
+        "schemaLoadFailed": "Error al cargar el esquema de alertas. Por favor, actualice la página."
+      },
+      "editor": {
+        "createTitle": "Crear regla de alerta",
+        "editTitle": "Editar regla de alerta",
+        "name": "Nombre",
+        "namePlaceholder": "Introducir nombre de regla",
+        "description": "Descripción",
+        "descriptionPlaceholder": "Descripción opcional",
+        "enabled": "Activado",
+        "triggerSection": "Disparador",
+        "objectType": "Tipo de objeto",
+        "triggerType": "Tipo de disparador",
+        "triggerEvent": "Evento",
+        "triggerMetric": "Métrica",
+        "event": "Evento",
+        "metric": "Métrica",
+        "conditionsSection": "Condiciones",
+        "property": "Propiedad",
+        "operator": "Operador",
+        "value": "Valor",
+        "valuePlaceholder": "Introducir valor",
+        "duration": "Duración (s)",
+        "addCondition": "Agregar condición",
+        "removeCondition": "Eliminar condición",
+        "actionsSection": "Acciones",
+        "actionBell": "Notificación en la aplicación",
+        "actionPush": "Notificación push",
+        "optionsSection": "Opciones",
+        "cooldownMinutes": "Tiempo de espera (minutos)",
+        "templateTitle": "Plantilla de título",
+        "templateTitlePlaceholder": "Dejar vacío para usar el predeterminado",
+        "templateMessage": "Plantilla de mensaje",
+        "templateMessagePlaceholder": "Dejar vacío para usar el predeterminado"
+      },
+      "export": "Exportar",
+      "import": "Importar",
+      "exporting": "Exportando...",
+      "importing": "Importando..."
     }
   },
   "auth": {

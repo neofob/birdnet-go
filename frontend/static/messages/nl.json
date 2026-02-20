@@ -55,7 +55,8 @@
       "clear": "Wis",
       "edit-config": "Instelling wijzigen",
       "add-action": "Aktie toevoegen",
-      "learnMore": "Meer bekijken"
+      "learnMore": "Meer bekijken",
+      "create": "Aanmaken"
     },
     "ui": {
       "loading": "Inlezen ...",
@@ -1133,7 +1134,8 @@
       "security": "Beveiligings instellingen",
       "species": "Soorten filters",
       "notifications": "Meldings instellingen",
-      "support": "Ondersteuning"
+      "support": "Ondersteuning",
+      "alertrules": "Waarschuwingsregels"
     },
     "notFound": {
       "title": "Instellingen niet gevonden",
@@ -2848,6 +2850,119 @@
       "hasChanges": "Dit tabblad heeft niet-opgeslagen wijzigingen",
       "setAsDefault": "Als standaard instellen",
       "defaultIndicator": "Standaard invoerbron"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Regels",
+        "history": "Geschiedenis"
+      },
+      "sections": {
+        "rules": {
+          "title": "Waarschuwingsregels",
+          "description": "Configureer regels die meldingen activeren op basis van gebeurtenissen en metrieken."
+        },
+        "history": {
+          "title": "Waarschuwingsgeschiedenis",
+          "description": "Bekijk eerdere waarschuwingen en hun resultaten."
+        }
+      },
+      "filters": {
+        "objectType": "Objecttype",
+        "status": "Status",
+        "allTypes": "Alle typen",
+        "allStates": "Alle statussen",
+        "enabled": "Ingeschakeld",
+        "disabled": "Uitgeschakeld"
+      },
+      "builtIn": "Ingebouwd",
+      "enabled": "Ingeschakeld",
+      "disabled": "Uitgeschakeld",
+      "trigger": "Trigger",
+      "conditions": "Voorwaarden",
+      "actions": "Acties",
+      "cooldown": "Wachttijd",
+      "noConditions": "Geen voorwaarden",
+      "noActions": "Geen acties",
+      "noRules": "Geen waarschuwingsregels geconfigureerd.",
+      "noMatchingRules": "Geen regels komen overeen met de huidige filters.",
+      "noHistory": "Geen waarschuwingsgeschiedenis.",
+      "confirmDelete": "Weet u zeker dat u de regel \"{name}\" wilt verwijderen?",
+      "newRule": "Nieuwe regel",
+      "resetDefaults": "Standaardwaarden herstellen",
+      "resetting": "Herstellen...",
+      "clearHistory": "Geschiedenis wissen",
+      "clearing": "Wissen...",
+      "historyCount": "{total} vermeldingen totaal",
+      "actionsExecuted": "Uitgevoerde acties",
+      "actionLabels": {
+        "edit": "Regel bewerken",
+        "enable": "Regel inschakelen",
+        "disable": "Regel uitschakelen",
+        "test": "Regel testen",
+        "delete": "Regel verwijderen"
+      },
+      "status": {
+        "enabled": "Regel ingeschakeld",
+        "disabled": "Regel uitgeschakeld",
+        "deleted": "Regel verwijderd",
+        "testFired": "Testwaarschuwing verzonden",
+        "defaultsReset": "Standaardwaarden hersteld",
+        "historyCleared": "Geschiedenis gewist",
+        "created": "Regel aangemaakt",
+        "updated": "Regel bijgewerkt",
+        "exported": "Regels geëxporteerd",
+        "imported": "{imported} van {total} regels geïmporteerd"
+      },
+      "errors": {
+        "loadFailed": "Laden van waarschuwingsregels mislukt",
+        "historyFailed": "Laden van waarschuwingsgeschiedenis mislukt",
+        "toggleFailed": "In-/uitschakelen van regel mislukt",
+        "deleteFailed": "Verwijderen van regel mislukt",
+        "testFailed": "Testen van regel mislukt",
+        "resetFailed": "Herstellen van standaardwaarden mislukt",
+        "clearHistoryFailed": "Wissen van geschiedenis mislukt",
+        "saveFailed": "Opslaan van regel mislukt",
+        "exportFailed": "Exporteren van regels mislukt",
+        "importFailed": "Importeren van regels mislukt",
+        "schemaLoadFailed": "Kan het waarschuwingsschema niet laden. Vernieuw de pagina."
+      },
+      "editor": {
+        "createTitle": "Waarschuwingsregel aanmaken",
+        "editTitle": "Waarschuwingsregel bewerken",
+        "name": "Naam",
+        "namePlaceholder": "Voer regelnaam in",
+        "description": "Beschrijving",
+        "descriptionPlaceholder": "Optionele beschrijving",
+        "enabled": "Ingeschakeld",
+        "triggerSection": "Trigger",
+        "objectType": "Objecttype",
+        "triggerType": "Triggertype",
+        "triggerEvent": "Gebeurtenis",
+        "triggerMetric": "Metriek",
+        "event": "Gebeurtenis",
+        "metric": "Metriek",
+        "conditionsSection": "Voorwaarden",
+        "property": "Eigenschap",
+        "operator": "Operator",
+        "value": "Waarde",
+        "valuePlaceholder": "Voer waarde in",
+        "duration": "Duur (s)",
+        "addCondition": "Voorwaarde toevoegen",
+        "removeCondition": "Voorwaarde verwijderen",
+        "actionsSection": "Acties",
+        "actionBell": "In-app melding",
+        "actionPush": "Pushmelding",
+        "optionsSection": "Opties",
+        "cooldownMinutes": "Wachttijd (minuten)",
+        "templateTitle": "Titelsjabloon",
+        "templateTitlePlaceholder": "Laat leeg voor standaard",
+        "templateMessage": "Berichtsjabloon",
+        "templateMessagePlaceholder": "Laat leeg voor standaard"
+      },
+      "export": "Exporteren",
+      "import": "Importeren",
+      "exporting": "Exporteren...",
+      "importing": "Importeren..."
     }
   },
   "auth": {

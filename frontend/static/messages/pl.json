@@ -55,7 +55,8 @@
       "clear": "Wyczyść",
       "edit-config": "Edytuj Konfigurację",
       "add-action": "Dodaj Akcję",
-      "learnMore": "Dowiedz się Więcej"
+      "learnMore": "Dowiedz się Więcej",
+      "create": "Utwórz"
     },
     "ui": {
       "loading": "Ładowanie...",
@@ -1133,7 +1134,8 @@
       "security": "Bezpieczeństwo",
       "species": "Gatunki",
       "notifications": "Powiadomienia",
-      "support": "Wsparcie"
+      "support": "Wsparcie",
+      "alertrules": "Reguły alertów"
     },
     "notFound": {
       "title": "Nie Znaleziono Ustawień",
@@ -2848,6 +2850,119 @@
       "sqlitePlaceholder": "Wprowadź ścieżkę bazy danych SQLite",
       "mysqlHostPlaceholder": "Wprowadź host MySQL",
       "mysqlUsernamePlaceholder": "Wprowadź nazwę użytkownika MySQL"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Reguły",
+        "history": "Historia"
+      },
+      "sections": {
+        "rules": {
+          "title": "Reguły alertów",
+          "description": "Konfiguruj reguły wyzwalające powiadomienia na podstawie zdarzeń i metryk."
+        },
+        "history": {
+          "title": "Historia alertów",
+          "description": "Przeglądaj poprzednie zdarzenia alertów i ich rezultaty."
+        }
+      },
+      "filters": {
+        "objectType": "Typ obiektu",
+        "status": "Status",
+        "allTypes": "Wszystkie typy",
+        "allStates": "Wszystkie stany",
+        "enabled": "Włączone",
+        "disabled": "Wyłączone"
+      },
+      "builtIn": "Wbudowana",
+      "enabled": "Włączona",
+      "disabled": "Wyłączona",
+      "trigger": "Wyzwalacz",
+      "conditions": "Warunki",
+      "actions": "Akcje",
+      "cooldown": "Czas odnowienia",
+      "noConditions": "Brak warunków",
+      "noActions": "Brak akcji",
+      "noRules": "Nie skonfigurowano żadnych reguł alertów.",
+      "noMatchingRules": "Żadne reguły nie pasują do bieżących filtrów.",
+      "noHistory": "Brak historii alertów.",
+      "confirmDelete": "Czy na pewno chcesz usunąć regułę \"{name}\"?",
+      "newRule": "Nowa reguła",
+      "resetDefaults": "Przywróć domyślne",
+      "resetting": "Przywracanie...",
+      "clearHistory": "Wyczyść historię",
+      "clearing": "Czyszczenie...",
+      "historyCount": "{total} wpisów łącznie",
+      "actionsExecuted": "Wykonane akcje",
+      "actionLabels": {
+        "edit": "Edytuj regułę",
+        "enable": "Włącz regułę",
+        "disable": "Wyłącz regułę",
+        "test": "Testuj regułę",
+        "delete": "Usuń regułę"
+      },
+      "status": {
+        "enabled": "Reguła włączona",
+        "disabled": "Reguła wyłączona",
+        "deleted": "Reguła usunięta",
+        "testFired": "Alert testowy wysłany",
+        "defaultsReset": "Domyślne przywrócone",
+        "historyCleared": "Historia wyczyszczona",
+        "created": "Reguła utworzona",
+        "updated": "Reguła zaktualizowana",
+        "exported": "Reguły wyeksportowane",
+        "imported": "Zaimportowano {imported} z {total} reguł"
+      },
+      "errors": {
+        "loadFailed": "Nie udało się załadować reguł alertów",
+        "historyFailed": "Nie udało się załadować historii alertów",
+        "toggleFailed": "Nie udało się przełączyć reguły",
+        "deleteFailed": "Nie udało się usunąć reguły",
+        "testFailed": "Nie udało się przetestować reguły",
+        "resetFailed": "Nie udało się przywrócić domyślnych",
+        "clearHistoryFailed": "Nie udało się wyczyścić historii",
+        "saveFailed": "Nie udało się zapisać reguły",
+        "exportFailed": "Nie udało się wyeksportować reguł",
+        "importFailed": "Nie udało się zaimportować reguł",
+        "schemaLoadFailed": "Nie udało się załadować schematu alertów. Odśwież stronę."
+      },
+      "editor": {
+        "createTitle": "Utwórz regułę alertu",
+        "editTitle": "Edytuj regułę alertu",
+        "name": "Nazwa",
+        "namePlaceholder": "Wprowadź nazwę reguły",
+        "description": "Opis",
+        "descriptionPlaceholder": "Opcjonalny opis",
+        "enabled": "Włączona",
+        "triggerSection": "Wyzwalacz",
+        "objectType": "Typ obiektu",
+        "triggerType": "Typ wyzwalacza",
+        "triggerEvent": "Zdarzenie",
+        "triggerMetric": "Metryka",
+        "event": "Zdarzenie",
+        "metric": "Metryka",
+        "conditionsSection": "Warunki",
+        "property": "Właściwość",
+        "operator": "Operator",
+        "value": "Wartość",
+        "valuePlaceholder": "Wprowadź wartość",
+        "duration": "Czas trwania (s)",
+        "addCondition": "Dodaj warunek",
+        "removeCondition": "Usuń warunek",
+        "actionsSection": "Akcje",
+        "actionBell": "Powiadomienie w aplikacji",
+        "actionPush": "Powiadomienie push",
+        "optionsSection": "Opcje",
+        "cooldownMinutes": "Czas odnowienia (minuty)",
+        "templateTitle": "Szablon tytułu",
+        "templateTitlePlaceholder": "Pozostaw puste dla domyślnego",
+        "templateMessage": "Szablon wiadomości",
+        "templateMessagePlaceholder": "Pozostaw puste dla domyślnego"
+      },
+      "export": "Eksportuj",
+      "import": "Importuj",
+      "exporting": "Eksportowanie...",
+      "importing": "Importowanie..."
     }
   },
   "auth": {

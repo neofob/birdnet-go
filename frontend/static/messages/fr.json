@@ -55,7 +55,8 @@
       "clear": "Effacer",
       "edit-config": "Modifier la configuration",
       "add-action": "Ajouter une action",
-      "learnMore": "En savoir plus"
+      "learnMore": "En savoir plus",
+      "create": "Créer"
     },
     "ui": {
       "loading": "Chargement...",
@@ -1133,7 +1134,8 @@
       "notifications": "Notifications",
       "security": "Sécurité",
       "species": "Espèces",
-      "support": "Support"
+      "support": "Support",
+      "alertrules": "Règles d'alerte"
     },
     "notFound": {
       "title": "Paramètres non trouvés",
@@ -2848,6 +2850,119 @@
       "hasChanges": "Cet onglet contient des modifications non enregistrées",
       "setAsDefault": "Définir par défaut",
       "defaultIndicator": "Source d'entrée par défaut"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Règles",
+        "history": "Historique"
+      },
+      "sections": {
+        "rules": {
+          "title": "Règles d'alerte",
+          "description": "Configurer des règles qui déclenchent des notifications en fonction des événements et des métriques."
+        },
+        "history": {
+          "title": "Historique des alertes",
+          "description": "Consulter les événements d'alerte passés et leurs résultats."
+        }
+      },
+      "filters": {
+        "objectType": "Type d'objet",
+        "status": "Statut",
+        "allTypes": "Tous les types",
+        "allStates": "Tous les états",
+        "enabled": "Activé",
+        "disabled": "Désactivé"
+      },
+      "builtIn": "Intégré",
+      "enabled": "Activé",
+      "disabled": "Désactivé",
+      "trigger": "Déclencheur",
+      "conditions": "Conditions",
+      "actions": "Actions",
+      "cooldown": "Temps de recharge",
+      "noConditions": "Aucune condition",
+      "noActions": "Aucune action",
+      "noRules": "Aucune règle d'alerte configurée.",
+      "noMatchingRules": "Aucune règle ne correspond aux filtres actuels.",
+      "noHistory": "Aucun historique d'alertes.",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer la règle \"{name}\" ?",
+      "newRule": "Nouvelle règle",
+      "resetDefaults": "Réinitialiser les valeurs par défaut",
+      "resetting": "Réinitialisation...",
+      "clearHistory": "Effacer l'historique",
+      "clearing": "Effacement...",
+      "historyCount": "{total} entrées au total",
+      "actionsExecuted": "Actions exécutées",
+      "actionLabels": {
+        "edit": "Modifier la règle",
+        "enable": "Activer la règle",
+        "disable": "Désactiver la règle",
+        "test": "Tester la règle",
+        "delete": "Supprimer la règle"
+      },
+      "status": {
+        "enabled": "Règle activée",
+        "disabled": "Règle désactivée",
+        "deleted": "Règle supprimée",
+        "testFired": "Alerte de test déclenchée",
+        "defaultsReset": "Valeurs par défaut réinitialisées",
+        "historyCleared": "Historique effacé",
+        "created": "Règle créée",
+        "updated": "Règle mise à jour",
+        "exported": "Règles exportées",
+        "imported": "{imported} sur {total} règles importées"
+      },
+      "errors": {
+        "loadFailed": "Échec du chargement des règles d'alerte",
+        "historyFailed": "Échec du chargement de l'historique des alertes",
+        "toggleFailed": "Échec de l'activation/désactivation de la règle",
+        "deleteFailed": "Échec de la suppression de la règle",
+        "testFailed": "Échec du test de la règle",
+        "resetFailed": "Échec de la réinitialisation des valeurs par défaut",
+        "clearHistoryFailed": "Échec de l'effacement de l'historique",
+        "saveFailed": "Échec de l'enregistrement de la règle",
+        "exportFailed": "Échec de l'exportation des règles",
+        "importFailed": "Échec de l'importation des règles",
+        "schemaLoadFailed": "Échec du chargement du schéma d'alerte. Veuillez rafraîchir la page."
+      },
+      "editor": {
+        "createTitle": "Créer une règle d'alerte",
+        "editTitle": "Modifier la règle d'alerte",
+        "name": "Nom",
+        "namePlaceholder": "Saisir le nom de la règle",
+        "description": "Description",
+        "descriptionPlaceholder": "Description facultative",
+        "enabled": "Activé",
+        "triggerSection": "Déclencheur",
+        "objectType": "Type d'objet",
+        "triggerType": "Type de déclencheur",
+        "triggerEvent": "Événement",
+        "triggerMetric": "Métrique",
+        "event": "Événement",
+        "metric": "Métrique",
+        "conditionsSection": "Conditions",
+        "property": "Propriété",
+        "operator": "Opérateur",
+        "value": "Valeur",
+        "valuePlaceholder": "Saisir une valeur",
+        "duration": "Durée (s)",
+        "addCondition": "Ajouter une condition",
+        "removeCondition": "Supprimer la condition",
+        "actionsSection": "Actions",
+        "actionBell": "Notification dans l'application",
+        "actionPush": "Notification push",
+        "optionsSection": "Options",
+        "cooldownMinutes": "Temps de recharge (minutes)",
+        "templateTitle": "Modèle de titre",
+        "templateTitlePlaceholder": "Laisser vide pour la valeur par défaut",
+        "templateMessage": "Modèle de message",
+        "templateMessagePlaceholder": "Laisser vide pour la valeur par défaut"
+      },
+      "export": "Exporter",
+      "import": "Importer",
+      "exporting": "Exportation...",
+      "importing": "Importation..."
     }
   },
   "auth": {

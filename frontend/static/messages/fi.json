@@ -55,7 +55,8 @@
       "clear": "Tyhjennä",
       "edit-config": "Muokkaa asetuksia",
       "add-action": "Lisää toiminto",
-      "learnMore": "Lue lisää"
+      "learnMore": "Lue lisää",
+      "create": "Luo"
     },
     "ui": {
       "loading": "Ladataan...",
@@ -1133,7 +1134,8 @@
       "notifications": "Ilmoitukset",
       "security": "Turvallisuus",
       "species": "Lajit",
-      "support": "Tuki"
+      "support": "Tuki",
+      "alertrules": "Hälytyssäännöt"
     },
     "notFound": {
       "title": "Asetuksia ei löytynyt",
@@ -2848,6 +2850,119 @@
       "hasChanges": "Tällä välilehdellä on tallentamattomia muutoksia",
       "setAsDefault": "Aseta oletukseksi",
       "defaultIndicator": "Oletuslähde"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Säännöt",
+        "history": "Historia"
+      },
+      "sections": {
+        "rules": {
+          "title": "Hälytyssäännöt",
+          "description": "Määritä säännöt, jotka laukaisevat ilmoituksia tapahtumien ja mittareiden perusteella."
+        },
+        "history": {
+          "title": "Hälytysten historia",
+          "description": "Tarkastele aiempia hälytyksiä ja niiden tuloksia."
+        }
+      },
+      "filters": {
+        "objectType": "Kohdetyyppi",
+        "status": "Tila",
+        "allTypes": "Kaikki tyypit",
+        "allStates": "Kaikki tilat",
+        "enabled": "Käytössä",
+        "disabled": "Pois käytöstä"
+      },
+      "builtIn": "Sisäänrakennettu",
+      "enabled": "Käytössä",
+      "disabled": "Pois käytöstä",
+      "trigger": "Laukaisin",
+      "conditions": "Ehdot",
+      "actions": "Toiminnot",
+      "cooldown": "Odotusaika",
+      "noConditions": "Ei ehtoja",
+      "noActions": "Ei toimintoja",
+      "noRules": "Hälytyssääntöjä ei ole määritetty.",
+      "noMatchingRules": "Yksikään sääntö ei vastaa nykyisiä suodattimia.",
+      "noHistory": "Ei hälytysten historiaa.",
+      "confirmDelete": "Haluatko varmasti poistaa säännön \"{name}\"?",
+      "newRule": "Uusi sääntö",
+      "resetDefaults": "Palauta oletukset",
+      "resetting": "Palautetaan...",
+      "clearHistory": "Tyhjennä historia",
+      "clearing": "Tyhjennetään...",
+      "historyCount": "{total} merkintää yhteensä",
+      "actionsExecuted": "Suoritetut toiminnot",
+      "actionLabels": {
+        "edit": "Muokkaa sääntöä",
+        "enable": "Ota sääntö käyttöön",
+        "disable": "Poista sääntö käytöstä",
+        "test": "Testaa sääntöä",
+        "delete": "Poista sääntö"
+      },
+      "status": {
+        "enabled": "Sääntö käytössä",
+        "disabled": "Sääntö pois käytöstä",
+        "deleted": "Sääntö poistettu",
+        "testFired": "Testihälytys laukaistu",
+        "defaultsReset": "Oletukset palautettu",
+        "historyCleared": "Historia tyhjennetty",
+        "created": "Sääntö luotu",
+        "updated": "Sääntö päivitetty",
+        "exported": "Säännöt viety",
+        "imported": "{imported} / {total} sääntöä tuotu"
+      },
+      "errors": {
+        "loadFailed": "Hälytyssääntöjen lataus epäonnistui",
+        "historyFailed": "Hälytysten historian lataus epäonnistui",
+        "toggleFailed": "Säännön tilan vaihto epäonnistui",
+        "deleteFailed": "Säännön poistaminen epäonnistui",
+        "testFailed": "Säännön testaus epäonnistui",
+        "resetFailed": "Oletusten palautus epäonnistui",
+        "clearHistoryFailed": "Historian tyhjennys epäonnistui",
+        "saveFailed": "Säännön tallennus epäonnistui",
+        "exportFailed": "Sääntöjen vienti epäonnistui",
+        "importFailed": "Sääntöjen tuonti epäonnistui",
+        "schemaLoadFailed": "Hälytysjärjestelmän lataus epäonnistui. Päivitä sivu."
+      },
+      "editor": {
+        "createTitle": "Luo hälytyssääntö",
+        "editTitle": "Muokkaa hälytyssääntöä",
+        "name": "Nimi",
+        "namePlaceholder": "Syötä säännön nimi",
+        "description": "Kuvaus",
+        "descriptionPlaceholder": "Valinnainen kuvaus",
+        "enabled": "Käytössä",
+        "triggerSection": "Laukaisin",
+        "objectType": "Kohdetyyppi",
+        "triggerType": "Laukaisimen tyyppi",
+        "triggerEvent": "Tapahtuma",
+        "triggerMetric": "Mittari",
+        "event": "Tapahtuma",
+        "metric": "Mittari",
+        "conditionsSection": "Ehdot",
+        "property": "Ominaisuus",
+        "operator": "Operaattori",
+        "value": "Arvo",
+        "valuePlaceholder": "Syötä arvo",
+        "duration": "Kesto (s)",
+        "addCondition": "Lisää ehto",
+        "removeCondition": "Poista ehto",
+        "actionsSection": "Toiminnot",
+        "actionBell": "Sovelluksen sisäinen ilmoitus",
+        "actionPush": "Push-ilmoitus",
+        "optionsSection": "Asetukset",
+        "cooldownMinutes": "Odotusaika (minuuttia)",
+        "templateTitle": "Otsikkopohja",
+        "templateTitlePlaceholder": "Jätä tyhjäksi oletusarvolle",
+        "templateMessage": "Viestipohja",
+        "templateMessagePlaceholder": "Jätä tyhjäksi oletusarvolle"
+      },
+      "export": "Vie",
+      "import": "Tuo",
+      "exporting": "Viedään...",
+      "importing": "Tuodaan..."
     }
   },
   "auth": {

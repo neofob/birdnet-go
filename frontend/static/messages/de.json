@@ -55,7 +55,8 @@
       "clear": "Löschen",
       "edit-config": "Konfiguration bearbeiten",
       "add-action": "Aktion hinzufügen",
-      "learnMore": "Mehr erfahren"
+      "learnMore": "Mehr erfahren",
+      "create": "Erstellen"
     },
     "ui": {
       "loading": "Wird geladen...",
@@ -1133,7 +1134,8 @@
       "notifications": "Benachrichtigungen",
       "security": "Sicherheit",
       "species": "Arten",
-      "support": "Unterstützung"
+      "support": "Unterstützung",
+      "alertrules": "Alarmregeln"
     },
     "notFound": {
       "title": "Einstellungen nicht gefunden",
@@ -2848,6 +2850,119 @@
       "hasChanges": "Dieser Reiter hat ungespeicherte Änderungen",
       "setAsDefault": "Als Standard festlegen",
       "defaultIndicator": "Standard-Eingabequelle"
+    },
+    "alerts": {
+      "tabs": {
+        "rules": "Regeln",
+        "history": "Verlauf"
+      },
+      "sections": {
+        "rules": {
+          "title": "Alarmregeln",
+          "description": "Regeln konfigurieren, die Benachrichtigungen basierend auf Ereignissen und Metriken auslösen."
+        },
+        "history": {
+          "title": "Alarmverlauf",
+          "description": "Vergangene Alarmereignisse und deren Ergebnisse anzeigen."
+        }
+      },
+      "filters": {
+        "objectType": "Objekttyp",
+        "status": "Status",
+        "allTypes": "Alle Typen",
+        "allStates": "Alle Zustände",
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "builtIn": "Integriert",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "trigger": "Auslöser",
+      "conditions": "Bedingungen",
+      "actions": "Aktionen",
+      "cooldown": "Abklingzeit",
+      "noConditions": "Keine Bedingungen",
+      "noActions": "Keine Aktionen",
+      "noRules": "Keine Alarmregeln konfiguriert.",
+      "noMatchingRules": "Keine Regeln entsprechen den aktuellen Filtern.",
+      "noHistory": "Kein Alarmverlauf.",
+      "confirmDelete": "Möchten Sie die Regel \"{name}\" wirklich löschen?",
+      "newRule": "Neue Regel",
+      "resetDefaults": "Standardwerte zurücksetzen",
+      "resetting": "Zurücksetzen...",
+      "clearHistory": "Verlauf löschen",
+      "clearing": "Löschen...",
+      "historyCount": "{total} Einträge gesamt",
+      "actionsExecuted": "Ausgeführte Aktionen",
+      "actionLabels": {
+        "edit": "Regel bearbeiten",
+        "enable": "Regel aktivieren",
+        "disable": "Regel deaktivieren",
+        "test": "Regel testen",
+        "delete": "Regel löschen"
+      },
+      "status": {
+        "enabled": "Regel aktiviert",
+        "disabled": "Regel deaktiviert",
+        "deleted": "Regel gelöscht",
+        "testFired": "Testalarm ausgelöst",
+        "defaultsReset": "Standardwerte zurückgesetzt",
+        "historyCleared": "Verlauf gelöscht",
+        "created": "Regel erstellt",
+        "updated": "Regel aktualisiert",
+        "exported": "Regeln exportiert",
+        "imported": "{imported} von {total} Regeln importiert"
+      },
+      "errors": {
+        "loadFailed": "Alarmregeln konnten nicht geladen werden",
+        "historyFailed": "Alarmverlauf konnte nicht geladen werden",
+        "toggleFailed": "Regel konnte nicht umgeschaltet werden",
+        "deleteFailed": "Regel konnte nicht gelöscht werden",
+        "testFailed": "Regel konnte nicht getestet werden",
+        "resetFailed": "Standardwerte konnten nicht zurückgesetzt werden",
+        "clearHistoryFailed": "Verlauf konnte nicht gelöscht werden",
+        "saveFailed": "Regel konnte nicht gespeichert werden",
+        "exportFailed": "Regeln konnten nicht exportiert werden",
+        "importFailed": "Regeln konnten nicht importiert werden",
+        "schemaLoadFailed": "Fehler beim Laden des Alarmschemas. Bitte aktualisieren Sie die Seite."
+      },
+      "editor": {
+        "createTitle": "Alarmregel erstellen",
+        "editTitle": "Alarmregel bearbeiten",
+        "name": "Name",
+        "namePlaceholder": "Regelname eingeben",
+        "description": "Beschreibung",
+        "descriptionPlaceholder": "Optionale Beschreibung",
+        "enabled": "Aktiviert",
+        "triggerSection": "Auslöser",
+        "objectType": "Objekttyp",
+        "triggerType": "Auslösertyp",
+        "triggerEvent": "Ereignis",
+        "triggerMetric": "Metrik",
+        "event": "Ereignis",
+        "metric": "Metrik",
+        "conditionsSection": "Bedingungen",
+        "property": "Eigenschaft",
+        "operator": "Operator",
+        "value": "Wert",
+        "valuePlaceholder": "Wert eingeben",
+        "duration": "Dauer (s)",
+        "addCondition": "Bedingung hinzufügen",
+        "removeCondition": "Bedingung entfernen",
+        "actionsSection": "Aktionen",
+        "actionBell": "In-App-Benachrichtigung",
+        "actionPush": "Push-Benachrichtigung",
+        "optionsSection": "Optionen",
+        "cooldownMinutes": "Abklingzeit (Minuten)",
+        "templateTitle": "Titelvorlage",
+        "templateTitlePlaceholder": "Leer lassen für Standard",
+        "templateMessage": "Nachrichtenvorlage",
+        "templateMessagePlaceholder": "Leer lassen für Standard"
+      },
+      "export": "Exportieren",
+      "import": "Importieren",
+      "exporting": "Exportieren...",
+      "importing": "Importieren..."
     }
   },
   "auth": {
