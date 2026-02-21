@@ -1,3 +1,4 @@
+/* global self */
 // Minimal service worker for PWA install support.
 // This enables the browser's "Add to Home Screen" / "Install App" prompt.
 // No offline caching — BirdNET-Go runs on a local network.
