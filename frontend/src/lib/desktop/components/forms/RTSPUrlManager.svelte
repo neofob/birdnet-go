@@ -84,7 +84,7 @@
   }
 
   function generateId(): string {
-    return `rtsp-${crypto.randomUUID()}`;
+    return `rtsp-${crypto?.randomUUID?.() ?? Math.random().toString(36).substring(2, 11)}`;
   }
 
   function addUrl() {
