@@ -408,7 +408,7 @@ func (ds *Datastore) Save(note *datastore.Note, results []datastore.Results) err
 	}
 
 	// Resolve audio source if provided (follows same pattern as conversion.go)
-	if note.Source.SafeString != "" {
+	if note.Source.SafeString != "" && ds.source != nil {
 		nodeName := note.SourceNode
 		if nodeName == "" {
 			nodeName = "default"
@@ -429,6 +429,10 @@ func (ds *Datastore) Save(note *datastore.Note, results []datastore.Results) err
 			// Continue without source - not fatal
 		} else {
 			det.SourceID = &source.ID
+		}
+	} else if note.Source.SafeString != "" && ds.source == nil {
+		if ds.log != nil {
+			ds.log.Debug("audio source provided but source repository is nil, skipping resolution")
 		}
 	}
 
