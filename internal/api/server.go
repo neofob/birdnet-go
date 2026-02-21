@@ -279,6 +279,9 @@ func (s *Server) setupRoutes() error {
 	s.staticServer = NewStaticFileServer()
 	s.staticServer.RegisterRoutes(s.echo)
 
+	// Register PWA routes (manifest and service worker at root paths)
+	s.registerPWARoutes()
+
 	// Initialize SPA handler - serves Vite's index.html directly
 	// Configuration is fetched by frontend from /api/v2/app/config
 	devMode := s.staticServer.IsDevMode()
