@@ -196,6 +196,24 @@ func (r *detectionRepository) GetWithRelations(ctx context.Context, id uint) (*e
 		}
 	}
 
+	// Load review (optional - not an error if missing)
+	var review entities.DetectionReview
+	if err := r.db.WithContext(ctx).Table(r.reviewsTable()).
+		Where("detection_id = ?", id).First(&review).Error; err == nil {
+		det.Review = &review
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to load review: %w", err)
+	}
+
+	// Load lock (optional - not an error if missing)
+	var lock entities.DetectionLock
+	if err := r.db.WithContext(ctx).Table(r.locksTable()).
+		Where("detection_id = ?", id).First(&lock).Error; err == nil {
+		det.Lock = &lock
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to load lock: %w", err)
+	}
+
 	return &det, nil
 }
 
@@ -400,12 +418,34 @@ func (r *detectionRepository) loadRelationsForDetections(ctx context.Context, de
 		}
 	}
 
+	// Load reviews by detection ID
+	detectionIDs := make([]uint, len(dets))
+	for i, d := range dets {
+		detectionIDs[i] = d.ID
+	}
+
+	reviews, err := r.GetReviewsByDetectionIDs(ctx, detectionIDs)
+	if err != nil {
+		return fmt.Errorf("load reviews: %w", err)
+	}
+
+	locks, err := r.GetLocksByDetectionIDs(ctx, detectionIDs)
+	if err != nil {
+		return fmt.Errorf("load locks: %w", err)
+	}
+
 	// Assign relations
 	for _, d := range dets {
 		d.Label = labels[d.LabelID]
 		d.Model = models[d.ModelID]
 		if d.SourceID != nil {
 			d.Source = sources[*d.SourceID]
+		}
+		if review, ok := reviews[d.ID]; ok {
+			d.Review = review
+		}
+		if locks[d.ID] {
+			d.Lock = &entities.DetectionLock{DetectionID: d.ID}
 		}
 	}
 

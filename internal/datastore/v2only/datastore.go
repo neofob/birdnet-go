@@ -499,6 +499,15 @@ func (ds *Datastore) detectionToNote(det *entities.Detection) datastore.Note {
 	dateStr := t.Format(time.DateOnly)
 	timeStr := t.Format(time.TimeOnly)
 
+	// Populate virtual Verified field from Review
+	verified := ""
+	if det.Review != nil {
+		verified = string(det.Review.Verified)
+	}
+
+	// Populate virtual Locked field from Lock presence
+	locked := det.Lock != nil
+
 	return datastore.Note{
 		ID:             det.ID,
 		Date:           dateStr,
@@ -509,6 +518,8 @@ func (ds *Datastore) detectionToNote(det *entities.Detection) datastore.Note {
 		Latitude:       lat,
 		Longitude:      lon,
 		ClipName:       clipName,
+		Verified:       verified,
+		Locked:         locked,
 	}
 }
 
@@ -685,6 +696,13 @@ func (ds *Datastore) GetAllNotes() ([]datastore.Note, error) {
 	dets, _, err := ds.detection.Search(ctx, filters)
 	if err != nil {
 		return nil, err
+	}
+
+	// Load relations (review, lock, label, source) for accurate virtual fields
+	if err := ds.loadDetectionRelations(ctx, dets); err != nil {
+		if ds.log != nil {
+			ds.log.Debug("failed to load some detection relations", logger.Error(err))
+		}
 	}
 
 	return ds.detectionsToNotes(dets), nil
@@ -1035,6 +1053,13 @@ func (ds *Datastore) SearchNotes(query string, sortAscending bool, limit, offset
 		return nil, err
 	}
 
+	// Load relations (review, lock, label, source) for accurate virtual fields
+	if err := ds.loadDetectionRelations(ctx, dets); err != nil {
+		if ds.log != nil {
+			ds.log.Debug("failed to load some detection relations", logger.Error(err))
+		}
+	}
+
 	return ds.detectionsToNotes(dets), nil
 }
 
@@ -1059,6 +1084,13 @@ func (ds *Datastore) SearchNotesAdvanced(filters *datastore.AdvancedSearchFilter
 	dets, total, err := ds.detection.Search(ctx, repoFilters)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	// Load relations (review, lock, label, source) for accurate virtual fields
+	if err := ds.loadDetectionRelations(ctx, dets); err != nil {
+		if ds.log != nil {
+			ds.log.Debug("failed to load some detection relations", logger.Error(err))
+		}
 	}
 
 	return ds.detectionsToNotes(dets), total, nil
@@ -1595,15 +1627,23 @@ func (ds *Datastore) loadDetectionRelations(ctx context.Context, dets []*entitie
 	labelIDs := slices.Collect(maps.Keys(labelIDSet))
 	sourceIDs := slices.Collect(maps.Keys(sourceIDSet))
 
-	// Batch load all relations
-	labelMap, err := ds.label.GetByIDs(ctx, labelIDs)
-	if err != nil {
-		return fmt.Errorf("load labels: %w", err)
+	// Batch load all relations (nil-safe for partially initialized datastores)
+	var labelMap map[uint]*entities.Label
+	if ds.label != nil {
+		var err error
+		labelMap, err = ds.label.GetByIDs(ctx, labelIDs)
+		if err != nil {
+			return fmt.Errorf("load labels: %w", err)
+		}
 	}
 
-	sourceMap, err := ds.source.GetByIDs(ctx, sourceIDs)
-	if err != nil {
-		return fmt.Errorf("load sources: %w", err)
+	var sourceMap map[uint]*entities.AudioSource
+	if ds.source != nil {
+		var err error
+		sourceMap, err = ds.source.GetByIDs(ctx, sourceIDs)
+		if err != nil {
+			return fmt.Errorf("load sources: %w", err)
+		}
 	}
 
 	reviewMap, err := ds.detection.GetReviewsByDetectionIDs(ctx, detectionIDs)
