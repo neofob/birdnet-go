@@ -11,7 +11,7 @@
  * Fix: Critical fallbacks provide essential translations immediately
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -168,5 +168,32 @@ describe('i18n store - locale switching', () => {
 
     // This should not throw
     expect(() => setLocale('en')).not.toThrow();
+  });
+});
+
+describe('i18n store - localStorage cache', () => {
+  // Clean up any stale keys injected by tests to avoid leaking state.
+  afterEach(() => {
+    localStorage.removeItem('birdnet-messages-en-oldversion');
+  });
+
+  // Note: This test runs after the i18n module has already initialized, so it
+  // doesn't exercise the startup cache-read path. It verifies that stale entries
+  // from old versions don't interfere with the already-loaded fresh translations.
+  it('should not use stale localStorage cache after version change', async () => {
+    // Simulate stale cache from old version
+    localStorage.setItem(
+      'birdnet-messages-en-oldversion',
+      JSON.stringify({
+        common: { loading: 'Stale Loading...' },
+      })
+    );
+
+    // Wait for fresh translations
+    await waitForTranslations();
+
+    // Should use fresh translations, not stale cache
+    const result = t('common.loading');
+    expect(result).toBe('Loading...');
   });
 });
