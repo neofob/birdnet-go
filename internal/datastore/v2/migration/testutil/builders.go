@@ -1003,6 +1003,46 @@ func GenerateDetections(count int) []datastore.Note {
 	return notes
 }
 
+// GenerateOutOfOrderDetections creates detections where IDs don't correlate with dates.
+// This simulates bulk imports of historical data where newer IDs have older dates.
+// Count must exceed batch size (100 for SQLite) to trigger multi-batch pagination bugs.
+//
+// Pattern: every 5th record (indices 4, 9, 14, ...) gets a much earlier date than
+// its neighbors, creating ID/date order divergence across batch boundaries.
+func GenerateOutOfOrderDetections(count int) []datastore.Note {
+	notes := make([]datastore.Note, count)
+	baseTime := time.Now().Add(-time.Duration(count*3) * time.Hour)
+
+	for i := range count {
+		speciesIdx := i % len(TestSpecies)
+		species := TestSpecies[speciesIdx]
+
+		// Every 5th record gets an earlier date, creating divergence.
+		// The time gap is large enough that date-sorted batches will place
+		// these records far from their ID-based position, causing skips
+		// when cursor pagination crosses batch boundaries.
+		var ts time.Time
+		if i > 0 && i%5 == 4 {
+			// Jump backwards: higher ID but much earlier date
+			ts = baseTime.Add(time.Duration(max(i-10, 0)) * time.Hour)
+		} else {
+			ts = baseTime.Add(time.Duration(i*3) * time.Hour)
+		}
+
+		confidence := 0.5 + (float64(i%50) / 100.0)
+
+		notes[i] = NewDetectionBuilder().
+			WithID(uint(i + 1)). //nolint:gosec // G115: test data uses small values
+			WithTimestamp(ts).
+			WithSpecies(species.Code, species.Scientific, species.Common).
+			WithConfidence(confidence).
+			WithClipName(fmt.Sprintf("clip_%d.wav", i+1)).
+			Build()
+	}
+
+	return notes
+}
+
 // GenerateWeatherData creates DailyEvents and HourlyWeather for testing.
 func GenerateWeatherData(days int) ([]datastore.DailyEvents, []datastore.HourlyWeather) {
 	dailyEvents := make([]datastore.DailyEvents, days)

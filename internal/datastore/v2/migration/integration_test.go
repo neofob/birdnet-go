@@ -875,3 +875,38 @@ func TestMigration_AuxiliaryDataMigratedThroughWorker(t *testing.T) {
 	require.NoError(t, err, "failed to count daily events")
 	assert.Equal(t, int64(1), dailyEventCount, "daily event should be migrated through worker")
 }
+
+// ============================================================================
+// Test: Out-of-Order IDs - Cursor Pagination Sort Bug
+// ============================================================================
+
+// TestMigration_OutOfOrderIDs_AllRecordsMigrated verifies that the migration
+// correctly handles records where IDs don't correlate with dates (e.g., bulk
+// imports of historical data). Uses 150 records to exceed the default batch
+// size (100) and force multi-batch cursor pagination.
+func TestMigration_OutOfOrderIDs_AllRecordsMigrated(t *testing.T) {
+	t.Parallel()
+
+	ctx := testutil.SetupIntegrationTest(t)
+
+	// Seed 150 detections where IDs don't correlate with dates.
+	// Must exceed batch size (100) to force multi-batch pagination.
+	notes := testutil.GenerateOutOfOrderDetections(150)
+	err := ctx.Seeder.SeedDetections(notes)
+	require.NoError(t, err, "failed to seed detections")
+
+	// Verify seeding
+	legacyCount := ctx.GetLegacyNoteCount(t)
+	assert.Equal(t, 150, legacyCount, "should have 150 notes in legacy DB")
+
+	// Run migration
+	ctx.StartMigration(t, len(notes))
+	ctx.WaitForCompletion(t, 60*time.Second)
+
+	// Verify ALL records migrated.
+	// Without the fix, records with out-of-order IDs are permanently skipped
+	// when cursor pagination sorts by date instead of id.
+	v2Count := ctx.GetV2DetectionCount(t)
+	assert.Equal(t, int64(150), v2Count,
+		"all 150 records must be migrated, including those with out-of-order IDs")
+}

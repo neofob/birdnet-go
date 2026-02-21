@@ -27,6 +27,9 @@ type AdvancedSearchFilters struct {
 	Offset        int
 	// MinID filters to records with ID > MinID (cursor-based pagination for migration)
 	MinID uint
+	// CursorPagination indicates this query uses cursor-based pagination and must
+	// sort by id ASC to guarantee all records are visited.
+	CursorPagination bool
 }
 
 // ConfidenceFilter represents a confidence level filter
@@ -119,25 +122,32 @@ func (ds *DataStore) SearchNotesAdvanced(filters *AdvancedSearchFilters) ([]Note
 			Build()
 	}
 
-	// Apply sorting based on SortBy field, falling back to SortAscending for backward compatibility
-	switch strings.ToLower(filters.SortBy) {
-	case "date_asc":
-		query = query.Order("date ASC, time ASC")
-	case "species_asc":
-		query = query.Order("common_name ASC")
-	case "confidence_desc":
-		query = query.Order("confidence DESC")
-	case "status":
-		// Only add note_reviews JOIN if not already joined by applyVerifiedFilter
-		if filters.Verified == nil {
-			query = query.Joins("LEFT JOIN note_reviews ON note_reviews.note_id = notes.id")
-		}
-		query = query.Order("CASE WHEN note_reviews.verified = 'correct' THEN 0 WHEN note_reviews.verified IS NULL OR note_reviews.verified = '' THEN 1 ELSE 2 END ASC")
-	default: // "date_desc" or empty — use SortAscending for backward compatibility
-		if filters.SortAscending {
+	// When cursor-based pagination is active, MUST sort by id ASC to guarantee
+	// all records are visited. Sorting by date with an id-based cursor causes records
+	// to be permanently skipped when IDs don't correlate with dates (bulk imports).
+	if filters.CursorPagination {
+		query = query.Order("id ASC")
+	} else {
+		// Apply sorting based on SortBy field, falling back to SortAscending for backward compatibility
+		switch strings.ToLower(filters.SortBy) {
+		case "date_asc":
 			query = query.Order("date ASC, time ASC")
-		} else {
-			query = query.Order("date DESC, time DESC")
+		case "species_asc":
+			query = query.Order("common_name ASC")
+		case "confidence_desc":
+			query = query.Order("confidence DESC")
+		case "status":
+			// Only add note_reviews JOIN if not already joined by applyVerifiedFilter
+			if filters.Verified == nil {
+				query = query.Joins("LEFT JOIN note_reviews ON note_reviews.note_id = notes.id")
+			}
+			query = query.Order("CASE WHEN note_reviews.verified = 'correct' THEN 0 WHEN note_reviews.verified IS NULL OR note_reviews.verified = '' THEN 1 ELSE 2 END ASC")
+		default: // "date_desc" or empty — use SortAscending for backward compatibility
+			if filters.SortAscending {
+				query = query.Order("date ASC, time ASC")
+			} else {
+				query = query.Order("date DESC, time DESC")
+			}
 		}
 	}
 
