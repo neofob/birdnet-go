@@ -22,9 +22,15 @@ func (s *Server) registerPWARoutes() {
 
 // handlePWAFile serves a PWA file from the static file server (dev or embedded).
 // These files are stored in frontend/static/ and built into dist/.
+// PWA files have fixed (non-hashed) names, so we override the default
+// immutable cache headers that serveFileContent sets for Vite-hashed assets.
 func (sfs *StaticFileServer) handlePWAFile(c echo.Context, filename string) error {
+	sfs.initDevMode()
 	if sfs.devMode {
 		return sfs.serveFromDisk(c, filename)
 	}
+	// Set cache headers before serveFromEmbed — prevents the 1-year immutable
+	// cache that serveFileContent applies to content-hashed Vite bundles.
+	c.Response().Header().Set("Cache-Control", "no-cache")
 	return sfs.serveFromEmbed(c, filename)
 }

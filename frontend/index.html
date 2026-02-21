@@ -71,7 +71,9 @@
     <script type="module" src="/src/main.js"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function (err) {
+          console.warn('Service worker registration failed:', err);
+        });
       }
     </script>
   </body>

@@ -2,7 +2,7 @@
   "name": "BirdNET-Go",
   "short_name": "BirdNET-Go",
   "description": "Real-time bird sound identification",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#10b981",
