@@ -15,6 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tphakala/birdnet-go/internal/detection"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // countResultsInDatabase returns the number of Results rows for a given NoteID.
@@ -462,4 +465,79 @@ func TestGetAdditionalResults(t *testing.T) {
 	species := []string{loaded[0].Species.ScientificName, loaded[1].Species.ScientificName}
 	assert.Contains(t, species, "Cyanistes caeruleus")
 	assert.Contains(t, species, "Periparus ater")
+}
+
+// TestSearchNotesAdvanced_MinID_CursorVisitsAllRecords verifies that cursor-based
+// pagination with MinID sorts by id ASC (not date), ensuring all records are visited
+// even when IDs don't correlate with dates (e.g., bulk imports of historical data).
+func TestSearchNotesAdvanced_MinID_CursorVisitsAllRecords(t *testing.T) {
+	t.Parallel()
+
+	// Setup in-memory SQLite with legacy schema
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&Note{}, &NoteReview{}, &NoteLock{}, &NoteComment{}))
+
+	ds := &DataStore{DB: db}
+
+	// Insert 10 notes where high IDs have early dates, simulating bulk import
+	// of historical data (newer IDs assigned to older recordings).
+	//
+	// Key scenario: IDs 5, 8, 10 have very early dates. When sorted by date ASC,
+	// these high-ID records appear first, setting lastID high (e.g., 10) and causing
+	// WHERE id > 10 to permanently skip IDs 1-4, 6-7, 9 (which have later dates).
+	notes := []Note{
+		{ID: 1, Date: "2024-01-10", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 2, Date: "2024-01-11", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 3, Date: "2024-01-12", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 4, Date: "2024-01-13", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 5, Date: "2024-01-01", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9}, // High ID, very early date (bulk import)
+		{ID: 6, Date: "2024-01-14", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 7, Date: "2024-01-15", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 8, Date: "2024-01-02", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9}, // High ID, very early date (bulk import)
+		{ID: 9, Date: "2024-01-16", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9},
+		{ID: 10, Date: "2024-01-03", Time: "10:00:00", ScientificName: "Parus major", CommonName: "Great Tit", Confidence: 0.9}, // Highest ID, very early date (bulk import)
+	}
+	for i := range notes {
+		require.NoError(t, db.Create(&notes[i]).Error)
+	}
+
+	// Iterate using cursor pagination with batch size 3.
+	// Small batch size forces multiple batches, exposing sort-order issues.
+	visited := make(map[uint]bool)
+	var lastID uint
+	iterations := 0
+	maxIterations := 20 // Safety limit to prevent infinite loops
+
+	for iterations < maxIterations {
+		iterations++
+		filters := &AdvancedSearchFilters{
+			MinID:            lastID,
+			CursorPagination: true, // Set by WithMinID for cursor-based pagination
+			SortAscending:    true, // Also set by WithMinID
+			Limit:            3,
+		}
+		results, _, err := ds.SearchNotesAdvanced(filters)
+		require.NoError(t, err)
+
+		if len(results) == 0 {
+			break
+		}
+
+		for _, n := range results {
+			visited[n.ID] = true
+			lastID = n.ID
+		}
+	}
+
+	// ALL 10 records must be visited via cursor pagination.
+	// Before the fix, ORDER BY date ASC with WHERE id > lastID would skip
+	// records whose IDs don't correlate with their dates.
+	assert.Len(t, visited, 10, "all 10 records should be visited via cursor pagination")
+	for _, n := range notes {
+		assert.True(t, visited[n.ID], "record ID=%d should have been visited", n.ID)
+	}
+	assert.Less(t, iterations, maxIterations, "should complete without hitting iteration safety limit")
 }
