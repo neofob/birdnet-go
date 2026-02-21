@@ -446,11 +446,12 @@ func (r *testDetectionRepo) Search(_ context.Context, filters *datastore.Detecti
 
 	// Match production SearchNotesAdvanced sort logic:
 	// cursor-based pagination (CursorPagination) sorts by id, everything else by date.
-	if filters != nil && filters.CursorPagination {
+	switch {
+	case filters != nil && filters.CursorPagination:
 		query = query.Order("id ASC")
-	} else if filters != nil && filters.SortAscending {
+	case filters != nil && filters.SortAscending:
 		query = query.Order("date ASC, time ASC")
-	} else {
+	default:
 		query = query.Order("date DESC, time DESC")
 	}
 
