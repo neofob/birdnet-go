@@ -2332,6 +2332,30 @@ func thresholdScientificName(t *entities.DynamicThreshold) string {
 	return ""
 }
 
+// resolveCommonName maps a scientific name to its common name using the
+// pre-built commonNameMap. Falls back to the scientific name if no mapping exists.
+// This follows the same pattern used in detectionToNote, detectionToRecord,
+// and GetTopBirdsData for common-name display.
+func (ds *Datastore) resolveCommonName(scientificName string) string {
+	if cn, ok := ds.commonNameMap[scientificName]; ok {
+		return cn
+	}
+	return scientificName
+}
+
+// resolveToScientificName converts a species name (which may be a common name
+// or scientific name) to a scientific name for v2 label lookups.
+// Uses the pre-built speciesMap (lowercase common name → scientific name).
+// Falls back to the input unchanged if no mapping is found.
+// This follows the same pattern used in GetHourlyOccurrences.
+func (ds *Datastore) resolveToScientificName(name string) string {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if sci, ok := ds.speciesMap[normalized]; ok {
+		return sci
+	}
+	return name
+}
+
 // SaveDynamicThreshold saves a dynamic threshold.
 // Resolves the scientific name to a label ID before saving.
 func (ds *Datastore) SaveDynamicThreshold(threshold *datastore.DynamicThreshold) error {
@@ -2367,14 +2391,15 @@ func (ds *Datastore) GetDynamicThreshold(speciesName string) (*datastore.Dynamic
 		return nil, fmt.Errorf("threshold repository not configured")
 	}
 	ctx := context.Background()
-	t, err := ds.threshold.GetDynamicThreshold(ctx, speciesName)
+	// Resolve to scientific name in case caller passes a common name
+	t, err := ds.threshold.GetDynamicThreshold(ctx, ds.resolveToScientificName(speciesName))
 	if err != nil {
 		return nil, err
 	}
 	scientificName := thresholdScientificName(t)
 	return &datastore.DynamicThreshold{
 		ID:             t.ID,
-		SpeciesName:    scientificName, // Use scientific name as species name for compatibility
+		SpeciesName:    ds.resolveCommonName(scientificName),
 		ScientificName: scientificName,
 		Level:          t.Level,
 		CurrentValue:   t.CurrentValue,
@@ -2405,7 +2430,7 @@ func (ds *Datastore) GetAllDynamicThresholds(limit ...int) ([]datastore.DynamicT
 		scientificName := thresholdScientificName(t)
 		result = append(result, datastore.DynamicThreshold{
 			ID:             t.ID,
-			SpeciesName:    scientificName,
+			SpeciesName:    ds.resolveCommonName(scientificName),
 			ScientificName: scientificName,
 			Level:          t.Level,
 			CurrentValue:   t.CurrentValue,
@@ -2428,7 +2453,7 @@ func (ds *Datastore) DeleteDynamicThreshold(speciesName string) error {
 		return fmt.Errorf("threshold repository not configured")
 	}
 	ctx := context.Background()
-	return ds.threshold.DeleteDynamicThreshold(ctx, speciesName)
+	return ds.threshold.DeleteDynamicThreshold(ctx, ds.resolveToScientificName(speciesName))
 }
 
 // DeleteExpiredDynamicThresholds deletes expired thresholds.
@@ -2446,7 +2471,7 @@ func (ds *Datastore) UpdateDynamicThresholdExpiry(speciesName string, expiresAt 
 		return fmt.Errorf("threshold repository not configured")
 	}
 	ctx := context.Background()
-	return ds.threshold.UpdateDynamicThresholdExpiry(ctx, speciesName, expiresAt)
+	return ds.threshold.UpdateDynamicThresholdExpiry(ctx, ds.resolveToScientificName(speciesName), expiresAt)
 }
 
 // BatchSaveDynamicThresholds saves multiple thresholds.
@@ -2657,12 +2682,16 @@ func (ds *Datastore) GetRecentThresholdEvents(limit int) ([]datastore.ThresholdE
 }
 
 // DeleteThresholdEvents deletes threshold events for a species.
+// NOTE: This only deletes events by the resolved scientific name. GetThresholdEvents
+// queries both common-name and scientific-name labels (WORKAROUND #1907). Legacy events
+// saved with common-name labels may survive this delete. Full dual-delete cleanup
+// should be added when the #1907 workaround is removed.
 func (ds *Datastore) DeleteThresholdEvents(speciesName string) error {
 	if ds.threshold == nil {
 		return nil
 	}
 	ctx := context.Background()
-	return ds.threshold.DeleteThresholdEvents(ctx, speciesName)
+	return ds.threshold.DeleteThresholdEvents(ctx, ds.resolveToScientificName(speciesName))
 }
 
 // DeleteAllThresholdEvents deletes all threshold events.
