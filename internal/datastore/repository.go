@@ -104,6 +104,9 @@ type DetectionFilters struct {
 	// Cursor-based pagination (for migration worker)
 	// MinID filters to records with ID > MinID, enabling efficient cursor-based iteration.
 	MinID uint
+	// CursorPagination indicates this query uses cursor-based pagination and must
+	// sort by id ASC. Set automatically by WithMinID.
+	CursorPagination bool
 
 	// Sort order
 	SortAscending bool
@@ -177,7 +180,8 @@ func (f *DetectionFilters) WithLocked(locked bool) *DetectionFilters {
 // When set, only detections with ID > MinID are returned, ordered by ID ASC.
 func (f *DetectionFilters) WithMinID(id uint) *DetectionFilters {
 	f.MinID = id
-	f.SortAscending = true // MinID implies ascending order for proper iteration
+	f.CursorPagination = true // Cursor pagination must sort by id ASC
+	f.SortAscending = true    // MinID implies ascending order for proper iteration
 	return f
 }
 

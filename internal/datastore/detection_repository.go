@@ -472,8 +472,9 @@ func (r *detectionRepository) convertFilters(filters *DetectionFilters) (Advance
 		Offset:        filters.Offset,
 		SortAscending: filters.SortAscending,
 		Verified:      filters.Verified,
-		Locked:        filters.Locked,
-		MinID:         filters.MinID,
+		Locked:           filters.Locked,
+		MinID:            filters.MinID,
+		CursorPagination: filters.CursorPagination,
 	}
 
 	// Convert date range - parse strings to time.Time using repository timezone
