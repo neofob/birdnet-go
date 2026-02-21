@@ -209,9 +209,11 @@ func (sfs *StaticFileServer) serveFileContent(c echo.Context, file fs.File, stat
 	contentType := getMIMEType(path)
 	c.Response().Header().Set("Content-Type", contentType)
 
-	// Enable long-term caching for embedded assets
-	// Vite generates hashed filenames, so we can cache aggressively
-	c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	// Enable long-term caching for embedded assets (Vite-hashed filenames).
+	// Callers may pre-set Cache-Control for assets with fixed (non-hashed) names.
+	if c.Response().Header().Get("Cache-Control") == "" {
+		c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
 
 	// Try to serve with http.ServeContent for efficient range requests
 	if seeker, ok := file.(io.ReadSeeker); ok {
@@ -302,6 +304,8 @@ func getMIMEType(path string) string {
 		return "text/plain; charset=utf-8"
 	case ".xml":
 		return "application/xml; charset=utf-8"
+	case ".webmanifest":
+		return "application/manifest+json; charset=utf-8"
 	case ".pdf":
 		return "application/pdf"
 	case ".mp3":

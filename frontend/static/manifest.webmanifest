@@ -1,0 +1,22 @@
+{
+  "name": "BirdNET-Go",
+  "short_name": "BirdNET-Go",
+  "description": "Real-time bird sound identification",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/ui/assets/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/ui/assets/BirdNET-Go-logo.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
+}
