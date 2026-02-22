@@ -39,7 +39,7 @@ function debugLog(message: string, data?: Record<string, unknown>) {
 }
 
 /** Maximum concurrent image loads - adjust this value to tune performance */
-export const MAX_CONCURRENT_IMAGE_LOADS = 2;
+export const MAX_CONCURRENT_IMAGE_LOADS = 3;
 
 /** Handle returned by acquireSlot for managing the slot request */
 export interface SlotHandle {

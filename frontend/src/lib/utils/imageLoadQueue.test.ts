@@ -14,8 +14,8 @@ describe('imageLoadQueue', () => {
   });
 
   describe('MAX_CONCURRENT_IMAGE_LOADS', () => {
-    it('is set to 2', () => {
-      expect(MAX_CONCURRENT_IMAGE_LOADS).toBe(2);
+    it('is set to 3', () => {
+      expect(MAX_CONCURRENT_IMAGE_LOADS).toBe(3);
     });
   });
 
