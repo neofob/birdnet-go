@@ -21,20 +21,20 @@ func getTestLogger() logger.Logger {
 	return logger.NewSlogLogger(io.Discard, logger.LogLevelDebug, nil)
 }
 
-// --- FFprobe Helpers ---
+// --- Sox Helpers ---
 
-// isFFprobeAvailable checks if ffprobe is available in PATH.
-// Use this to skip tests that require ffprobe.
-func isFFprobeAvailable() bool {
-	_, err := exec.LookPath("ffprobe")
+// isSoxAvailable checks if sox is available in PATH.
+// Use this to skip tests that require sox.
+func isSoxAvailable() bool {
+	_, err := exec.LookPath("sox")
 	return err == nil
 }
 
-// skipIfNoFFprobe skips the test if ffprobe is not available.
-func skipIfNoFFprobe(t *testing.T) {
+// skipIfNoSox skips the test if sox is not available.
+func skipIfNoSox(t *testing.T) {
 	t.Helper()
-	if !isFFprobeAvailable() {
-		t.Skip("ffprobe not available, skipping test")
+	if !isSoxAvailable() {
+		t.Skip("sox not available, skipping test")
 	}
 }
 

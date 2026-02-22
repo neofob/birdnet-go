@@ -12,7 +12,7 @@ import (
 )
 
 func TestGetAudioDuration(t *testing.T) {
-	skipIfNoFFprobe(t)
+	skipIfNoSox(t)
 
 	// Create a test WAV file with known duration (1 second of silence)
 	testFile := filepath.Join(t.TempDir(), "test.wav")
@@ -63,7 +63,7 @@ func TestGetAudioDuration(t *testing.T) {
 }
 
 func TestGetAudioDurationTimeout(t *testing.T) {
-	skipIfNoFFprobe(t)
+	skipIfNoSox(t)
 
 	// Create and immediately cancel context to trigger error
 	ctx, cancel := context.WithCancel(t.Context())
