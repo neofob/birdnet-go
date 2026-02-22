@@ -1104,7 +1104,7 @@ const spectrogramRetryAfterSeconds = "2"
 const (
 	spectrogramGenerationTimeout = 5 * time.Minute  // Max time for async spectrogram generation
 	spectrogramRetryDelay        = 2 * time.Second  // Default retry delay for validation errors
-	ffprobeDurationTimeout       = 3 * time.Second  // Timeout for ffprobe duration queries
+	soxDurationTimeout           = 3 * time.Second  // Timeout for sox --info duration queries
 	failedStatusRetentionTime    = 30 * time.Second // How long to retain failed statuses for polling
 	ffprobeCacheMaxEntries       = 100              // Maximum entries in ffprobe cache before cleanup
 	spectrogramVerifyRetries     = 3                // Number of verification retries after generation
@@ -1360,7 +1360,7 @@ func (c *Controller) validateSpectrogramInputs(ctx context.Context, absAudioPath
 		modTime:   fileInfo.ModTime(),
 	}
 
-	// Also cache the duration value for GetAudioDuration calls
+	// Also cache the duration value for sox --info duration calls
 	if validationResult.Duration > 0 {
 		// Clean duration cache if needed
 		if len(ffprobeCache.duration) > ffprobeCacheMaxEntries {
@@ -1383,7 +1383,7 @@ func (c *Controller) validateSpectrogramInputs(ctx context.Context, absAudioPath
 	return validationResult, nil
 }
 
-// getCachedAudioDuration retrieves audio duration from cache or calls FFprobe if not cached
+// getCachedAudioDuration retrieves audio duration from cache or calls sox --info if not cached
 func getCachedAudioDuration(ctx context.Context, audioPath string) float64 {
 	// Check if file exists and get info
 	fileInfo, err := os.Stat(audioPath)
@@ -1413,17 +1413,17 @@ func getCachedAudioDuration(ctx context.Context, audioPath string) float64 {
 	}
 	ffprobeCache.RUnlock()
 
-	// Cache miss - call FFprobe
-	getSpectrogramLogger().Debug("Audio duration cache miss, calling FFprobe",
+	// Cache miss - call sox --info
+	getSpectrogramLogger().Debug("Audio duration cache miss, calling sox --info",
 		logger.String("audio_path", audioPath))
 
 	// Use a timeout context to prevent hanging
-	durationCtx, cancel := context.WithTimeout(ctx, ffprobeDurationTimeout)
+	durationCtx, cancel := context.WithTimeout(ctx, soxDurationTimeout)
 	defer cancel()
 
 	duration, err := myaudio.GetAudioDuration(durationCtx, audioPath)
 	if err != nil {
-		getSpectrogramLogger().Warn("Failed to get audio duration with ffprobe",
+		getSpectrogramLogger().Warn("Failed to get audio duration with sox --info",
 			logger.Error(err),
 			logger.String("audio_path", audioPath))
 		return 0

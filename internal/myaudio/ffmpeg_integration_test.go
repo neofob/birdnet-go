@@ -14,23 +14,24 @@ import (
 )
 
 func TestGetAudioDurationIntegration(t *testing.T) {
-	// Skip if ffprobe is not available
-	if !isFFprobeAvailable() {
-		t.Skip("ffprobe not available, skipping integration test")
+	// Skip if sox is not available
+	if !isSoxAvailable() {
+		t.Skip("sox not available, skipping integration test")
 	}
 
 	// Look for a real audio file in clips directory
 	clipsDir := filepath.Join("..", "..", "clips")
 	var testFile string
 
-	// Try to find any audio file
+	// Try to find any audio file in a format sox supports natively
+	// Note: sox does not support m4a/aac - those require ffmpeg
 	err := filepath.WalkDir(clipsDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			// Return the error to stop walking, not nil
 			return err
 		}
 		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".m4a" || ext == ".mp3" || ext == ".wav" || ext == ".flac" {
+		if ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg" {
 			testFile = path
 			return fs.SkipAll // Stop walking once we find a file
 		}

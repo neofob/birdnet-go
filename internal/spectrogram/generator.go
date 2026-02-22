@@ -764,10 +764,10 @@ func (g *Generator) getSoxSpectrogramArgs(ctx context.Context, audioPath, output
 	// shows the full audio duration regardless of image width (fixes #1484)
 	duration := getCachedAudioDuration(ctx, audioPath)
 	if duration <= 0 {
-		// Fallback: Use configured capture length if ffprobe fails
+		// Fallback: Use configured capture length if sox --info fails
 		captureLength := g.settings.Realtime.Audio.Export.Length
 		duration = float64(captureLength)
-		g.log().Warn("FFprobe failed, using configured fallback duration",
+		g.log().Warn("Sox duration query failed, using configured fallback duration",
 			logger.Float64("fallback_duration_seconds", duration),
 			logger.String("audio_path", audioPath))
 	}
@@ -889,7 +889,7 @@ func (g *Generator) waitWithTimeoutErr(cmd *exec.Cmd, timeout time.Duration) err
 	}
 }
 
-// getCachedAudioDuration retrieves audio duration from cache or fetches it using ffprobe.
+// getCachedAudioDuration retrieves audio duration from cache or fetches it using sox --info.
 // The cache is invalidated if the file has been modified (size or modTime changed).
 // Returns 0 if duration cannot be determined (caller should use configured fallback).
 func getCachedAudioDuration(ctx context.Context, audioPath string) float64 {
@@ -918,8 +918,8 @@ func getCachedAudioDuration(ctx context.Context, audioPath string) float64 {
 		}
 	}
 
-	// Cache miss or invalid - fetch duration via ffprobe
-	duration, err := getAudioDurationViaFFprobe(ctx, audioPath)
+	// Cache miss or invalid - fetch duration via sox --info
+	duration, err := getAudioDurationViaSox(ctx, audioPath)
 	if err != nil {
 		return 0 // Caller will use configured fallback
 	}
@@ -971,24 +971,20 @@ func evictOldCacheEntriesLocked() {
 	}
 }
 
-// getAudioDurationViaFFprobe calls ffprobe to get audio duration.
-// Uses ffprobe directly to avoid circular dependency with myaudio package.
-func getAudioDurationViaFFprobe(ctx context.Context, audioPath string) (float64, error) {
-	ffprobePath := "ffprobe"
+// getAudioDurationViaSox calls sox --info -D to get audio duration.
+// This is ~30x faster than ffprobe for duration queries.
+func getAudioDurationViaSox(ctx context.Context, audioPath string) (float64, error) {
+	soxPath := conf.GetSoxBinaryName()
 
-	cmd := exec.CommandContext(ctx, ffprobePath,
-		"-v", "error",
-		"-show_entries", "format=duration",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		audioPath)
+	cmd := exec.CommandContext(ctx, soxPath, "--info", "-D", audioPath) //nolint:gosec // G204: soxPath from conf.GetSoxBinaryName(), args are fixed
 
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %w", err)
+		return 0, fmt.Errorf("sox --info failed: %w", err)
 	}
 
 	var duration float64
-	if _, err := fmt.Sscanf(string(output), "%f", &duration); err != nil {
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(output)), "%f", &duration); err != nil {
 		return 0, fmt.Errorf("failed to parse duration: %w", err)
 	}
 
