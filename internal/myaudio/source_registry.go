@@ -97,6 +97,14 @@ func (r *AudioSourceRegistry) RegisterSource(connectionString string, config Sou
 			Build()
 	}
 
+	// Pre-resolve audio card display name before acquiring the lock to avoid
+	// blocking I/O (audio context init + device enumeration) under the mutex.
+	if config.DisplayName == "" && config.Type == SourceTypeAudioCard {
+		if name := resolveAudioCardDisplayName(connectionString); name != "" {
+			config.DisplayName = name
+		}
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -829,13 +837,37 @@ func (r *AudioSourceRegistry) generateID(sourceType SourceType) string {
 	return fmt.Sprintf("%s_%s", sourceType, id)
 }
 
+// resolveAudioCardDisplayName attempts to look up the human-readable device name
+// by querying the system's audio devices via ListAudioSources and matching by ID.
+// Returns the device name if found, or empty string if lookup fails.
+func resolveAudioCardDisplayName(connectionString string) string {
+	devices, err := ListAudioSources()
+	if err != nil {
+		log := GetLogger()
+		log.Debug("resolveAudioCardDisplayName: failed to list audio sources",
+			logger.Error(err),
+			logger.String("connection_string", connectionString))
+		return ""
+	}
+
+	for _, device := range devices {
+		// Match by device ID (new configs) or exact device name (legacy configs)
+		if device.ID == connectionString || device.Name == connectionString {
+			return device.Name
+		}
+	}
+
+	return ""
+}
+
 func (r *AudioSourceRegistry) generateDisplayName(source *AudioSource) string {
 	switch source.Type {
 	case SourceTypeRTSP:
 		// Use SafeString (sanitized URL) as display name
 		return source.SafeString
 	case SourceTypeAudioCard:
-		// Parse device string based on OS
+		// Display name resolution via ListAudioSources() happens before the lock
+		// in RegisterSource. This fallback handles the case where that lookup failed.
 		return r.parseAudioDeviceName(source.SafeString)
 	case SourceTypeFile:
 		// Use filename without path

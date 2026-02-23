@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/host"
-	"github.com/tphakala/birdnet-go/internal/analysis/processor"
 	"github.com/tphakala/birdnet-go/internal/alerting"
+	"github.com/tphakala/birdnet-go/internal/analysis/processor"
 	"github.com/tphakala/birdnet-go/internal/api"
 	apiv2 "github.com/tphakala/birdnet-go/internal/api/v2"
 	"github.com/tphakala/birdnet-go/internal/backup"
@@ -1630,8 +1630,7 @@ func initializeAudioSources(settings *conf.Settings) ([]string, error) {
 			// This ensures consistent UUID-based IDs like RTSP sources
 			registry := myaudio.GetRegistry()
 			source, err := registry.RegisterSource(settings.Realtime.Audio.Source, myaudio.SourceConfig{
-				Type:        myaudio.SourceTypeAudioCard,
-				DisplayName: settings.Realtime.Audio.Source,
+				Type: myaudio.SourceTypeAudioCard,
 			})
 			if err != nil {
 				log.Warn("failed to register audio device source",
