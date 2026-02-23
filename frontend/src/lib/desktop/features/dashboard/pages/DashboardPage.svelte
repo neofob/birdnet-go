@@ -302,7 +302,15 @@ Performance Optimizations:
           t('dashboard.errors.recentDetectionsFetch', { status: response.statusText })
         );
       }
-      const newData = await response.json();
+      const rawData = await response.json();
+
+      // Deduplicate by ID to prevent Svelte each_key_duplicate errors.
+      const seen = new Set<number>();
+      const newData = rawData.filter((d: Detection) => {
+        if (seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      });
 
       // Only apply animations for SSE-triggered updates
       if (applyAnimations) {
@@ -776,8 +784,9 @@ Performance Optimizations:
       return;
     }
 
-    // Add to queue (overwrites previous detection for same species)
-    updateQueue.set(detection.speciesCode, detection);
+    // Add to queue (overwrites previous detection for same species).
+    // Use scientificName as key since species_code may be empty in v2 schema.
+    updateQueue.set(detection.scientificName, detection);
 
     // Clear existing timer and set new one
     if (updateTimer) {
@@ -830,13 +839,23 @@ Performance Optimizations:
       hour = 0;
     }
 
-    const existingIndex = dailySummary.findIndex(s => s.species_code === detection.speciesCode);
+    // Match by scientific_name — it's the unique key used by both the backend
+    // aggregation (analytics.go) and the Svelte {#each} loop in DailySummaryCard.
+    // species_code is unreliable: v2 schema stores it as "" (omitted via omitempty),
+    // so it's undefined in the frontend for all API-sourced entries.
+    const existingIndex = dailySummary.findIndex(
+      s => s.scientific_name === detection.scientificName
+    );
 
     if (existingIndex >= 0) {
       // Update existing species - DailySummaryCard's sortedData handles reordering
       const existing = safeArrayAccess(dailySummary, existingIndex);
       if (!existing) return;
       const updated = { ...existing };
+      // Backfill species_code from SSE detection if the API-sourced entry lacks one.
+      if (!updated.species_code && detection.speciesCode) {
+        updated.species_code = detection.speciesCode;
+      }
       updated.previousCount = updated.count;
       updated.count++;
       updated.countIncreased = true;
@@ -862,11 +881,12 @@ Performance Optimizations:
       // Update cache incrementally instead of invalidating
       updateDailySummaryCacheEntry(selectedDate, dailySummary);
 
-      // Clear animation flags after animation completes
+      // Clear animation flags after animation completes.
+      // Use scientificName for lookup — species_code may be undefined (v2 schema).
       scheduleAnimationCleanup(
         () => {
           const currentIndex = dailySummary.findIndex(
-            s => s.species_code === detection.speciesCode
+            s => s.scientific_name === detection.scientificName
           );
           if (currentIndex >= 0) {
             const currentItem = safeArrayAccess(dailySummary, currentIndex);
@@ -886,7 +906,7 @@ Performance Optimizations:
           }
         },
         1000,
-        `count-${detection.speciesCode}`
+        `count-${detection.scientificName}`
       );
     } else {
       // Add new species - sorting is handled by DailySummaryCard's sortedData derived value
@@ -925,11 +945,12 @@ Performance Optimizations:
       // Update cache incrementally with new species included
       updateDailySummaryCacheEntry(selectedDate, dailySummary);
 
-      // Clear animation flag after animation completes
+      // Clear animation flag after animation completes.
+      // Use scientificName for lookup — species_code may be undefined (v2 schema).
       scheduleAnimationCleanup(
         () => {
           const currentIndex = dailySummary.findIndex(
-            s => s.species_code === detection.speciesCode
+            s => s.scientific_name === detection.scientificName
           );
           if (currentIndex >= 0) {
             const currentItem = safeArrayAccess(dailySummary, currentIndex);
@@ -948,7 +969,7 @@ Performance Optimizations:
           }
         },
         800,
-        `new-${detection.speciesCode}`
+        `new-${detection.scientificName}`
       );
     }
   }
