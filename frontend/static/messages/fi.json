@@ -568,6 +568,12 @@
     "status": {
       "locked": "Lukittu"
     },
+    "timeOfDay": {
+      "day": "Päivä",
+      "night": "Yö",
+      "sunrise": "Auringonnousu",
+      "sunset": "Auringonlasku"
+    },
     "table": {
       "caption": "Lintuhavaintojen lista päivämäärällä, lajilla, luottamuksella ja tilatiedoilla"
     },
@@ -680,6 +686,13 @@
         "genus": "Suku",
         "species": "Laji"
       }
+    },
+    "tracking": {
+      "title": "Lajiseuranta",
+      "newSpecies": "Uusi laji",
+      "newThisYear": "Ensimmäinen tänä vuonna",
+      "newThisSeason": "Ensimmäinen tällä kaudella",
+      "daysSinceFirst": "Päiviä ensihavainnosta"
     }
   },
   "system": {

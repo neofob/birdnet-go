@@ -573,6 +573,12 @@
     "status": {
       "locked": "Locked"
     },
+    "timeOfDay": {
+      "day": "Day",
+      "night": "Night",
+      "sunrise": "Sunrise",
+      "sunset": "Sunset"
+    },
     "table": {
       "caption": "List of bird detections with date, species, confidence, and status information"
     },
@@ -685,6 +691,13 @@
         "genus": "Genus",
         "species": "Species"
       }
+    },
+    "tracking": {
+      "title": "Species Tracking",
+      "newSpecies": "New species",
+      "newThisYear": "First this year",
+      "newThisSeason": "First this season",
+      "daysSinceFirst": "Days since first seen"
     }
   },
   "system": {

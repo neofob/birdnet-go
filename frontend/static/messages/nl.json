@@ -568,6 +568,12 @@
     "status": {
       "locked": "Vergrendeld"
     },
+    "timeOfDay": {
+      "day": "Dag",
+      "night": "Nacht",
+      "sunrise": "Zonsopgang",
+      "sunset": "Zonsondergang"
+    },
     "table": {
       "caption": "Lijst van herkende vogels met datum, soort , betrouwbaarheid en status informatie"
     },
@@ -680,6 +686,13 @@
         "genus": "Geslacht",
         "species": "Soort"
       }
+    },
+    "tracking": {
+      "title": "Soortmonitoring",
+      "newSpecies": "Nieuwe soort",
+      "newThisYear": "Eerste keer dit jaar",
+      "newThisSeason": "Eerste keer dit seizoen",
+      "daysSinceFirst": "Dagen sinds eerste waarneming"
     }
   },
   "system": {

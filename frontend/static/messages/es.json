@@ -568,6 +568,12 @@
     "status": {
       "locked": "Bloqueado"
     },
+    "timeOfDay": {
+      "day": "Día",
+      "night": "Noche",
+      "sunrise": "Amanecer",
+      "sunset": "Atardecer"
+    },
     "table": {
       "caption": "Lista de detecciones de aves con fecha, especie, confianza e información de estado"
     },
@@ -680,6 +686,13 @@
         "genus": "Género",
         "species": "Especie"
       }
+    },
+    "tracking": {
+      "title": "Seguimiento de especies",
+      "newSpecies": "Nueva especie",
+      "newThisYear": "Primera vez este año",
+      "newThisSeason": "Primera vez esta temporada",
+      "daysSinceFirst": "Días desde la primera detección"
     }
   },
   "system": {
