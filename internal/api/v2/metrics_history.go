@@ -14,10 +14,10 @@ import (
 	"github.com/tphakala/birdnet-go/internal/observability"
 )
 
-// metricsHistoryDefaultPoints is the default number of points returned when the
-// "points" query parameter is omitted.
-const metricsHistoryDefaultPoints = 360
-const metricsHistoryMaxPoints = 360
+// MetricsHistoryMaxPoints is the maximum number of data points retained per
+// metric in the ring buffer. It also serves as the default and cap for the
+// "points" query parameter on the history endpoint.
+const MetricsHistoryMaxPoints = 360
 
 // metricsSSEHeartbeatInterval is the keepalive interval for the metrics SSE stream.
 const metricsSSEHeartbeatInterval = 30 * time.Second
@@ -35,10 +35,10 @@ func (c *Controller) GetMetricsHistory(ctx echo.Context) error {
 		return c.HandleError(ctx, nil, "Metrics history not available", http.StatusServiceUnavailable)
 	}
 
-	points := metricsHistoryDefaultPoints
+	points := MetricsHistoryMaxPoints
 	if raw := ctx.QueryParam("points"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed <= 0 || parsed > metricsHistoryMaxPoints {
+		if err != nil || parsed <= 0 || parsed > MetricsHistoryMaxPoints {
 			return c.HandleError(ctx, err, "Invalid 'points' parameter", http.StatusBadRequest)
 		}
 		points = parsed
