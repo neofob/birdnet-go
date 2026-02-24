@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -227,6 +228,9 @@ func readCPUTemperature() (float64, bool) {
 	if err != nil || len(zones) == 0 {
 		return 0, false
 	}
+
+	// Sort for deterministic sensor selection on systems with multiple thermal zones.
+	slices.Sort(zones)
 
 	for _, zone := range zones {
 		temp, ok := readThermalZone(zone)
