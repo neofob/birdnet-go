@@ -87,7 +87,7 @@ func NewMemoryStore(maxPoints int) *MemoryStore {
 }
 
 // RecordBatch stores all metric values for a single collection tick.
-// After recording, it broadcasts the latest snapshot to all subscribers.
+// After recording, it broadcasts the latest snapshot to all active subscribers.
 func (s *MemoryStore) RecordBatch(points map[string]float64) {
 	now := time.Now()
 
@@ -101,25 +101,34 @@ func (s *MemoryStore) RecordBatch(points map[string]float64) {
 		rb.write(MetricPoint{Timestamp: now, Value: value})
 	}
 
-	// Build immutable snapshot inside the lock to guarantee consistency
-	// even if multiple goroutines call RecordBatch concurrently.
-	snapshot := make(map[string]MetricPoint, len(s.series))
-	for name, rb := range s.series {
-		if p, ok := rb.latest(); ok {
-			snapshot[name] = p
-		}
-	}
-	s.mu.Unlock()
-
+	// Only build the snapshot if there are active subscribers.
 	s.subMu.Lock()
-	for ch := range s.subscribers {
-		// Non-blocking send: drop if consumer is lagging.
-		select {
-		case ch <- snapshot:
-		default:
-		}
-	}
+	hasSubscribers := len(s.subscribers) > 0
 	s.subMu.Unlock()
+
+	if hasSubscribers {
+		// Build immutable snapshot inside the lock to guarantee consistency
+		// even if multiple goroutines call RecordBatch concurrently.
+		snapshot := make(map[string]MetricPoint, len(s.series))
+		for name, rb := range s.series {
+			if p, ok := rb.latest(); ok {
+				snapshot[name] = p
+			}
+		}
+		s.mu.Unlock()
+
+		s.subMu.Lock()
+		for ch := range s.subscribers {
+			// Non-blocking send: drop if consumer is lagging.
+			select {
+			case ch <- snapshot:
+			default:
+			}
+		}
+		s.subMu.Unlock()
+	} else {
+		s.mu.Unlock()
+	}
 }
 
 // Get returns up to the last n points for the named metric.
@@ -174,6 +183,7 @@ func (s *MemoryStore) Names() []string {
 
 // Subscribe returns a channel that receives the latest metric snapshot
 // after each RecordBatch, and a cancel function to unsubscribe.
+// The received maps are shared and must be treated as read-only by consumers.
 func (s *MemoryStore) Subscribe() (sub <-chan map[string]MetricPoint, cancel func()) {
 	bidi := make(chan map[string]MetricPoint, 1)
 
