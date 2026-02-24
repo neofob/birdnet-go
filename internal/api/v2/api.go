@@ -69,6 +69,9 @@ type Controller struct {
 	authService    auth.Service        // Authentication service (injected from server)
 	authMiddleware echo.MiddlewareFunc // Authentication middleware function (injected from server)
 
+	// Metrics history store for sparkline data
+	metricsStore observability.MetricsStore
+
 	// SSE related fields
 	sseManager *SSEManager // Manager for Server-Sent Events connections
 
@@ -114,6 +117,14 @@ func WithAuthMiddleware(mw echo.MiddlewareFunc) Option {
 func WithAuthService(svc auth.Service) Option {
 	return func(c *Controller) {
 		c.authService = svc
+	}
+}
+
+// WithMetricsStore sets the system metrics history store for the controller.
+// This enables the metrics history and streaming endpoints.
+func WithMetricsStore(store observability.MetricsStore) Option {
+	return func(c *Controller) {
+		c.metricsStore = store
 	}
 }
 
@@ -482,6 +493,7 @@ func (c *Controller) initRoutes() {
 		{"media routes", c.initMediaRoutes},
 		{"range routes", c.initRangeRoutes},
 		{"sse routes", c.initSSERoutes},
+		{"metrics history routes", c.initMetricsHistoryRoutes},
 		{"notification routes", c.initNotificationRoutes},
 		{"support routes", c.initSupportRoutes},
 		{"debug routes", c.initDebugRoutes},
