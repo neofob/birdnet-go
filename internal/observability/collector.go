@@ -150,14 +150,16 @@ func (c *Collector) collectDiskIO(points map[string]float64) {
 				if !ok {
 					continue
 				}
+				// Sanitize device name to remove any path prefixes (platform-dependent)
+				name := filepath.Base(device)
 				// Guard against counter resets (device swap, kernel rollover)
 				if counter.ReadBytes >= prev.ReadBytes {
 					readRate := float64(counter.ReadBytes-prev.ReadBytes) / elapsed
-					points[fmt.Sprintf("disk.io.read.%s", device)] = readRate
+					points[fmt.Sprintf("disk.io.read.%s", name)] = readRate
 				}
 				if counter.WriteBytes >= prev.WriteBytes {
 					writeRate := float64(counter.WriteBytes-prev.WriteBytes) / elapsed
-					points[fmt.Sprintf("disk.io.write.%s", device)] = writeRate
+					points[fmt.Sprintf("disk.io.write.%s", name)] = writeRate
 				}
 			}
 		}
@@ -257,8 +259,8 @@ func readThermalZone(zonePath string) (float64, bool) {
 	const milliToUnit = 1000.0
 	celsius := float64(milliCelsius) / milliToUnit
 
-	// Validate range (0-100°C)
-	if celsius < 0 || celsius > 100 {
+	// Validate range: 120°C upper bound captures overheating before thermal shutdown
+	if celsius < 0 || celsius > 120 {
 		return 0, false
 	}
 	return celsius, true

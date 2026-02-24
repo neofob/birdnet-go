@@ -41,10 +41,16 @@ func (rb *ringBuffer) read(n int) []MetricPoint {
 	}
 
 	result := make([]MetricPoint, n)
-	// Start reading from (head - count + (count - n)) mod cap = (head - n) mod cap
+	// Start reading from (head - n) mod cap
 	start := (rb.head - n + len(rb.data)) % len(rb.data)
-	for i := range n {
-		result[i] = rb.data[(start+i)%len(rb.data)]
+	if start+n <= len(rb.data) {
+		// Contiguous segment — single copy
+		copy(result, rb.data[start:start+n])
+	} else {
+		// Wraps around — two copies
+		part1 := len(rb.data) - start
+		copy(result, rb.data[start:])
+		copy(result[part1:], rb.data[:n-part1])
 	}
 	return result
 }
