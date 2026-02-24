@@ -64,9 +64,13 @@ func (c *Collector) Start(ctx context.Context) {
 	}
 }
 
+// expectedMetricCount is the pre-allocation hint for the number of metrics collected per tick
+// (cpu, memory, temperature, disk usage, disk IO read/write per device).
+const expectedMetricCount = 8
+
 // collect gathers all system metrics and records them as a single batch.
 func (c *Collector) collect() {
-	points := make(map[string]float64, 8) // pre-allocate for expected number of metrics
+	points := make(map[string]float64, expectedMetricCount)
 
 	c.collectCPU(points)
 	c.collectMemory(points)

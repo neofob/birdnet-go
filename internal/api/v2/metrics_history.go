@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/observability"
 )
@@ -16,6 +17,7 @@ import (
 // metricsHistoryDefaultPoints is the default number of points returned when the
 // "points" query parameter is omitted.
 const metricsHistoryDefaultPoints = 360
+const metricsHistoryMaxPoints = 360
 
 // metricsSSEHeartbeatInterval is the keepalive interval for the metrics SSE stream.
 const metricsSSEHeartbeatInterval = 30 * time.Second
@@ -36,7 +38,7 @@ func (c *Controller) GetMetricsHistory(ctx echo.Context) error {
 	points := metricsHistoryDefaultPoints
 	if raw := ctx.QueryParam("points"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed <= 0 {
+		if err != nil || parsed <= 0 || parsed > metricsHistoryMaxPoints {
 			return c.HandleError(ctx, err, "Invalid 'points' parameter", http.StatusBadRequest)
 		}
 		points = parsed
@@ -175,9 +177,30 @@ func (c *Controller) initMetricsHistoryRoutes() {
 	systemGroup := c.Group.Group("/system")
 	authMiddleware := c.authMiddleware
 
+	// Rate limiter for metrics SSE connections (10 requests per minute per IP)
+	rateLimiterConfig := middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
+			middleware.RateLimiterMemoryStoreConfig{
+				Rate:      10,
+				ExpiresIn: 1 * time.Minute,
+			},
+		),
+		IdentifierExtractor: middleware.DefaultRateLimiterConfig.IdentifierExtractor,
+		ErrorHandler: func(context echo.Context, err error) error {
+			return context.JSON(http.StatusTooManyRequests, map[string]string{
+				"error": "Rate limit exceeded for metrics SSE connections",
+			})
+		},
+		DenyHandler: func(context echo.Context, identifier string, err error) error {
+			return context.JSON(http.StatusTooManyRequests, map[string]string{
+				"error": "Too many metrics SSE connection attempts, please wait before trying again",
+			})
+		},
+	}
+
 	metricsGroup := systemGroup.Group("/metrics", authMiddleware)
 	metricsGroup.GET("/history", c.GetMetricsHistory)
-	metricsGroup.GET("/stream", c.StreamMetrics)
+	metricsGroup.GET("/stream", c.StreamMetrics, middleware.RateLimiterWithConfig(rateLimiterConfig))
 
 	// Start the collector background goroutine
 	c.wg.Go(func() {

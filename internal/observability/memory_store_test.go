@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
 func TestNewMemoryStore(t *testing.T) {
@@ -129,7 +130,7 @@ func TestMemoryStore_Subscribe(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := NewMemoryStore(10)
 		ch, cancel := store.Subscribe()
-		defer cancel()
+		t.Cleanup(cancel)
 
 		// Record a batch; subscriber should receive it
 		store.RecordBatch(map[string]float64{"cpu": 42.0})
@@ -173,9 +174,9 @@ func TestMemoryStore_Subscribe_MultipleSubscribers(t *testing.T) {
 		store := NewMemoryStore(10)
 
 		ch1, cancel1 := store.Subscribe()
-		defer cancel1()
+		t.Cleanup(cancel1)
 		ch2, cancel2 := store.Subscribe()
-		defer cancel2()
+		t.Cleanup(cancel2)
 
 		store.RecordBatch(map[string]float64{"cpu": 55.0})
 
@@ -198,7 +199,7 @@ func TestMemoryStore_Subscribe_SlowConsumerDrops(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := NewMemoryStore(10)
 		ch, cancel := store.Subscribe()
-		defer cancel()
+		t.Cleanup(cancel)
 
 		// Don't read from channel — simulate slow consumer
 		// Record 3 batches; channel cap is 1, so at most 1 is buffered
@@ -220,6 +221,7 @@ func TestMemoryStore_Subscribe_SlowConsumerDrops(t *testing.T) {
 
 func TestMemoryStore_ConcurrentAccess(t *testing.T) {
 	t.Parallel()
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 	store := NewMemoryStore(100)
 
 	var wg sync.WaitGroup

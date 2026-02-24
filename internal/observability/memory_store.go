@@ -76,7 +76,9 @@ type MemoryStore struct {
 }
 
 // NewMemoryStore creates a MemoryStore that keeps up to maxPoints per metric.
+// A minimum of 1 point is enforced to avoid zero-capacity buffers.
 func NewMemoryStore(maxPoints int) *MemoryStore {
+	maxPoints = max(1, maxPoints)
 	return &MemoryStore{
 		series:      make(map[string]*ringBuffer),
 		maxPoints:   maxPoints,
