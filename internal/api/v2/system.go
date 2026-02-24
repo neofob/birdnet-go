@@ -1117,6 +1117,9 @@ func (c *Controller) checkThermalZone(zonePath string, targetTypes map[string]bo
 // thermalBasePath is the base directory for thermal zones on Linux
 const thermalBasePath = "/sys/class/thermal/"
 
+// defaultNoSensorMessage is the default message when no suitable CPU temperature sensor is found
+const defaultNoSensorMessage = "No suitable CPU temperature sensor found or temperature out of valid range."
+
 // cpuThermalTypes contains sensor types for CPU temperature
 var cpuThermalTypes = map[string]bool{
 	"cpu-thermal":     true, // Common on Raspberry Pi
@@ -1132,18 +1135,16 @@ func (c *Controller) GetSystemCPUTemperature(ctx echo.Context) error {
 
 	response := SystemTemperature{
 		IsAvailable: false,
-		Message:     "No suitable CPU temperature sensor found or temperature out of valid range.",
+		Message:     defaultNoSensorMessage,
 	}
 
 	// Check thermal directory access
-	if err := c.checkThermalDirectoryAccess(ctx, &response, ip, path); err != nil {
-		return err
+	exists, err := c.checkThermalDirectoryAccess(&response, ip, path)
+	if err != nil {
+		return c.HandleError(ctx, err, "Failed to access thermal information due to filesystem error", http.StatusInternalServerError)
 	}
-	if response.Message != "" && !response.IsAvailable {
-		// Early return if directory doesn't exist - checkThermalDirectoryAccess already set response
-		if response.Message == "Thermal zone directory not found. This feature is typically available on Linux systems." {
-			return ctx.JSON(http.StatusOK, response)
-		}
+	if !exists {
+		return ctx.JSON(http.StatusOK, response)
 	}
 
 	// Get thermal zones
@@ -1163,21 +1164,23 @@ func (c *Controller) GetSystemCPUTemperature(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// checkThermalDirectoryAccess checks if thermal directory exists and is accessible
-func (c *Controller) checkThermalDirectoryAccess(ctx echo.Context, response *SystemTemperature, ip, path string) error {
+// checkThermalDirectoryAccess checks if thermal directory exists and is accessible.
+// Returns (true, nil) if the directory exists, (false, nil) if not found (with response
+// fields set), or (false, error) for other filesystem failures.
+func (c *Controller) checkThermalDirectoryAccess(response *SystemTemperature, ip, path string) (bool, error) {
 	_, err := os.Stat(thermalBasePath)
 	if err == nil {
-		return nil
+		return true, nil
 	}
 
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		response.Message = "Thermal zone directory not found. This feature is typically available on Linux systems."
-		c.logInfoIfEnabled("Thermal zone directory not found, CPU temperature feature unavailable.", logger.String("path", thermalBasePath), logger.String("os", runtime.GOOS), logger.String("request_path", path), logger.String("ip", ip))
-		return ctx.JSON(http.StatusOK, response)
+		c.logDebugIfEnabled("Thermal zone directory not found, CPU temperature feature unavailable.", logger.String("path", thermalBasePath), logger.String("os", runtime.GOOS), logger.String("request_path", path), logger.String("ip", ip))
+		return false, nil
 	}
 
 	c.logErrorIfEnabled("Failed to stat thermal base path", logger.String("path", thermalBasePath), logger.Error(err), logger.String("request_path", path), logger.String("ip", ip))
-	return c.HandleError(ctx, err, "Failed to access thermal information due to filesystem error", http.StatusInternalServerError)
+	return false, fmt.Errorf("failed to access thermal information: %w", err)
 }
 
 // getThermalZones retrieves available thermal zone paths
