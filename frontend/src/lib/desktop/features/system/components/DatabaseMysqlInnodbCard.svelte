@@ -55,7 +55,7 @@
             >{t('system.database.dashboard.innodb.lockWaits')}</span
           >
         </div>
-        <span class="font-mono tabular-nums font-medium">{details.lock_waits}</span>
+        <span class="font-mono tabular-nums font-medium">{formatNumber(details.lock_waits)}</span>
       </div>
       <div class="flex justify-between text-sm">
         <div class="flex items-center gap-2">
@@ -67,7 +67,7 @@
         <span
           class="font-mono tabular-nums font-medium {details.deadlocks > 0
             ? 'text-red-600 dark:text-red-400'
-            : 'text-emerald-600 dark:text-emerald-400'}">{details.deadlocks}</span
+            : 'text-emerald-600 dark:text-emerald-400'}">{formatNumber(details.deadlocks)}</span
         >
       </div>
       <div class="flex justify-between text-sm">
@@ -85,7 +85,9 @@
         <span class="text-slate-400 dark:text-slate-500"
           >{t('system.database.dashboard.innodb.tableLocksWaited')}</span
         >
-        <span class="font-mono tabular-nums font-medium">{details.table_locks_waited}</span>
+        <span class="font-mono tabular-nums font-medium"
+          >{formatNumber(details.table_locks_waited)}</span
+        >
       </div>
       <div class="flex justify-between text-sm">
         <span class="text-slate-400 dark:text-slate-500"
