@@ -18,7 +18,7 @@ require (
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/k3a/html2text v1.3.0
 	github.com/klauspost/cpuid/v2 v2.3.0
-	github.com/labstack/echo/v4 v4.15.0
+	github.com/labstack/echo/v4 v4.15.1
 	github.com/nicholas-fedor/shoutrrr v0.13.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/sftp v1.13.10
@@ -40,7 +40,7 @@ require (
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.50.0
 	golang.org/x/text v0.34.0
-	google.golang.org/api v0.266.0
+	google.golang.org/api v0.268.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/sqlite v1.6.0
