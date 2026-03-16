@@ -2447,7 +2447,7 @@ func (c *Controller) generateSpectrogram(ctx context.Context, audioPath string, 
 	// Generate a unique key for this spectrogram generation request
 	spectrogramKey := buildSpectrogramKey(relSpectrogramPath, width, raw)
 
-	// Step 3: Fast path - Check if spectrogram already exists
+	// Step 3: Fast path - Check if spectrogram already exists (cheap os.Stat, OK before singleflight)
 	exists, err := c.checkSpectrogramExists(relSpectrogramPath, spectrogramKey, start)
 	if err != nil {
 		return "", err
@@ -2456,28 +2456,9 @@ func (c *Controller) generateSpectrogram(ctx context.Context, audioPath string, 
 		return relSpectrogramPath, nil
 	}
 
-	// Step 4: Check if audio file exists
-	if err := c.checkAudioFileExists(relAudioPath); err != nil {
-		return "", err
-	}
-
-	// Step 5: Validate that the audio file is complete and ready for processing
+	// Absolute paths needed for generation
 	absAudioPath := filepath.Join(c.SFS.BaseDir(), relAudioPath)
-	_, err = c.validateSpectrogramInputs(ctx, absAudioPath, audioPath, spectrogramKey)
-	if err != nil {
-		return "", err
-	}
-
-	// Absolute path for the spectrogram on the host filesystem
 	absSpectrogramPath := filepath.Join(c.SFS.BaseDir(), relSpectrogramPath)
-
-	// Step 6: Proceed with generation (spectrogram doesn't exist)
-	getSpectrogramLogger().Debug("Proceeding with spectrogram generation",
-		logger.String("spectrogram_key", spectrogramKey),
-		logger.String("abs_audio_path", absAudioPath),
-		logger.String("abs_spectrogram_path", absSpectrogramPath),
-		logger.Int("width", width),
-		logger.Bool("raw", raw))
 
 	// Track this request in the queue
 	c.initializeQueueStatus(spectrogramKey)
@@ -2485,13 +2466,47 @@ func (c *Controller) generateSpectrogram(ctx context.Context, audioPath string, 
 	// Clean up queue entry on exit
 	defer c.cleanupQueueStatus(spectrogramKey)
 
-	// Use singleflight to prevent duplicate generations; acquire semaphore only for the winner
+	// Use singleflight to coalesce duplicate requests for the same spectrogram.
+	// Audio validation (FFprobe) and generation run inside the group so that
+	// concurrent requests share a single FFprobe call and generation pass
+	// instead of each spawning redundant subprocesses (fixes #2342).
 	getSpectrogramLogger().Debug("Starting singleflight generation",
 		logger.String("spectrogram_key", spectrogramKey))
 
-	_, err, _ = spectrogramGroup.Do(spectrogramKey, func() (any, error) {
+	// Use DoChan so callers can bail out early if their request context is
+	// cancelled (e.g. client disconnect) without blocking the handler goroutine.
+	// The shared work continues in the background using the controller-scoped
+	// context (c.ctx) and the next request will hit the fast path.
+	resultCh := spectrogramGroup.DoChan(spectrogramKey, func() (any, error) {
+		// Use a controller-scoped context with timeout instead of the request-scoped ctx.
+		// Since singleflight shares the result across all concurrent callers, using a
+		// request-scoped context would cause all waiters to fail if the winning request's
+		// client disconnects. The controller context (c.ctx) respects server shutdown
+		// but is not tied to any individual HTTP request.
+		sharedCtx, sharedCancel := context.WithTimeout(c.ctx, spectrogramGenerationTimeout)
+		defer sharedCancel()
+
+		// Step 4: Check if audio file exists (inside singleflight to avoid redundant stat calls)
+		if err := c.checkAudioFileExists(relAudioPath); err != nil {
+			return nil, err
+		}
+
+		// Step 5: Validate audio file with FFprobe (expensive ~300ms subprocess).
+		// Running inside singleflight ensures only one FFprobe call per unique spectrogram key.
+		_, err := c.validateSpectrogramInputs(sharedCtx, absAudioPath, audioPath, spectrogramKey)
+		if err != nil {
+			return nil, err
+		}
+
+		getSpectrogramLogger().Debug("Proceeding with spectrogram generation",
+			logger.String("spectrogram_key", spectrogramKey),
+			logger.String("abs_audio_path", absAudioPath),
+			logger.String("abs_spectrogram_path", absSpectrogramPath),
+			logger.Int("width", width),
+			logger.Bool("raw", raw))
+
 		// Acquire semaphore inside singleflight - only the actual worker gets a slot
-		if err := c.acquireSemaphoreSlot(ctx, spectrogramKey); err != nil {
+		if err := c.acquireSemaphoreSlot(sharedCtx, spectrogramKey); err != nil {
 			return nil, err
 		}
 		defer func() {
@@ -2505,12 +2520,35 @@ func (c *Controller) generateSpectrogram(ctx context.Context, audioPath string, 
 				logger.Int("slots_now_available", maxConcurrentSpectrograms-slotsAfterRelease),
 				logger.Int64("total_duration_ms", time.Since(start).Milliseconds()))
 		}()
-		return c.performSpectrogramGeneration(ctx, relSpectrogramPath, absAudioPath, absSpectrogramPath, spectrogramKey, width, raw)
+		return c.performSpectrogramGeneration(sharedCtx, relSpectrogramPath, absAudioPath, absSpectrogramPath, spectrogramKey, width, raw)
 	})
+
+	// Wait for either the singleflight result or caller's context cancellation.
+	// If the caller's context is done (client disconnect), return immediately;
+	// the shared generation work continues in the background.
+	var shared bool
+	select {
+	case result := <-resultCh:
+		shared = result.Shared
+		err = result.Err
+	case <-ctx.Done():
+		getSpectrogramLogger().Debug("Caller context cancelled while waiting for spectrogram generation",
+			logger.String("spectrogram_key", spectrogramKey),
+			logger.Error(ctx.Err()),
+			logger.Int64("total_duration_ms", time.Since(start).Milliseconds()))
+		return "", ctx.Err()
+	}
+
+	if shared {
+		getSpectrogramLogger().Info("Spectrogram request coalesced via singleflight (duplicate avoided)",
+			logger.String("spectrogram_key", spectrogramKey),
+			logger.Int64("total_duration_ms", time.Since(start).Milliseconds()))
+	}
 
 	if err != nil {
 		getSpectrogramLogger().Debug("Spectrogram generation failed",
 			logger.String("spectrogram_key", spectrogramKey),
+			logger.Bool("shared", shared),
 			logger.Error(err),
 			logger.Int64("total_duration_ms", time.Since(start).Milliseconds()))
 		return "", fmt.Errorf("failed to generate spectrogram: %w", err)
@@ -2519,6 +2557,7 @@ func (c *Controller) generateSpectrogram(ctx context.Context, audioPath string, 
 	getSpectrogramLogger().Debug("Spectrogram generation completed successfully",
 		logger.String("spectrogram_key", spectrogramKey),
 		logger.String("relative_spectrogram_path", relSpectrogramPath),
+		logger.Bool("shared", shared),
 		logger.Int64("total_duration_ms", time.Since(start).Milliseconds()))
 
 	// Return the relative path of the newly created spectrogram
