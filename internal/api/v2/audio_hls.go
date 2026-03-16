@@ -128,9 +128,15 @@ func (c *Controller) initHLSRoutes() {
 	// HLS base group (no auth by default)
 	hlsGroup := c.Group.Group("/streams/hls")
 
-	// Stream control endpoints - require authentication
-	hlsGroup.POST("/:sourceID/start", c.StartHLSStream, authMiddleware)
+	// Stream control endpoints
+	// When PublicAccess.LiveAudio is enabled, unauthenticated users can start streams
+	// Stop always requires authentication to prevent abuse
 	hlsGroup.POST("/:sourceID/stop", c.StopHLSStream, authMiddleware)
+	if c.Settings.Security.PublicAccess.LiveAudio {
+		hlsGroup.POST("/:sourceID/start", c.StartHLSStream)
+	} else {
+		hlsGroup.POST("/:sourceID/start", c.StartHLSStream, authMiddleware)
+	}
 
 	// Public endpoints - no authentication required
 	hlsGroup.POST("/heartbeat", c.HLSHeartbeat)
@@ -158,6 +164,12 @@ func (c *Controller) StartHLSStream(ctx echo.Context) error {
 
 	// Check for force restart query param
 	forceRestart := ctx.QueryParam("force") == QueryValueTrue
+
+	// Only allow force restart for authenticated users to prevent DoS
+	// (force kills the FFmpeg process and spawns a new one)
+	if forceRestart && !c.isClientAuthenticated(ctx) {
+		forceRestart = false
+	}
 
 	c.logAPIRequest(ctx, logger.LogLevelInfo, "HLS stream start requested",
 		logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)),

@@ -889,6 +889,7 @@ func TestGetAppConfig_NoExtraFields(t *testing.T) {
 		"enabled":       true,
 		"accessAllowed": true,
 		"authConfig":    true,
+		"publicAccess":  true,
 	}
 
 	for key := range securityObj {
@@ -1299,4 +1300,38 @@ func FuzzGetAppConfig_SecurityConfig(f *testing.F) {
 
 		verifyFuzzSecurityResponse(t, &response, input, rec.Body.String())
 	})
+}
+
+// TestGetAppConfig_PublicAccessFlags tests that publicAccess flags are included in the response.
+func TestGetAppConfig_PublicAccessFlags(t *testing.T) {
+	e, controller := setupAppConfigTest(t, nil)
+
+	tests := []struct {
+		name     string
+		enabled  bool
+		expected bool
+	}{
+		{"LiveAudio disabled by default", false, false},
+		{"LiveAudio enabled", true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller.Settings.Security.PublicAccess.LiveAudio = tt.enabled
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v2/app/config", http.NoBody)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetPath("/api/v2/app/config")
+
+			err := controller.GetAppConfig(c)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var response AppConfigResponse
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+
+			assert.Equal(t, tt.expected, response.Security.PublicAccess.LiveAudio)
+		})
+	}
 }
