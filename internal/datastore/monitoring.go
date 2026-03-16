@@ -14,7 +14,7 @@ import (
 // database connection pool statistics
 func (ds *DataStore) startConnectionPoolMonitoring(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
-	go func() {
+	ds.monitoringWg.Go(func() {
 		defer ticker.Stop()
 		for {
 			select {
@@ -66,14 +66,14 @@ func (ds *DataStore) startConnectionPoolMonitoring(ctx context.Context, interval
 				}
 			}
 		}
-	}()
+	})
 }
 
 // startDatabaseMonitoring starts a goroutine that periodically monitors
 // database size and table statistics
 func (ds *DataStore) startDatabaseMonitoring(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
-	go func() {
+	ds.monitoringWg.Go(func() {
 		defer ticker.Stop()
 		for {
 			select {
@@ -115,7 +115,7 @@ func (ds *DataStore) startDatabaseMonitoring(ctx context.Context, interval time.
 				}
 			}
 		}
-	}()
+	})
 }
 
 // getDatabaseSize returns the total size of the database in bytes
@@ -199,18 +199,20 @@ func (ds *DataStore) StartMonitoring(connectionPoolInterval, databaseStatsInterv
 	}
 }
 
-// StopMonitoring cancels all monitoring goroutines and ensures clean shutdown
+// StopMonitoring cancels all monitoring goroutines and blocks until they exit.
 func (ds *DataStore) StopMonitoring() {
 	ds.monitoringMu.Lock()
-	defer ds.monitoringMu.Unlock()
-
 	if ds.monitoringCancel != nil {
 		GetLogger().Info("Stopping all monitoring activities")
 		ds.monitoringCancel()
 		ds.monitoringCancel = nil
 		ds.monitoringCtx = nil
-		GetLogger().Info("All monitoring activities stopped")
 	}
+	ds.monitoringMu.Unlock()
+
+	// Wait outside the lock so goroutines can finish without deadlocking.
+	ds.monitoringWg.Wait()
+	GetLogger().Info("All monitoring activities stopped")
 }
 
 // IsMonitoringActive returns true if monitoring is currently active

@@ -331,7 +331,7 @@ func (s *SQLiteStore) startIntegrityCheckLoop() {
 	s.monitoringMu.Unlock()
 
 	// Run initial check immediately, then on interval
-	go func() {
+	s.monitoringWg.Go(func() {
 		s.RunIntegrityCheck()
 
 		ticker := time.NewTicker(integrityCheckInterval)
@@ -344,7 +344,7 @@ func (s *SQLiteStore) startIntegrityCheckLoop() {
 				s.RunIntegrityCheck()
 			}
 		}
-	}()
+	})
 }
 
 // Close closes the SQLite database connection

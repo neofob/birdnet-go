@@ -244,6 +244,7 @@ type DataStore struct {
 	monitoringCtx    context.Context    // Context for monitoring goroutines
 	monitoringCancel context.CancelFunc // Function to cancel monitoring
 	monitoringMu     sync.Mutex         // Mutex to protect monitoring state
+	monitoringWg     sync.WaitGroup     // WaitGroup for monitoring goroutines
 }
 
 // NewDataStore creates a new DataStore instance based on the provided configuration context.
