@@ -886,7 +886,7 @@ func TestExecuteCommandAction_WithParameters(t *testing.T) {
 	// Script that writes args to output file and calls sync to flush to disk.
 	// The sync command ensures the file is visible to readers even on slow CI
 	// filesystems where the kernel may delay flushing after the process exits.
-	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\nsync " + outputPath + "\n"
+	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\nsync\n"
 	scriptPath := createTestScript(t, "args_script.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
@@ -993,7 +993,7 @@ func TestExecuteCommandAction_UnicodeInParameters(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "unicode_output.txt")
 
-	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\nsync " + outputPath + "\n"
+	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\nsync\n"
 	scriptPath := createTestScript(t, "unicode_script.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
@@ -1056,7 +1056,7 @@ func TestExecuteCommandAction_EnvironmentIsolation(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "env_output.txt")
 
-	scriptContent := "#!/bin/sh\nenv > " + outputPath + "\nsync " + outputPath + "\n"
+	scriptContent := "#!/bin/sh\nenv > " + outputPath + "\nsync\n"
 	scriptPath := createTestScript(t, "env_script.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
