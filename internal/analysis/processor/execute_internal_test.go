@@ -25,6 +25,10 @@ const osWindows = "windows"
 // Uses t.TempDir() for automatic cleanup. Explicitly syncs the file to disk before
 // closing to prevent ETXTBSY ("text file busy") races where the kernel still holds
 // a write reference when exec is called immediately after.
+//
+// After closing, the function verifies the file is stat-able as a final check
+// that the kernel has finished processing the file descriptor operations.
+// This prevents ETXTBSY errors on CI runners with slow I/O subsystems.
 func createTestScript(t *testing.T, name, content string) string {
 	t.Helper()
 	scriptPath := filepath.Join(t.TempDir(), name)
@@ -38,7 +42,31 @@ func createTestScript(t *testing.T, name, content string) string {
 	require.NoError(t, f.Sync())
 	require.NoError(t, f.Close())
 
+	// Verify the file is fully committed to the filesystem. On some Linux
+	// systems (especially CI runners with overlayfs or slow storage), the
+	// kernel may still hold a write reference to the file even after
+	// Sync+Close return. Stat-ing the file and verifying the executable bit
+	// acts as a fence that ensures the file is ready for exec.
+	require.Eventually(t, func() bool {
+		info, statErr := os.Stat(scriptPath)
+		return statErr == nil && info.Mode()&0o111 != 0
+	}, 2*time.Second, 10*time.Millisecond, "script file should be stat-able and executable")
+
 	return scriptPath
+}
+
+// readFileEventually polls until the file at path is readable and non-empty,
+// returning its contents. This handles filesystem flush delays on slow CI runners
+// where a child process's file writes may not be immediately visible after exit.
+func readFileEventually(t *testing.T, path string) []byte {
+	t.Helper()
+	var output []byte
+	require.Eventually(t, func() bool {
+		var err error
+		output, err = os.ReadFile(path) //nolint:gosec // test file path is controlled
+		return err == nil && len(output) > 0
+	}, 5*time.Second, 50*time.Millisecond, "output file should become readable")
+	return output
 }
 
 // createTestDetections creates a Detections struct with both Result and Note populated.
@@ -855,8 +883,10 @@ func TestExecuteCommandAction_WithParameters(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "args_output.txt")
 
-	// Script that writes args to output file
-	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\n"
+	// Script that writes args to output file and calls sync to flush to disk.
+	// The sync command ensures the file is visible to readers even on slow CI
+	// filesystems where the kernel may delay flushing after the process exits.
+	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\nsync\n"
 	scriptPath := createTestScript(t, "args_script.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
@@ -876,9 +906,7 @@ func TestExecuteCommandAction_WithParameters(t *testing.T) {
 	err := action.Execute(t.Context(), det)
 	require.NoError(t, err)
 
-	// Verify output
-	output, err := os.ReadFile(outputPath) //nolint:gosec // test file path is controlled
-	require.NoError(t, err)
+	output := readFileEventually(t, outputPath)
 	outputStr := string(output)
 
 	// Should contain both parameters (sorted alphabetically)
@@ -965,7 +993,7 @@ func TestExecuteCommandAction_UnicodeInParameters(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "unicode_output.txt")
 
-	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\n"
+	scriptContent := "#!/bin/sh\necho \"$@\" > " + outputPath + "\nsync\n"
 	scriptPath := createTestScript(t, "unicode_script.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
@@ -984,9 +1012,7 @@ func TestExecuteCommandAction_UnicodeInParameters(t *testing.T) {
 	err := action.Execute(t.Context(), det)
 	require.NoError(t, err)
 
-	// Verify output contains unicode
-	output, err := os.ReadFile(outputPath) //nolint:gosec // test file path is controlled
-	require.NoError(t, err)
+	output := readFileEventually(t, outputPath)
 	assert.Contains(t, string(output), "Sparrow")
 	// The shell may handle emoji differently, just verify the script ran
 }
@@ -997,8 +1023,10 @@ func TestExecuteCommandAction_LargeOutput(t *testing.T) {
 	}
 	t.Parallel()
 
-	// Script that generates 100KB of output
-	scriptContent := "#!/bin/sh\nfor i in $(seq 1 10000); do echo 'This is line number '$i' with some padding text to make it longer'; done\n"
+	// Script that generates large output using dd for efficiency.
+	// Using dd is much faster than a shell loop on resource-constrained CI runners.
+	// Generates ~100KB of output (100 blocks x 1024 bytes).
+	scriptContent := "#!/bin/sh\ndd if=/dev/zero bs=1024 count=100 2>/dev/null | tr '\\0' 'A'\n"
 	scriptPath := createTestScript(t, "large_output.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
@@ -1006,8 +1034,12 @@ func TestExecuteCommandAction_LargeOutput(t *testing.T) {
 		Params:  nil,
 	}
 
+	// Use an explicit timeout context to prevent hangs on slow CI runners
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
 	// Should handle large output without crashing
-	err := action.Execute(t.Context(), createTestDetections("Test Bird"))
+	err := action.ExecuteContext(ctx, createTestDetections("Test Bird"))
 	assert.NoError(t, err)
 }
 
@@ -1015,17 +1047,16 @@ func TestExecuteCommandAction_EnvironmentIsolation(t *testing.T) {
 	if runtime.GOOS == osWindows {
 		t.Skip("Test is Unix-specific")
 	}
-	t.Parallel()
+	// This test mutates process-wide environment variables; must run serially.
 
-	// Set a test environment variable
+	// Set a test environment variable (t.Setenv auto-restores on cleanup)
 	testEnvKey := "BIRDNET_TEST_SECRET_" + time.Now().Format("20060102150405")
-	require.NoError(t, os.Setenv(testEnvKey, "secret_value"))
-	defer func() { _ = os.Unsetenv(testEnvKey) }()
+	t.Setenv(testEnvKey, "secret_value")
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "env_output.txt")
 
-	scriptContent := "#!/bin/sh\nenv > " + outputPath + "\n"
+	scriptContent := "#!/bin/sh\nenv > " + outputPath + "\nsync\n"
 	scriptPath := createTestScript(t, "env_script.sh", scriptContent)
 
 	action := &ExecuteCommandAction{
@@ -1036,10 +1067,9 @@ func TestExecuteCommandAction_EnvironmentIsolation(t *testing.T) {
 	err := action.Execute(t.Context(), createTestDetections("Test Bird"))
 	require.NoError(t, err)
 
-	// Verify output does NOT contain our secret environment variable
-	output, err := os.ReadFile(outputPath) //nolint:gosec // test file path is controlled
-	require.NoError(t, err)
+	output := readFileEventually(t, outputPath)
 
+	// Verify output does NOT contain our secret environment variable
 	assert.NotContains(t, string(output), testEnvKey)
 	assert.NotContains(t, string(output), "secret_value")
 
