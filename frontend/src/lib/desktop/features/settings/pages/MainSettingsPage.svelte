@@ -452,7 +452,7 @@
 
           if (marker) {
             marker.setLngLat([lng, lat]);
-          } else if (maplibregl && (lat !== 0 || lng !== 0)) {
+          } else if (maplibregl && settings.birdnet.locationConfigured) {
             marker = new maplibregl.Marker({ draggable: true }).setLngLat([lng, lat]).addTo(map!);
             marker.on('dragend', () => {
               const lngLat = marker!.getLngLat();
@@ -632,7 +632,7 @@
       };
       mapElement.addEventListener('wheel', handleWheel as globalThis.EventListener, false);
 
-      if ((initialLat !== 0 || initialLng !== 0) && maplibregl) {
+      if ($birdnetSettings?.locationConfigured && maplibregl) {
         marker = new maplibregl.Marker({ draggable: true })
           .setLngLat([initialLng, initialLat])
           .addTo(map);
@@ -662,16 +662,22 @@
     }
   }
 
+  // Centralized location update: marks locationConfigured and pushes coordinates to the store
+  function updateLocationSettings(lat: number, lng: number) {
+    settingsActions.updateSection('birdnet', {
+      latitude: lat,
+      longitude: lng,
+      locationConfigured: true,
+    });
+  }
+
   function updateMarker(lat: number, lng: number) {
     if (!map) return;
 
     const roundedLat = parseFloat(lat.toFixed(3));
     const roundedLng = parseFloat(lng.toFixed(3));
 
-    settingsActions.updateSection('birdnet', {
-      latitude: roundedLat,
-      longitude: roundedLng,
-    });
+    updateLocationSettings(roundedLat, roundedLng);
 
     updateMapView(roundedLat, roundedLng);
     debouncedTestRangeFilter();
@@ -716,10 +722,7 @@
           const roundedLat = parseFloat(lngLat.lat.toFixed(3));
           const roundedLng = parseFloat(lngLat.lng.toFixed(3));
 
-          settingsActions.updateSection('birdnet', {
-            latitude: roundedLat,
-            longitude: roundedLng,
-          });
+          updateLocationSettings(roundedLat, roundedLng);
 
           if (map) {
             const mainCurrentZoom = map.getZoom();
@@ -779,7 +782,7 @@
         false
       );
 
-      if (currentLat !== 0 || currentLng !== 0) {
+      if ($birdnetSettings?.locationConfigured) {
         modalMarker = new maplibregl!.Marker({ draggable: true })
           .setLngLat([currentLng, currentLat])
           .addTo(modalMap);
@@ -789,10 +792,7 @@
           const roundedLat = parseFloat(lngLat.lat.toFixed(3));
           const roundedLng = parseFloat(lngLat.lng.toFixed(3));
 
-          settingsActions.updateSection('birdnet', {
-            latitude: roundedLat,
-            longitude: roundedLng,
-          });
+          updateLocationSettings(roundedLat, roundedLng);
 
           if (map) {
             const mainCurrentZoom = map.getZoom();
@@ -816,10 +816,7 @@
           const roundedLat = parseFloat(lngLat.lat.toFixed(3));
           const roundedLng = parseFloat(lngLat.lng.toFixed(3));
 
-          settingsActions.updateSection('birdnet', {
-            latitude: roundedLat,
-            longitude: roundedLng,
-          });
+          updateLocationSettings(roundedLat, roundedLng);
 
           if (modalMarker) {
             modalMarker.setLngLat([roundedLng, roundedLat]);
@@ -892,8 +889,7 @@
   }
 
   async function testCurrentRangeFilter() {
-    if (rangeFilterState.testing || !settings.birdnet.latitude || !settings.birdnet.longitude)
-      return;
+    if (rangeFilterState.testing || !settings.birdnet.locationConfigured) return;
 
     clearTimeout(loadingDelayTimer);
 
@@ -929,7 +925,7 @@
   }
 
   async function loadRangeFilterSpecies() {
-    if (rangeFilterState.loading) return;
+    if (rangeFilterState.loading || !settings.birdnet.locationConfigured) return;
 
     rangeFilterState.loading = true;
     rangeFilterState.error = null;
@@ -955,10 +951,12 @@
   }
 
   $effect(() => {
-    const lat = settings.birdnet.latitude;
-    const lng = settings.birdnet.longitude;
+    // Track coordinate changes as dependencies
+    const _lat = settings.birdnet.latitude;
+    const _lng = settings.birdnet.longitude;
+    const configured = settings.birdnet.locationConfigured;
 
-    if (lat && lng) {
+    if (configured && _lat != null && _lng != null) {
       debouncedTestRangeFilter();
     }
   });
@@ -969,7 +967,14 @@
   }
 
   function updateBirdnetSetting(key: string, value: string | number | boolean | null) {
-    settingsActions.updateSection('birdnet', { [key]: value });
+    // When latitude or longitude is updated, mark location as explicitly configured
+    if (key === 'latitude' || key === 'longitude') {
+      const currentLat = key === 'latitude' ? (value as number) : settings.birdnet.latitude;
+      const currentLng = key === 'longitude' ? (value as number) : settings.birdnet.longitude;
+      updateLocationSettings(currentLat, currentLng);
+    } else {
+      settingsActions.updateSection('birdnet', { [key]: value });
+    }
   }
 
   function updateDynamicThreshold(key: string, value: number | boolean) {
@@ -1336,7 +1341,7 @@
   }
 
   async function downloadSpeciesCSV() {
-    if (rangeFilterState.downloading) return;
+    if (rangeFilterState.downloading || !settings.birdnet.locationConfigured) return;
 
     try {
       rangeFilterState.downloading = true;
@@ -1687,7 +1692,9 @@
             <button
               type="button"
               class="inline-flex items-center justify-center h-8 px-3 text-sm font-medium rounded-lg border border-[var(--color-base-content)]/30 bg-transparent hover:bg-black/5 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!rangeFilterState.speciesCount || rangeFilterState.loading}
+              disabled={!rangeFilterState.speciesCount ||
+                rangeFilterState.loading ||
+                !settings.birdnet.locationConfigured}
               onclick={() => {
                 rangeFilterState.showModal = true;
                 loadRangeFilterSpecies();
@@ -1698,7 +1705,9 @@
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 h-8 px-3 text-sm font-medium rounded-lg bg-[var(--color-primary)] text-[var(--color-primary-content)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!rangeFilterState.speciesCount || rangeFilterState.downloading}
+              disabled={!rangeFilterState.speciesCount ||
+                rangeFilterState.downloading ||
+                !settings.birdnet.locationConfigured}
               onclick={downloadSpeciesCSV}
               aria-label={t('common.aria.downloadCsv')}
             >
