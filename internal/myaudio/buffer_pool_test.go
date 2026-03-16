@@ -1,6 +1,7 @@
 package myaudio
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -152,6 +153,12 @@ func TestBufferPoolGetPut(t *testing.T) {
 
 func TestBufferPoolSizeValidation(t *testing.T) {
 	t.Parallel()
+
+	// Force a GC cycle before starting to prevent the runtime from triggering
+	// one mid-test, which can clear sync.Pool internals and cause stats to
+	// diverge from expectations on resource-constrained CI runners.
+	runtime.GC()
+
 	const bufferSize = 1024
 	pool, err := NewBufferPool(bufferSize)
 	require.NoError(t, err)
@@ -173,8 +180,10 @@ func TestBufferPoolSizeValidation(t *testing.T) {
 	pool.Put(correctBuf)
 	assert.Equal(t, discardedBefore, pool.GetStats().Discarded, "correct-size buffer should not be discarded")
 
-	// Verify Get returns a correctly-sized buffer regardless of pool state
-	// Note: sync.Pool may GC the pooled buffer, so we can't assert on Hits
+	// Verify Get returns a correctly-sized buffer regardless of pool state.
+	// Note: sync.Pool may GC the pooled buffer, so we can't assert on Hits.
+	// We only assert that Get always returns a buffer with the correct size,
+	// whether it came from the pool or was newly allocated.
 	reusedBuf := pool.Get()
 	assert.NotNil(t, reusedBuf)
 	assert.Len(t, reusedBuf, bufferSize, "returned buffer should have the correct size")
