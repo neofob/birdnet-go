@@ -2941,8 +2941,8 @@
       "errors": {
         "connectionError": "Erro de conexão",
         "responseStreamFailed": "Falha ao ler o fluxo de resposta",
-        "configurationCheck": "Configuration Check",
-        "testStageFallback": "Test Stage"
+        "configurationCheck": "Verificação de configuração",
+        "testStageFallback": "Fase de teste"
       },
       "ebird": {
         "title": "eBird",

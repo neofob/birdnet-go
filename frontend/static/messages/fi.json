@@ -2941,8 +2941,8 @@
       "errors": {
         "connectionError": "Yhteysvirhe",
         "responseStreamFailed": "Vastausvirran lukeminen epäonnistui",
-        "configurationCheck": "Configuration Check",
-        "testStageFallback": "Test Stage"
+        "configurationCheck": "Asetustarkistus",
+        "testStageFallback": "Testausvaihe"
       },
       "ebird": {
         "title": "eBird",

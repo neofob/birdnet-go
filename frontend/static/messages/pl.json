@@ -2605,8 +2605,8 @@
       "errors": {
         "connectionError": "Błąd połączenia",
         "responseStreamFailed": "Nie udało się odczytać strumienia odpowiedzi",
-        "configurationCheck": "Configuration Check",
-        "testStageFallback": "Test Stage"
+        "configurationCheck": "Sprawdzenie konfiguracji",
+        "testStageFallback": "Etap testu"
       },
       "ebird": {
         "title": "eBird",

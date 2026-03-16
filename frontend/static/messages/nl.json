@@ -2599,8 +2599,8 @@
       "errors": {
         "connectionError": "Verbindingsfout",
         "responseStreamFailed": "Antwoordstroom kon niet worden gelezen",
-        "configurationCheck": "Configuration Check",
-        "testStageFallback": "Test Stage"
+        "configurationCheck": "Configuratiecontrole",
+        "testStageFallback": "Testfase"
       },
       "ebird": {
         "title": "eBird",
