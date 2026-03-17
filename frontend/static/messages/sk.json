@@ -885,6 +885,35 @@
       "daysSinceFirst": "Dní od prvej detekcie"
     }
   },
+  "spectrogram": {
+    "controls": {
+      "frequencyRange": "Frequency Range",
+      "colorMap": "Color Map",
+      "gain": "Gain",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "frequencyRangeMin": "Minimum frequency",
+      "frequencyRangeMax": "Maximum frequency"
+    },
+    "error": {
+      "unsupported": "Your browser does not support audio analysis",
+      "connectionFailed": "Failed to connect to live audio stream"
+    },
+    "dashboard": {
+      "toggle": "Show live spectrogram",
+      "audioToggle": "Enable audio"
+    },
+    "page": {
+      "title": "Live Audio",
+      "sourceLabel": "Audio Source",
+      "connected": "Pripojené"
+    },
+    "colorMaps": {
+      "inferno": "Inferno",
+      "viridis": "Viridis",
+      "grayscale": "Grayscale"
+    }
+  },
   "system": {
     "title": "Systémový prehľad",
     "refreshData": "Obnoviť dáta",

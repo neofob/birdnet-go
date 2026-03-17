@@ -890,6 +890,35 @@
       "daysSinceFirst": "Dienas kopš pirmās novērošanas"
     }
   },
+  "spectrogram": {
+    "controls": {
+      "frequencyRange": "Frequency Range",
+      "colorMap": "Color Map",
+      "gain": "Gain",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "frequencyRangeMin": "Minimum frequency",
+      "frequencyRangeMax": "Maximum frequency"
+    },
+    "error": {
+      "unsupported": "Your browser does not support audio analysis",
+      "connectionFailed": "Failed to connect to live audio stream"
+    },
+    "dashboard": {
+      "toggle": "Show live spectrogram",
+      "audioToggle": "Enable audio"
+    },
+    "page": {
+      "title": "Live Audio",
+      "sourceLabel": "Audio Source",
+      "connected": "Savienots"
+    },
+    "colorMaps": {
+      "inferno": "Inferno",
+      "viridis": "Viridis",
+      "grayscale": "Grayscale"
+    }
+  },
   "system": {
     "title": "Sistēmas panelis",
     "refreshData": "Atjaunināt datus",
