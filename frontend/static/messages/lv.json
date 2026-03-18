@@ -739,6 +739,10 @@
       "search": "Meklēšanas rezultāti vaicājumam \"{query}\"",
       "allDetections": "Visas atklāšanas datumā {date}"
     },
+    "detail": {
+      "species": "Suga",
+      "observation": "Novērojums"
+    },
     "headers": {
       "dateTime": "Datums un laiks",
       "weather": "Laikapstākļi",

@@ -739,6 +739,10 @@
       "search": "Søgeresultater for \"{query}\"",
       "allDetections": "Alle registreringer for {date}"
     },
+    "detail": {
+      "species": "Art",
+      "observation": "Observation"
+    },
     "headers": {
       "dateTime": "Dato og tid",
       "weather": "Vejr",

@@ -739,6 +739,10 @@
       "search": "Gevonden voor \"{query}\"",
       "allDetections": "Alles herkend op {date}"
     },
+    "detail": {
+      "species": "Soort",
+      "observation": "Waarneming"
+    },
     "headers": {
       "dateTime": "Datum/Tijd",
       "weather": "Weer",

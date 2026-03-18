@@ -739,6 +739,10 @@
       "search": "Hakutulokset haulle \"{query}\"",
       "allDetections": "Kaikki havainnot päivänä {date}"
     },
+    "detail": {
+      "species": "Laji",
+      "observation": "Havainto"
+    },
     "headers": {
       "dateTime": "Päivä ja aika",
       "weather": "Sää",

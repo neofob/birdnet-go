@@ -739,6 +739,10 @@
       "search": "Search Results for \"{query}\"",
       "allDetections": "All Detections for {date}"
     },
+    "detail": {
+      "species": "Species",
+      "observation": "Observation"
+    },
     "headers": {
       "dateTime": "Date & Time",
       "weather": "Weather",

@@ -739,6 +739,10 @@
       "search": "Výsledky vyhľadávania pre \"{query}\"",
       "allDetections": "Všetky detekcie pre dátum {date}"
     },
+    "detail": {
+      "species": "Druh",
+      "observation": "Pozorovanie"
+    },
     "headers": {
       "dateTime": "Dátum a čas",
       "weather": "Počasie",
