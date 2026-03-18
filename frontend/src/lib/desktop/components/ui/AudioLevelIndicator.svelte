@@ -39,6 +39,9 @@
     publicLiveAudio = false,
   }: Props = $props();
 
+  // Stream token state
+  let activeStreamToken: string | null = null;
+
   // State
   let levels = $state<AudioLevels>({});
   let selectedSource = $state<string | null>(null);
@@ -269,12 +272,12 @@
     stopHeartbeat();
 
     const sendHeartbeat = async () => {
-      if (!isPlaying || !playingSource) return;
+      if (!isPlaying || !activeStreamToken) return;
 
       try {
         await fetchWithCSRF('/api/v2/streams/hls/heartbeat', {
           method: 'POST',
-          body: { source_id: playingSource },
+          body: { stream_token: activeStreamToken },
         });
       } catch {
         // Failed to send heartbeat - ignore
@@ -292,11 +295,12 @@
       heartbeatTimer = null;
     }
 
-    // Send disconnect notification
-    if (playingSource) {
+    // Send disconnect notification (keepalive ensures delivery during page unload)
+    if (activeStreamToken) {
       fetchWithCSRF('/api/v2/streams/hls/heartbeat?disconnect=true', {
         method: 'POST',
-        body: { source_id: playingSource },
+        keepalive: true,
+        body: { stream_token: activeStreamToken },
       }).catch(() => {
         // Ignore errors during disconnect
       });
@@ -428,11 +432,17 @@
 
     try {
       // Use fetchWithCSRF for authenticated HLS endpoint
-      await fetchWithCSRF(`/api/v2/streams/hls/${encodedSourceId}/start`, {
+      const data = await fetchWithCSRF<{
+        status: string;
+        stream_token: string;
+        playlist_url: string;
+        playlist_ready: boolean;
+      }>(`/api/v2/streams/hls/${encodedSourceId}/start`, {
         method: 'POST',
       });
 
-      const hlsUrl = `/api/v2/streams/hls/${encodedSourceId}/playlist.m3u8`;
+      activeStreamToken = data.stream_token;
+      const hlsUrl = buildAppUrl(data.playlist_url);
       await setupHLSStream(hlsUrl, sourceId);
 
       startHeartbeat();
@@ -467,6 +477,7 @@
     const previousSource = playingSource;
     isPlaying = false;
     playingSource = null;
+    activeStreamToken = null;
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.playbackState = 'paused';

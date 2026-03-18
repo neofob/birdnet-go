@@ -3,8 +3,10 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"net/http"
@@ -68,6 +70,7 @@ type HLSStreamInfo struct {
 type HLSStreamStatus struct {
 	Status        string `json:"status"`                 // "starting" or "ready"
 	Source        string `json:"source"`                 // Source identifier (URL-encoded)
+	StreamToken   string `json:"stream_token,omitempty"` // Crypto-random token for secure URL access
 	PlaylistURL   string `json:"playlist_url,omitempty"` // API URL for the playlist (not filesystem path)
 	ActiveClients int    `json:"active_clients"`
 	PlaylistReady bool   `json:"playlist_ready"`
@@ -75,8 +78,8 @@ type HLSStreamStatus struct {
 
 // HLSHeartbeatRequest represents a client heartbeat message
 type HLSHeartbeatRequest struct {
-	SourceID string `json:"source_id"`
-	ClientID string `json:"client_id,omitempty"` // Optional, server can identify from request
+	StreamToken string `json:"stream_token"`
+	ClientID    string `json:"client_id,omitempty"` // Optional, server can identify from request
 }
 
 // hlsManager manages HLS streaming state
@@ -104,6 +107,11 @@ type hlsManager struct {
 	clientLogTime   map[string]time.Time
 	clientLogTimeMu sync.Mutex
 
+	// Stream token mappings for secure URL access
+	tokens       map[string]string // streamToken → sourceID
+	sourceTokens map[string]string // sourceID → streamToken (reverse lookup)
+	tokensMu     sync.RWMutex      // Protects both token maps
+
 	// Activity sync lifecycle management
 	activitySyncOnce   sync.Once
 	activitySyncCancel context.CancelFunc
@@ -117,6 +125,8 @@ var hlsMgr = &hlsManager{
 	activity:       make(map[string]time.Time),
 	clientActivity: make(map[string]time.Time),
 	clientLogTime:  make(map[string]time.Time),
+	tokens:         make(map[string]string),
+	sourceTokens:   make(map[string]string),
 	verboseLogging: os.Getenv(hlsVerboseEnvVar) != "",
 }
 
@@ -135,11 +145,14 @@ func (c *Controller) initHLSRoutes() {
 	hlsGroup.POST("/:sourceID/start", c.StartHLSStream, c.publicLiveAudioAuth)
 	hlsGroup.POST("/:sourceID/stop", c.StopHLSStream, authMiddleware)
 
-	// Public endpoints - no authentication required
-	hlsGroup.POST("/heartbeat", c.HLSHeartbeat)
-	hlsGroup.GET("/status", c.GetHLSStatus)
-	hlsGroup.GET("/:sourceID/playlist.m3u8", c.ServeHLSPlaylist)
-	hlsGroup.GET("/:sourceID/*", c.ServeHLSContent)
+	// Auth-gated endpoints
+	hlsGroup.POST("/heartbeat", c.HLSHeartbeat, c.publicLiveAudioAuth)
+	hlsGroup.GET("/status", c.GetHLSStatus, c.publicLiveAudioAuth)
+
+	// Token-based content serving
+	hlsTokenGroup := hlsGroup.Group("/t")
+	hlsTokenGroup.GET("/:streamToken/playlist.m3u8", c.ServeHLSPlaylist)
+	hlsTokenGroup.GET("/:streamToken/*", c.ServeHLSContent)
 
 	// Start the HLS activity sync goroutine (only once across all controller instances)
 	hlsMgr.activitySyncOnce.Do(func() {
@@ -162,6 +175,60 @@ func (c *Controller) publicLiveAudioAuth(next echo.HandlerFunc) echo.HandlerFunc
 			return next(ctx)
 		}
 		return c.authMiddleware(next)(ctx)
+	}
+}
+
+// generateStreamToken creates a crypto-random 32-character hex token for stream URL access.
+func generateStreamToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate stream token: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// getOrCreateStreamToken returns the existing token for a sourceID, or creates a new one.
+// Uses double-checked locking to avoid generating redundant tokens under contention.
+func getOrCreateStreamToken(sourceID string) (string, error) {
+	hlsMgr.tokensMu.RLock()
+	if token, exists := hlsMgr.sourceTokens[sourceID]; exists {
+		hlsMgr.tokensMu.RUnlock()
+		return token, nil
+	}
+	hlsMgr.tokensMu.RUnlock()
+
+	token, err := generateStreamToken()
+	if err != nil {
+		return "", err
+	}
+
+	hlsMgr.tokensMu.Lock()
+	if existing, exists := hlsMgr.sourceTokens[sourceID]; exists {
+		hlsMgr.tokensMu.Unlock()
+		return existing, nil
+	}
+	hlsMgr.tokens[token] = sourceID
+	hlsMgr.sourceTokens[sourceID] = token
+	hlsMgr.tokensMu.Unlock()
+
+	return token, nil
+}
+
+// resolveStreamToken looks up the sourceID for a given stream token.
+// Returns empty string if the token is not found.
+func resolveStreamToken(token string) string {
+	hlsMgr.tokensMu.RLock()
+	defer hlsMgr.tokensMu.RUnlock()
+	return hlsMgr.tokens[token]
+}
+
+// removeStreamToken removes the token mappings for a sourceID.
+func removeStreamToken(sourceID string) {
+	hlsMgr.tokensMu.Lock()
+	defer hlsMgr.tokensMu.Unlock()
+	if token, exists := hlsMgr.sourceTokens[sourceID]; exists {
+		delete(hlsMgr.tokens, token)
+		delete(hlsMgr.sourceTokens, sourceID)
 	}
 }
 
@@ -232,9 +299,14 @@ func (c *Controller) buildHLSStreamResponse(ctx echo.Context, sourceID string, s
 	// Get client count
 	clientCount := getStreamClientCount(sourceID)
 
-	// Build the API URL for the playlist (not the filesystem path)
-	encodedSourceID := url.PathEscape(sourceID)
-	playlistURL := fmt.Sprintf("/api/v2/streams/hls/%s/playlist.m3u8", encodedSourceID)
+	// Generate or retrieve stream token for secure URL access
+	token, err := getOrCreateStreamToken(sourceID)
+	if err != nil {
+		return c.HandleError(ctx, err, "Failed to generate stream token", http.StatusInternalServerError)
+	}
+
+	// Build the API URL using the stream token (not the sourceID)
+	playlistURL := fmt.Sprintf("/api/v2/streams/hls/t/%s/playlist.m3u8", token)
 
 	// Determine playlist ready status
 	var isReady bool
@@ -250,12 +322,14 @@ func (c *Controller) buildHLSStreamResponse(ctx echo.Context, sourceID string, s
 		status = "ready"
 		c.logAPIRequest(ctx, logger.LogLevelInfo, "HLS stream ready",
 			logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)),
+			logger.String("stream_token", token[:8]+"..."),
 			logger.String("playlist_url", playlistURL))
 	}
 
 	return ctx.JSON(http.StatusOK, HLSStreamStatus{
 		Status:        status,
-		Source:        encodedSourceID,
+		Source:        url.PathEscape(sourceID),
+		StreamToken:   token,
 		PlaylistURL:   playlistURL,
 		ActiveClients: clientCount,
 		PlaylistReady: isReady,
@@ -330,24 +404,31 @@ func (c *Controller) HLSHeartbeat(ctx echo.Context) error {
 		return c.HandleError(ctx, err, "Invalid heartbeat format", http.StatusBadRequest)
 	}
 
+	// Resolve stream token to sourceID
+	sourceID := resolveStreamToken(heartbeat.StreamToken)
+	if sourceID == "" {
+		// Return OK silently to avoid revealing the token mechanism
+		return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	}
+
 	clientID := c.generateClientID(ctx)
 
 	// Handle disconnection announcements
 	if ctx.QueryParam("disconnect") == QueryValueTrue || ctx.QueryParam("status") == "disconnect" {
-		return c.handleHLSDisconnect(ctx, heartbeat.SourceID, clientID)
+		return c.handleHLSDisconnect(ctx, sourceID, clientID)
 	}
 
 	// Validate stream exists
-	if !c.hlsStreamExists(heartbeat.SourceID) {
+	if !c.hlsStreamExists(sourceID) {
 		if hlsMgr.verboseLogging {
 			c.logAPIRequest(ctx, logger.LogLevelWarn, "Heartbeat for non-existent stream",
-				logger.String("source_id", privacy.SanitizeRTSPUrl(heartbeat.SourceID)))
+				logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)))
 		}
 		return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}
 
 	// Update activity
-	c.updateHLSActivity(heartbeat.SourceID, clientID, "heartbeat")
+	c.updateHLSActivity(sourceID, clientID, "heartbeat")
 
 	return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -364,11 +445,20 @@ func (c *Controller) GetHLSStatus(ctx echo.Context) error {
 	streams := make([]HLSStreamStatus, 0, len(streamsCopy))
 	for sourceID, stream := range streamsCopy {
 		encodedSourceID := url.PathEscape(sourceID)
-		playlistURL := fmt.Sprintf("/api/v2/streams/hls/%s/playlist.m3u8", encodedSourceID)
+
+		// Use token-based playlist URL if token exists
+		var playlistURL string
+		hlsMgr.tokensMu.RLock()
+		token, hasToken := hlsMgr.sourceTokens[sourceID]
+		hlsMgr.tokensMu.RUnlock()
+		if hasToken {
+			playlistURL = fmt.Sprintf("/api/v2/streams/hls/t/%s/playlist.m3u8", token)
+		}
 
 		// Check actual playlist readiness instead of hardcoding true
 		playlistReady := c.checkHLSPlaylistReady(stream)
 
+		// Intentionally omit StreamToken from status response to prevent token leakage
 		streams = append(streams, HLSStreamStatus{
 			Status:        "active",
 			Source:        encodedSourceID,
@@ -385,11 +475,12 @@ func (c *Controller) GetHLSStatus(ctx echo.Context) error {
 }
 
 // ServeHLSPlaylist serves the HLS playlist file
-// GET /api/v2/streams/hls/:sourceID/playlist.m3u8
+// GET /api/v2/streams/hls/t/:streamToken/playlist.m3u8
 func (c *Controller) ServeHLSPlaylist(ctx echo.Context) error {
-	sourceID, err := c.validateAndDecodeSourceID(ctx)
-	if err != nil {
-		return err
+	streamToken := ctx.Param("streamToken")
+	sourceID := resolveStreamToken(streamToken)
+	if sourceID == "" {
+		return c.HandleError(ctx, nil, "Stream not found", http.StatusNotFound)
 	}
 
 	clientID := c.generateClientID(ctx)
@@ -448,11 +539,12 @@ func (c *Controller) ServeHLSPlaylist(ctx echo.Context) error {
 }
 
 // ServeHLSContent serves HLS segment files
-// GET /api/v2/streams/hls/:sourceID/*
+// GET /api/v2/streams/hls/t/:streamToken/*
 func (c *Controller) ServeHLSContent(ctx echo.Context) error {
-	sourceID, err := c.validateAndDecodeSourceID(ctx)
-	if err != nil {
-		return err
+	streamToken := ctx.Param("streamToken")
+	sourceID := resolveStreamToken(streamToken)
+	if sourceID == "" {
+		return c.HandleError(ctx, nil, "Stream not found", http.StatusNotFound)
 	}
 
 	clientID := c.generateClientID(ctx)
@@ -742,11 +834,22 @@ func (c *Controller) getOrCreateHLSStream(_ context.Context, sourceID string) (*
 		go c.feedAudioToFFmpeg(sourceID, stream.FifoPipe, stream.ctx)
 	}
 
-	// Start context cleanup goroutine
-	go func() {
-		<-streamCtx.Done()
-		c.cleanupHLSStream(sourceID)
-	}()
+	// Start context cleanup goroutine — pass stream pointer to verify identity
+	// before cleanup, preventing a force-restarted stream from being killed
+	// by the old stream's context cancellation goroutine.
+	go func(s *HLSStreamInfo) {
+		<-s.ctx.Done()
+		hlsMgr.streamsMu.Lock()
+		current, exists := hlsMgr.streams[sourceID]
+		if exists && current == s {
+			delete(hlsMgr.streams, sourceID)
+			removeStreamToken(sourceID)
+			hlsMgr.streamsMu.Unlock()
+			c.performHLSCleanup(sourceID, s, "context cancelled")
+		} else {
+			hlsMgr.streamsMu.Unlock()
+		}
+	}(stream)
 
 	return stream, nil
 }
@@ -1068,6 +1171,13 @@ func (c *Controller) updateHLSActivity(sourceID, clientID, activityType string, 
 		hlsMgr.clientsMu.Unlock()
 	}
 
+	// Update per-client activity for premature disconnect detection
+	if clientID != "" {
+		hlsMgr.activityMu.Lock()
+		hlsMgr.clientActivity[sourceID+":"+clientID] = time.Now()
+		hlsMgr.activityMu.Unlock()
+	}
+
 	// Update activity timestamp
 	hlsMgr.activityMu.Lock()
 	extraTime := time.Duration(0)
@@ -1156,6 +1266,7 @@ func (c *Controller) cleanupExistingHLSStream(sourceID string) {
 	outputDir := stream.OutputDir
 	logFile := stream.logFile
 	delete(hlsMgr.streams, sourceID)
+	removeStreamToken(sourceID)
 	hlsMgr.streamsMu.Unlock()
 
 	// Wait for process termination
@@ -1192,22 +1303,6 @@ func (c *Controller) cleanupExistingHLSStream(sourceID string) {
 	}
 }
 
-// cleanupHLSStream performs full stream cleanup
-func (c *Controller) cleanupHLSStream(sourceID string) {
-	hlsMgr.streamsMu.Lock()
-	stream, exists := hlsMgr.streams[sourceID]
-	if !exists {
-		hlsMgr.streamsMu.Unlock()
-		return
-	}
-
-	GetLogger().Debug("Cleaning up HLS stream", logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)))
-	delete(hlsMgr.streams, sourceID)
-	hlsMgr.streamsMu.Unlock()
-
-	c.performHLSCleanup(sourceID, stream, "context cancelled")
-}
-
 // stopHLSStream stops a stream with a specific reason
 func (c *Controller) stopHLSStream(sourceID, reason string) {
 	hlsMgr.streamsMu.Lock()
@@ -1219,6 +1314,7 @@ func (c *Controller) stopHLSStream(sourceID, reason string) {
 
 	GetLogger().Info("Stopping HLS stream", logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)), logger.String("reason", reason))
 	delete(hlsMgr.streams, sourceID)
+	removeStreamToken(sourceID)
 	hlsMgr.streamsMu.Unlock()
 
 	c.performHLSCleanup(sourceID, stream, reason)
@@ -1402,6 +1498,12 @@ func (c *Controller) CleanupAllHLSStreams() error {
 	clear(hlsMgr.streams)
 	hlsMgr.streamsMu.Unlock()
 
+	// Clear token mappings
+	hlsMgr.tokensMu.Lock()
+	clear(hlsMgr.tokens)
+	clear(hlsMgr.sourceTokens)
+	hlsMgr.tokensMu.Unlock()
+
 	// Cleanup each stream
 	for sourceID, stream := range streamsToClean {
 		c.performHLSCleanup(sourceID, stream, "server shutdown")
@@ -1567,11 +1669,16 @@ func cleanupInactiveStreams(streamsToCleanup []string) {
 // removeStreamFromManager removes a stream from the manager and returns it
 func removeStreamFromManager(sourceID string) *HLSStreamInfo {
 	hlsMgr.streamsMu.Lock()
-	defer hlsMgr.streamsMu.Unlock()
-
 	stream, exists := hlsMgr.streams[sourceID]
 	if exists {
 		delete(hlsMgr.streams, sourceID)
+		// Remove token while still holding streamsMu to prevent race:
+		// a new stream could create a token between unlock and removeStreamToken.
+		removeStreamToken(sourceID)
+	}
+	hlsMgr.streamsMu.Unlock()
+
+	if exists {
 		return stream
 	}
 	return nil
