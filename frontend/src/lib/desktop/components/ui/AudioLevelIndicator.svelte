@@ -494,10 +494,9 @@
       const encodedSourceId = encodeURIComponent(previousSource);
       fetchWithCSRF(`/api/v2/streams/hls/${encodedSourceId}/stop`, {
         method: 'POST',
+        keepalive: true,
         body: { session_id: sessionId },
-      }).catch(_err => {
-        // Failed to notify server of playback stop
-      });
+      }).catch(() => {});
     }
   }
 

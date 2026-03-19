@@ -896,7 +896,7 @@ func (c *Controller) createHLSStream(sourceID string) (*HLSStreamInfo, error) {
 	// cancel the stream context to trigger cleanup via the context goroutine below.
 	if runtime.GOOS != OSWindows {
 		go func() {
-			c.feedAudioToFFmpeg(sourceID, stream.FifoPipe, stream.ctx)
+			c.feedAudioToFFmpeg(stream.ctx, sourceID, stream.FifoPipe)
 			if stream.ctx.Err() == nil {
 				GetLogger().Warn("Audio feed exited unexpectedly, cancelling stream",
 					logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)))
@@ -1199,7 +1199,7 @@ func writeToFIFO(ctx context.Context, fifo *os.File, data []byte) error {
 }
 
 // feedAudioToFFmpeg feeds audio data to FFmpeg via FIFO (Unix platforms)
-func (c *Controller) feedAudioToFFmpeg(sourceID, pipePath string, ctx context.Context) {
+func (c *Controller) feedAudioToFFmpeg(ctx context.Context, sourceID, pipePath string) {
 	sanitizedID := privacy.SanitizeRTSPUrl(sourceID)
 	GetLogger().Debug("Starting audio feed", logger.String("source_id", sanitizedID), logger.String("pipe_path", pipePath))
 
