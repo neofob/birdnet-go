@@ -1,0 +1,167 @@
+{
+  "version": "2",
+  "templates": [
+    {
+      "type": 3,
+      "title": "BirdNET-Go",
+      "description": "Real-time bird sound identification using BirdNET. Analyzes audio from a microphone or RTSP stream and identifies bird species.",
+      "categories": ["Nature", "Audio", "AI"],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/tphakala/birdnet-go/main/doc/BirdNET-Go-logo.webp",
+      "repository": {
+        "url": "https://github.com/tphakala/birdnet-go",
+        "stackfile": "Docker/docker-compose.yml"
+      },
+      "env": [
+        {
+          "name": "TZ",
+          "label": "Timezone",
+          "description": "Container timezone (IANA format, e.g. America/New_York, Europe/Helsinki)",
+          "default": "UTC"
+        },
+        {
+          "name": "BIRDNET_UID",
+          "label": "User ID",
+          "description": "User ID for file ownership. Run 'id -u' on host to find yours.",
+          "default": "1000"
+        },
+        {
+          "name": "BIRDNET_GID",
+          "label": "Group ID",
+          "description": "Group ID for file ownership. Run 'id -g' on host to find yours.",
+          "default": "1000"
+        },
+        {
+          "name": "WEB_PORT",
+          "label": "Web UI Port",
+          "description": "Host port for the web interface",
+          "default": "8080"
+        },
+        {
+          "name": "BIRDNET_LOCALE",
+          "label": "Locale",
+          "description": "Language for species names (e.g. en-us, fi, de, sv)",
+          "default": "en-us",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_LATITUDE",
+          "label": "Latitude",
+          "description": "Your location latitude (-90.0 to 90.0) for species range filtering",
+          "default": "",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_LONGITUDE",
+          "label": "Longitude",
+          "description": "Your location longitude (-180.0 to 180.0) for species range filtering",
+          "default": "",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_SENSITIVITY",
+          "label": "Sensitivity",
+          "description": "Detection sensitivity (0.1 to 1.5, higher = more sensitive)",
+          "default": "1.0",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_THRESHOLD",
+          "label": "Confidence Threshold",
+          "description": "Minimum confidence for detections (0.0 to 1.0)",
+          "default": "0.8",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_OVERLAP",
+          "label": "Audio Overlap",
+          "description": "Audio chunk overlap in seconds (0.0 to 2.9)",
+          "default": "1.5",
+          "preset": true
+        }
+      ],
+      "note": "<p>After deployment, access the web UI at <code>http://your-host:8080</code>.</p><p>For audio capture from a local microphone, ensure <code>/dev/snd</code> is accessible. For RTSP streams, configure the stream URL in the web UI after first launch.</p><p>See <a href=\"https://github.com/tphakala/birdnet-go\" target=\"_blank\">GitHub</a> for full documentation.</p>"
+    },
+    {
+      "type": 3,
+      "title": "BirdNET-Go (AutoTLS)",
+      "description": "BirdNET-Go with automatic HTTPS certificates via Let's Encrypt. Use this for internet-facing deployments with a domain name.",
+      "categories": ["Nature", "Audio", "AI"],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/tphakala/birdnet-go/main/doc/BirdNET-Go-logo.webp",
+      "repository": {
+        "url": "https://github.com/tphakala/birdnet-go",
+        "stackfile": "Docker/docker-compose.autotls.yml"
+      },
+      "env": [
+        {
+          "name": "BIRDNET_HOST",
+          "label": "Domain Name",
+          "description": "Your domain name for TLS certificate (e.g. birds.example.com). Required.",
+          "default": ""
+        },
+        {
+          "name": "TZ",
+          "label": "Timezone",
+          "description": "Container timezone (IANA format, e.g. America/New_York, Europe/Helsinki)",
+          "default": "UTC"
+        },
+        {
+          "name": "BIRDNET_UID",
+          "label": "User ID",
+          "description": "User ID for file ownership. Run 'id -u' on host to find yours.",
+          "default": "1000"
+        },
+        {
+          "name": "BIRDNET_GID",
+          "label": "Group ID",
+          "description": "Group ID for file ownership. Run 'id -g' on host to find yours.",
+          "default": "1000"
+        },
+        {
+          "name": "BIRDNET_LOCALE",
+          "label": "Locale",
+          "description": "Language for species names (e.g. en-us, fi, de, sv)",
+          "default": "en-us",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_LATITUDE",
+          "label": "Latitude",
+          "description": "Your location latitude (-90.0 to 90.0) for species range filtering",
+          "default": "",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_LONGITUDE",
+          "label": "Longitude",
+          "description": "Your location longitude (-180.0 to 180.0) for species range filtering",
+          "default": "",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_SENSITIVITY",
+          "label": "Sensitivity",
+          "description": "Detection sensitivity (0.1 to 1.5, higher = more sensitive)",
+          "default": "1.0",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_THRESHOLD",
+          "label": "Confidence Threshold",
+          "description": "Minimum confidence for detections (0.0 to 1.0)",
+          "default": "0.8",
+          "preset": true
+        },
+        {
+          "name": "BIRDNET_OVERLAP",
+          "label": "Audio Overlap",
+          "description": "Audio chunk overlap in seconds (0.0 to 2.9)",
+          "default": "1.5",
+          "preset": true
+        }
+      ],
+      "note": "<p>This template enables automatic HTTPS via Let's Encrypt. Your domain must point to this server and ports 80/443 must be accessible from the internet.</p><p><strong>Required:</strong> Set your domain name in the <code>BIRDNET_HOST</code> variable.</p><p>See <a href=\"https://github.com/tphakala/birdnet-go\" target=\"_blank\">GitHub</a> for full documentation.</p>"
+    }
+  ]
+}
