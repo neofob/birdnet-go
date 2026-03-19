@@ -10,7 +10,7 @@
 <script lang="ts">
   import Hls from 'hls.js';
   import ReconnectingEventSource from 'reconnecting-eventsource';
-  import { untrack } from 'svelte';
+  import { onMount } from 'svelte';
 
   import { Radio, AlertCircle, Loader2, Play, Maximize, Minimize, Mic } from '@lucide/svelte';
   import { t } from '$lib/i18n';
@@ -383,20 +383,11 @@
     spectro.setGain(db);
   }
 
-  // $derived memoizes the boolean so the effect only re-runs when the
-  // access result actually changes (true↔false), not on every internal
-  // auth state mutation (e.g., token refresh).
-  const hasAccess = $derived(hasLiveAudioAccess());
-
-  // $effect (not onMount) so the block re-runs when auth state changes,
-  // establishing SSE connection if user logs in after page mount.
-  //
-  // IMPORTANT: Only `hasAccess` should be a tracked dependency. Wrap side effects
-  // in untrack() to prevent reactive reads inside connectSSE()/stopStream() from
-  // becoming dependencies that cause effect_update_depth_exceeded loops.
-  $effect(() => {
-    if (hasAccess) {
-      untrack(() => connectSSE());
+  // Use onMount (NOT $effect) to avoid reactive dependency loops.
+  // See MiniSpectrogram.svelte for detailed explanation.
+  onMount(() => {
+    if (hasLiveAudioAccess()) {
+      connectSSE();
     }
 
     return () => {

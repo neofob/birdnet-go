@@ -15,7 +15,7 @@
 
   import Hls from 'hls.js';
   import ReconnectingEventSource from 'reconnecting-eventsource';
-  import { untrack } from 'svelte';
+  import { onMount } from 'svelte';
 
   import { Volume, Volume1, Volume2, VolumeX, Play, Square } from '@lucide/svelte';
   import { t } from '$lib/i18n';
@@ -348,28 +348,17 @@
     }
   }
 
-  // $derived memoizes the boolean so the effect only re-runs when the
-  // access result actually changes, not on every internal auth state mutation.
-  const hasAccess = $derived(hasLiveAudioAccess());
-
-  // $effect (not onMount) so the block re-runs when auth state changes,
-  // starting the stream if user logs in after page mount.
-  //
-  // IMPORTANT: Only `hasAccess` should be a tracked dependency. Everything else
-  // must be wrapped in untrack() to prevent effect_update_depth_exceeded:
-  // - shouldAutoStart() reads appState.liveSpectrogram
-  // - start() reads isActive/isConnecting ($state) and writes isConnecting=true
-  //   If these are tracked, the write triggers a re-run → cleanup sets them false
-  //   → re-run → write → cleanup → infinite loop
-  $effect(() => {
-    if (hasAccess) {
-      untrack(() => {
-        if (shouldAutoStart()) {
-          start();
-        }
-      });
+  // Use onMount (NOT $effect) for auto-start. This is fire-once initialization:
+  // - $effect caused effect_update_depth_exceeded because start() reads $state
+  //   variables (isActive, isConnecting) which become tracked dependencies,
+  //   creating a cleanup→restart infinite loop.
+  // - The "re-run on auth change" use case ($effect) is not worth the complexity;
+  //   if a user logs in after mount, they can click the play button.
+  onMount(() => {
+    if (hasLiveAudioAccess() && shouldAutoStart()) {
+      start();
     }
-    return () => stopRuntime();
+    return () => stop();
   });
 </script>
 
