@@ -15,7 +15,7 @@
 
   import Hls from 'hls.js';
   import ReconnectingEventSource from 'reconnecting-eventsource';
-  import { onMount } from 'svelte';
+
   import { Volume, Volume1, Volume2, VolumeX, Play, Square } from '@lucide/svelte';
   import { t } from '$lib/i18n';
   import { appState, hasLiveAudioAccess } from '$lib/stores/appState.svelte';
@@ -64,6 +64,7 @@
   let audioElement: HTMLAudioElement | null = null;
   let heartbeatTimer: ReturnType<typeof globalThis.setInterval> | null = null;
   let abortController: AbortController | null = null;
+  let activeSourceId: string | null = null;
 
   // Initialize composable during component init (must be at top level for $effect cleanup)
   const spectro = useSpectrogramAnalyser({ fftSize: FFT_SIZE, audioOutput: false });
@@ -165,6 +166,10 @@
       }
 
       const encodedSourceId = encodeURIComponent(sourceId);
+
+      // Capture source before await so stop() can clean up if the request
+      // is aborted after the server processes it
+      activeSourceId = sourceId;
 
       const data = await fetchWithCSRF<{
         status: string;
@@ -275,12 +280,24 @@
     }
   }
 
-  function stop() {
-    // Abort any in-flight async work first
+  // stopRuntime tears down the stream without clearing localStorage persistence.
+  // Used by $effect cleanup so reactive re-runs don't erase the user's play preference.
+  function stopRuntime() {
     abortController?.abort();
     abortController = null;
 
-    // Send disconnect heartbeat
+    // Send explicit stop for immediate server-side client removal
+    if (activeSourceId) {
+      const encodedSourceId = encodeURIComponent(activeSourceId);
+      fetchWithCSRF(`/api/v2/streams/hls/${encodedSourceId}/stop`, {
+        method: 'POST',
+        keepalive: true,
+        body: { session_id: sessionId },
+      }).catch(() => {});
+      activeSourceId = null;
+    }
+
+    // Send disconnect heartbeat as fallback
     if (activeStreamToken) {
       fetchWithCSRF('/api/v2/streams/hls/heartbeat?disconnect=true', {
         method: 'POST',
@@ -305,6 +322,12 @@
 
     isActive = false;
     isConnecting = false;
+  }
+
+  // stop tears down the stream AND clears the user's auto-start preference.
+  // Used by explicit user actions (stop button, fatal errors).
+  function stop() {
+    stopRuntime();
     persistToggleState(false);
   }
 
@@ -317,11 +340,17 @@
     }
   }
 
-  onMount(() => {
-    if (hasLiveAudioAccess() && shouldAutoStart()) {
+  // $derived memoizes the boolean so the effect only re-runs when the
+  // access result actually changes, not on every internal auth state mutation.
+  const hasAccess = $derived(hasLiveAudioAccess());
+
+  // $effect (not onMount) so the block re-runs when auth state changes,
+  // starting the stream if user logs in after page mount.
+  $effect(() => {
+    if (hasAccess && shouldAutoStart()) {
       start();
     }
-    return () => stop();
+    return () => stopRuntime();
   });
 </script>
 
