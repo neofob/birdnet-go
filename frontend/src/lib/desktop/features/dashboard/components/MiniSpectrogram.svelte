@@ -347,11 +347,20 @@
 
   // $effect (not onMount) so the block re-runs when auth state changes,
   // starting the stream if user logs in after page mount.
-  // shouldAutoStart() reads appState.liveSpectrogram — untrack it so the
-  // effect only re-runs on auth changes, not every appState mutation during startup.
+  //
+  // IMPORTANT: Only `hasAccess` should be a tracked dependency. Everything else
+  // must be wrapped in untrack() to prevent effect_update_depth_exceeded:
+  // - shouldAutoStart() reads appState.liveSpectrogram
+  // - start() reads isActive/isConnecting ($state) and writes isConnecting=true
+  //   If these are tracked, the write triggers a re-run → cleanup sets them false
+  //   → re-run → write → cleanup → infinite loop
   $effect(() => {
-    if (hasAccess && untrack(() => shouldAutoStart())) {
-      start();
+    if (hasAccess) {
+      untrack(() => {
+        if (shouldAutoStart()) {
+          start();
+        }
+      });
     }
     return () => stopRuntime();
   });

@@ -10,6 +10,7 @@
 <script lang="ts">
   import Hls from 'hls.js';
   import ReconnectingEventSource from 'reconnecting-eventsource';
+  import { untrack } from 'svelte';
 
   import { Radio, AlertCircle, Loader2, Play, Maximize, Minimize, Mic } from '@lucide/svelte';
   import { t } from '$lib/i18n';
@@ -389,9 +390,13 @@
 
   // $effect (not onMount) so the block re-runs when auth state changes,
   // establishing SSE connection if user logs in after page mount.
+  //
+  // IMPORTANT: Only `hasAccess` should be a tracked dependency. Wrap side effects
+  // in untrack() to prevent reactive reads inside connectSSE()/stopStream() from
+  // becoming dependencies that cause effect_update_depth_exceeded loops.
   $effect(() => {
     if (hasAccess) {
-      connectSSE();
+      untrack(() => connectSSE());
     }
 
     return () => {
