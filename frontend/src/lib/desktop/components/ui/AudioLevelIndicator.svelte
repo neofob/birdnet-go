@@ -5,6 +5,8 @@
   import { loggers } from '$lib/utils/logger';
   import { fetchWithCSRF } from '$lib/utils/api';
   import { buildAppUrl } from '$lib/utils/urlHelpers';
+  import { generateSessionId } from '$lib/utils/session';
+  import { hasLiveAudioAccess } from '$lib/stores/appState.svelte';
   import Hls from 'hls.js';
   import type { ErrorData } from 'hls.js';
   import { HLS_AUDIO_CONFIG, BUFFERING_STRATEGY, ERROR_HANDLING } from './hls-config';
@@ -23,21 +25,11 @@
 
   interface Props {
     className?: string;
-    securityEnabled?: boolean;
-    accessAllowed?: boolean;
-    publicLiveAudio?: boolean;
   }
 
-  // PERFORMANCE OPTIMIZATION: Cache HLS availability check with $derived
-  // Now using imported Hls instead of global window.Hls
-  let hlsSupported = $derived(typeof window !== 'undefined' && Hls.isSupported());
+  const hlsSupported = typeof window !== 'undefined' && Hls.isSupported();
 
-  let {
-    className = '',
-    securityEnabled = false,
-    accessAllowed = true,
-    publicLiveAudio = false,
-  }: Props = $props();
+  let { className = '' }: Props = $props();
 
   // Stream token state
   let activeStreamToken: string | null = null;
@@ -57,12 +49,15 @@
   const ZERO_LEVEL_TIMEOUT = 5000;
   const HEARTBEAT_INTERVAL = 20000;
 
+  const sessionId = generateSessionId();
+
   // Internal state
   let eventSource: ReconnectingEventSource | null = null;
   let audioElement: HTMLAudioElement | null = null;
   let hlsInstance: Hls | null = null;
   let zeroLevelTime: { [key: string]: number } = {};
   let heartbeatTimer: ReturnType<typeof globalThis.setInterval> | null = null;
+  let startRequestId = 0;
   let dropdownRef = $state<HTMLDivElement>();
   let buttonRef = $state<HTMLButtonElement>();
 
@@ -277,7 +272,7 @@
       try {
         await fetchWithCSRF('/api/v2/streams/hls/heartbeat', {
           method: 'POST',
-          body: { stream_token: activeStreamToken },
+          body: { stream_token: activeStreamToken, session_id: sessionId },
         });
       } catch {
         // Failed to send heartbeat - ignore
@@ -300,7 +295,7 @@
       fetchWithCSRF('/api/v2/streams/hls/heartbeat?disconnect=true', {
         method: 'POST',
         keepalive: true,
-        body: { stream_token: activeStreamToken },
+        body: { stream_token: activeStreamToken, session_id: sessionId },
       }).catch(() => {
         // Ignore errors during disconnect
       });
@@ -308,7 +303,7 @@
   }
 
   // Setup HLS streaming
-  async function setupHLSStream(hlsUrl: string, _sourceId: string) {
+  async function setupHLSStream(hlsUrl: string) {
     const audio = getAudioElement();
     if (!audio) return;
 
@@ -425,6 +420,7 @@
     // Starting audio playback for source
     stopPlayback();
 
+    const requestId = ++startRequestId;
     playingSource = sourceId;
     showStatusMessage('Starting audio stream...');
 
@@ -439,14 +435,24 @@
         playlist_ready: boolean;
       }>(`/api/v2/streams/hls/${encodedSourceId}/start`, {
         method: 'POST',
+        body: { session_id: sessionId },
       });
+
+      // Discard stale response if user switched sources during fetch
+      if (requestId !== startRequestId) return;
 
       activeStreamToken = data.stream_token;
       const hlsUrl = buildAppUrl(data.playlist_url);
-      await setupHLSStream(hlsUrl, sourceId);
+      await setupHLSStream(hlsUrl);
+
+      // Re-check after second await
+      if (requestId !== startRequestId) return;
 
       startHeartbeat();
     } catch (error) {
+      // Only show error if this is still the active request
+      if (requestId !== startRequestId) return;
+
       // Handle audio stream access error
       const message =
         error instanceof Error && error.message.includes('permission')
@@ -488,6 +494,7 @@
       const encodedSourceId = encodeURIComponent(previousSource);
       fetchWithCSRF(`/api/v2/streams/hls/${encodedSourceId}/stop`, {
         method: 'POST',
+        body: { session_id: sessionId },
       }).catch(_err => {
         // Failed to notify server of playback stop
       });
@@ -624,7 +631,7 @@
     </div>
   {/if}
 
-  {#if !securityEnabled || accessAllowed || publicLiveAudio}
+  {#if hasLiveAudioAccess()}
     <!-- Dropdown menu -->
     {#if dropdownOpen}
       <div

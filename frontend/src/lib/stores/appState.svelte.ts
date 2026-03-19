@@ -141,6 +141,19 @@ const DEFAULT_STATE: AppState = {
 export const appState: AppState = $state({ ...DEFAULT_STATE });
 
 /**
+ * Whether the current user has access to live audio features.
+ * Centralized check: security disabled, user authenticated, or public live audio enabled.
+ * Exported as a function because Svelte 5 does not allow exporting $derived from modules.
+ */
+export function hasLiveAudioAccess(): boolean {
+  return (
+    !appState.security.enabled ||
+    appState.security.accessAllowed ||
+    appState.security.publicAccess.liveAudio
+  );
+}
+
+/**
  * Delays execution for the specified number of milliseconds.
  */
 function delay(ms: number): Promise<void> {

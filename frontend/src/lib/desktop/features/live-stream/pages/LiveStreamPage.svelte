@@ -21,13 +21,16 @@
   import type { SelectOption } from '$lib/desktop/components/forms/SelectDropdown.types';
   import { fetchWithCSRF } from '$lib/utils/api';
   import { buildAppUrl } from '$lib/utils/urlHelpers';
+  import { generateSessionId } from '$lib/utils/session';
   import { loggers } from '$lib/utils/logger';
   import type { ColorMapName } from '$lib/utils/spectrogramColorMaps';
-  import { appState } from '$lib/stores/appState.svelte';
+  import { hasLiveAudioAccess } from '$lib/stores/appState.svelte';
 
   const logger = loggers.audio;
   const FFT_SIZE = 1024;
   const HEARTBEAT_INTERVAL = 20000;
+
+  const sessionId = generateSessionId();
 
   interface AudioLevelData {
     level: number;
@@ -61,13 +64,6 @@
   let heartbeatTimer: ReturnType<typeof globalThis.setInterval> | null = null;
   let abortController: AbortController | null = null;
   let activeStreamToken: string | null = null;
-
-  // Access control
-  const hasAudioAccess = $derived(
-    !appState.security.enabled ||
-      appState.security.accessAllowed ||
-      appState.security.publicAccess.liveAudio
-  );
 
   // Initialize composable during component init (registers cleanup $effect)
   const spectro = useSpectrogramAnalyser({ fftSize: FFT_SIZE, audioOutput: true });
@@ -140,6 +136,7 @@
       }>(`/api/v2/streams/hls/${encodedSourceId}/start`, {
         method: 'POST',
         signal,
+        body: { session_id: sessionId },
       });
 
       if (signal.aborted) return;
@@ -294,7 +291,7 @@
       try {
         await fetchWithCSRF('/api/v2/streams/hls/heartbeat', {
           method: 'POST',
-          body: { stream_token: token },
+          body: { stream_token: token, session_id: sessionId },
         });
       } catch {
         // Ignore heartbeat errors
@@ -323,7 +320,7 @@
       fetchWithCSRF('/api/v2/streams/hls/heartbeat?disconnect=true', {
         method: 'POST',
         keepalive: true,
-        body: { stream_token: activeStreamToken },
+        body: { stream_token: activeStreamToken, session_id: sessionId },
       }).catch(() => {});
     }
 
@@ -369,7 +366,7 @@
   }
 
   onMount(() => {
-    if (hasAudioAccess) {
+    if (hasLiveAudioAccess()) {
       connectSSE();
     }
 
@@ -413,7 +410,7 @@
   }
 </script>
 
-{#if hasAudioAccess}
+{#if hasLiveAudioAccess()}
   <div
     bind:this={cardEl}
     class={isFullscreen

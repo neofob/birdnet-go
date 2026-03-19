@@ -4,11 +4,15 @@ package api
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -337,25 +341,24 @@ func TestHLSManagerConcurrency(t *testing.T) {
 	})
 }
 
-// TestHLSHeartbeatRequest tests the heartbeat request struct
+// TestHLSHeartbeatRequest tests the heartbeat request struct JSON binding
 func TestHLSHeartbeatRequest(t *testing.T) {
 	t.Run("heartbeat with stream token only", func(t *testing.T) {
-		req := HLSHeartbeatRequest{
-			StreamToken: "abc123def456abc123def456abc123de",
-		}
+		body := []byte(`{"stream_token":"abc123def456abc123def456abc123de"}`)
+		var req HLSHeartbeatRequest
+		require.NoError(t, json.Unmarshal(body, &req))
 
 		assert.Equal(t, "abc123def456abc123def456abc123de", req.StreamToken)
-		assert.Empty(t, req.ClientID)
+		assert.Empty(t, req.SessionID)
 	})
 
-	t.Run("heartbeat with client id", func(t *testing.T) {
-		req := HLSHeartbeatRequest{
-			StreamToken: "abc123def456abc123def456abc123de",
-			ClientID:    "client_123",
-		}
+	t.Run("heartbeat with session id", func(t *testing.T) {
+		body := []byte(`{"stream_token":"abc123def456abc123def456abc123de","session_id":"550e8400-e29b-41d4-a716-446655440000"}`)
+		var req HLSHeartbeatRequest
+		require.NoError(t, json.Unmarshal(body, &req))
 
 		assert.Equal(t, "abc123def456abc123def456abc123de", req.StreamToken)
-		assert.Equal(t, "client_123", req.ClientID)
+		assert.Equal(t, "550e8400-e29b-41d4-a716-446655440000", req.SessionID)
 	})
 }
 
@@ -460,5 +463,121 @@ func TestStreamTokenMapping(t *testing.T) {
 	t.Run("remove nonexistent source is safe", func(t *testing.T) {
 		// Should not panic
 		removeStreamToken("nonexistent_source_xyz")
+	})
+}
+
+// TestGetOrCreateStreamTokenConcurrency tests that concurrent token requests
+// for the same source all return the same token.
+func TestGetOrCreateStreamTokenConcurrency(t *testing.T) {
+	t.Run("concurrent token requests for same source return same token", func(t *testing.T) {
+		// Save and restore original state
+		originalTokens := hlsMgr.tokens
+		originalSourceTokens := hlsMgr.sourceTokens
+		hlsMgr.tokensMu.Lock()
+		hlsMgr.tokens = make(map[string]string)
+		hlsMgr.sourceTokens = make(map[string]string)
+		hlsMgr.tokensMu.Unlock()
+
+		t.Cleanup(func() {
+			hlsMgr.tokensMu.Lock()
+			hlsMgr.tokens = originalTokens
+			hlsMgr.sourceTokens = originalSourceTokens
+			hlsMgr.tokensMu.Unlock()
+		})
+
+		const numGoroutines = 20
+		type result struct {
+			token string
+			err   error
+		}
+		results := make(chan result, numGoroutines)
+		var wg sync.WaitGroup
+		wg.Add(numGoroutines)
+
+		for range numGoroutines {
+			go func() {
+				defer wg.Done()
+				token, err := getOrCreateStreamToken("concurrent_source")
+				results <- result{token: token, err: err}
+			}()
+		}
+
+		wg.Wait()
+		close(results)
+
+		// Verify all goroutines succeeded and got the same non-empty token
+		var firstToken string
+		for r := range results {
+			require.NoError(t, r.err)
+			if firstToken == "" {
+				firstToken = r.token
+				require.NotEmpty(t, firstToken, "token should not be empty")
+			}
+			assert.Equal(t, firstToken, r.token, "all concurrent requests should get same token")
+		}
+	})
+}
+
+// TestResolveClientID tests the resolveClientID method
+func TestResolveClientID(t *testing.T) {
+	const testRemoteAddr = "192.168.1.100:12345"
+
+	t.Run("prefers session ID when provided", func(t *testing.T) {
+		c := &Controller{}
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+		req.RemoteAddr = testRemoteAddr
+		ctx := e.NewContext(req, httptest.NewRecorder())
+
+		validUUID := "550e8400-e29b-41d4-a716-446655440000"
+		clientID := c.resolveClientID(ctx, validUUID)
+		assert.Contains(t, clientID, "192.168.1.100")
+		assert.Contains(t, clientID, validUUID)
+	})
+
+	t.Run("falls back to generateClientID when no session", func(t *testing.T) {
+		c := &Controller{}
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+		req.RemoteAddr = testRemoteAddr
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		ctx := e.NewContext(req, httptest.NewRecorder())
+
+		clientID := c.resolveClientID(ctx, "")
+		assert.Contains(t, clientID, "192.168.1.100")
+		assert.Contains(t, clientID, "Browser")
+		assert.NotContains(t, clientID, "uuid")
+	})
+
+	t.Run("different sessions from same IP get different IDs", func(t *testing.T) {
+		c := &Controller{}
+		e := echo.New()
+
+		req1 := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+		req1.RemoteAddr = testRemoteAddr
+		ctx1 := e.NewContext(req1, httptest.NewRecorder())
+
+		req2 := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+		req2.RemoteAddr = testRemoteAddr // Same IP, same port — session ID differentiates
+		ctx2 := e.NewContext(req2, httptest.NewRecorder())
+
+		id1 := c.resolveClientID(ctx1, "550e8400-e29b-41d4-a716-446655440000")
+		id2 := c.resolveClientID(ctx2, "660e8400-e29b-41d4-a716-446655440000")
+		assert.NotEqual(t, id1, id2)
+	})
+
+	t.Run("rejects invalid session ID format", func(t *testing.T) {
+		c := &Controller{}
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+		req.RemoteAddr = testRemoteAddr
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		ctx := e.NewContext(req, httptest.NewRecorder())
+
+		// Non-UUID session ID should be rejected
+		clientID := c.resolveClientID(ctx, "not-a-valid-uuid")
+		// Should fall back to IP+UA-based ID
+		assert.Contains(t, clientID, "Browser")
+		assert.NotContains(t, clientID, "not-a-valid-uuid")
 	})
 }

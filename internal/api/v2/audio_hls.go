@@ -16,16 +16,19 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/myaudio"
 	"github.com/tphakala/birdnet-go/internal/privacy"
 	"github.com/tphakala/birdnet-go/internal/securefs"
+	"golang.org/x/sync/singleflight"
 )
 
 // HLS streaming configuration constants
@@ -43,15 +46,24 @@ const (
 	hlsClientLogRetention = 24 * time.Hour        // Retention period for client log timestamps
 
 	// Audio encoding
-	hlsMinSegments       = 2     // Minimum HLS segments required
-	hlsDefaultSegmentLen = 2     // Default HLS segment length in seconds
-	hlsMinSegmentLen     = 1     // Minimum HLS segment length in seconds
-	hlsMaxSegmentLen     = 30    // Maximum HLS segment length in seconds
-	hlsAudioBitDepth     = 16    // Audio bit depth for encoding
-	hlsMinBitrate        = 16    // Minimum audio bitrate in kbps
-	hlsMaxBitrate        = 320   // Maximum audio bitrate in kbps
-	hlsDefaultSampleRate = 48000 // Default audio sample rate in Hz
-	hlsCleanupDelay      = 5     // Delay in seconds before cleanup
+	hlsMinSegments                  = 2                // Minimum HLS segments required
+	hlsDefaultSegmentLen            = 2                // Default HLS segment length in seconds
+	hlsMinSegmentLen                = 1                // Minimum HLS segment length in seconds
+	hlsMaxSegmentLen                = 30               // Maximum HLS segment length in seconds
+	hlsAudioBitDepth                = 16               // Audio bit depth for encoding
+	hlsMinBitrate                   = 16               // Minimum audio bitrate in kbps
+	hlsMaxBitrate                   = 320              // Maximum audio bitrate in kbps
+	hlsDefaultSampleRate            = 48000            // Default audio sample rate in Hz
+	hlsCleanupDelay                 = 5                // Delay in seconds before cleanup
+	hlsPrematureDisconnectThreshold = 10 * time.Second // Ignore disconnects within this window
+
+	// Session ID validation
+
+	// FFmpeg HLS muxer settings
+	hlsListSize    = 3 // Number of HLS segments to keep in playlist
+	hlsInitTime    = 3 // Initial segment time for FFmpeg HLS muxer
+	hlsAllowCache  = 1 // Allow client-side caching of HLS segments
+	hlsStartNumber = 0 // Starting sequence number for HLS segments
 )
 
 // HLSStreamInfo contains information about an active HLS streaming session
@@ -76,10 +88,15 @@ type HLSStreamStatus struct {
 	PlaylistReady bool   `json:"playlist_ready"`
 }
 
+// HLSSessionRequest represents an optional request body for stream start
+type HLSSessionRequest struct {
+	SessionID string `json:"session_id,omitempty"` // Per-tab session UUID from frontend
+}
+
 // HLSHeartbeatRequest represents a client heartbeat message
 type HLSHeartbeatRequest struct {
 	StreamToken string `json:"stream_token"`
-	ClientID    string `json:"client_id,omitempty"` // Optional, server can identify from request
+	SessionID   string `json:"session_id,omitempty"` // Per-tab session UUID from frontend
 }
 
 // hlsManager manages HLS streaming state
@@ -91,7 +108,7 @@ type hlsManager struct {
 
 	// Client tracking per stream
 	clients   map[string]map[string]bool // sourceID -> clientID -> true
-	clientsMu sync.Mutex
+	clientsMu sync.RWMutex               // RWMutex for read-heavy client count operations
 
 	// Activity tracking for cleanup
 	activity   map[string]time.Time // sourceID -> lastActivityTime
@@ -111,6 +128,9 @@ type hlsManager struct {
 	tokens       map[string]string // streamToken → sourceID
 	sourceTokens map[string]string // sourceID → streamToken (reverse lookup)
 	tokensMu     sync.RWMutex      // Protects both token maps
+
+	// Singleflight for stream creation to prevent concurrent creation races
+	streamCreate singleflight.Group
 
 	// Activity sync lifecycle management
 	activitySyncOnce   sync.Once
@@ -240,7 +260,13 @@ func (c *Controller) StartHLSStream(ctx echo.Context) error {
 		return err
 	}
 
-	clientID := c.generateClientID(ctx)
+	// Bind optional request body for session_id
+	var req HLSSessionRequest
+	if err := ctx.Bind(&req); err != nil {
+		GetLogger().Debug("Failed to bind start request body", logger.Error(err))
+	}
+
+	clientID := c.resolveClientID(ctx, req.SessionID)
 
 	// Check for force restart query param
 	forceRestart := ctx.QueryParam("force") == QueryValueTrue
@@ -280,7 +306,7 @@ func (c *Controller) StartHLSStream(ctx echo.Context) error {
 	c.updateHLSActivity(sourceID, clientID, "stream_start", hlsNewStreamGracePeriod)
 
 	// Create or get the HLS stream
-	stream, err := c.getOrCreateHLSStream(ctx.Request().Context(), sourceID)
+	stream, err := c.getOrCreateHLSStream(sourceID)
 	if err != nil {
 		c.logAPIRequest(ctx, logger.LogLevelError, "Failed to create HLS stream",
 			logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)),
@@ -377,7 +403,13 @@ func (c *Controller) StopHLSStream(ctx echo.Context) error {
 		return err
 	}
 
-	clientID := c.generateClientID(ctx)
+	// Bind optional request body for session_id
+	var req HLSSessionRequest
+	if err := ctx.Bind(&req); err != nil {
+		GetLogger().Debug("Failed to bind stop request body", logger.Error(err))
+	}
+
+	clientID := c.resolveClientID(ctx, req.SessionID)
 
 	c.logAPIRequest(ctx, logger.LogLevelInfo, "HLS stream stop requested",
 		logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)),
@@ -411,7 +443,7 @@ func (c *Controller) HLSHeartbeat(ctx echo.Context) error {
 		return ctx.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}
 
-	clientID := c.generateClientID(ctx)
+	clientID := c.resolveClientID(ctx, heartbeat.SessionID)
 
 	// Handle disconnection announcements
 	if ctx.QueryParam("disconnect") == QueryValueTrue || ctx.QueryParam("status") == "disconnect" {
@@ -650,6 +682,19 @@ func (c *Controller) generateClientID(ctx echo.Context) string {
 	return clientIP + "-" + clientType
 }
 
+// resolveClientID returns a client identifier, preferring session-based ID when available.
+// Session ID is validated as a UUID and prefixed with IP to prevent spoofing.
+// Invalid or missing session IDs fall back to IP+UA-based identification.
+func (c *Controller) resolveClientID(ctx echo.Context, sessionID string) string {
+	if sessionID != "" {
+		if _, err := uuid.Parse(sessionID); err == nil {
+			return c.extractRemoteAddr(ctx) + "-" + sessionID
+		}
+	}
+	// Fallback for non-browser clients (VLC, FFmpeg, etc.) or invalid session IDs
+	return c.generateClientID(ctx)
+}
+
 // generateFilesystemSafeName creates a filesystem-safe identifier from source ID
 func generateFilesystemSafeName(input string) string {
 	sum := sha256.Sum256([]byte(input))
@@ -694,13 +739,31 @@ func (c *Controller) setHLSContentType(ctx echo.Context, path string) {
 
 // Stream management methods
 
-// getOrCreateHLSStream gets existing stream or creates a new one
-func (c *Controller) getOrCreateHLSStream(_ context.Context, sourceID string) (*HLSStreamInfo, error) {
-	// Check for existing stream
+// getOrCreateHLSStream gets existing stream or creates a new one.
+// Uses singleflight to serialize creation per sourceID, preventing concurrent
+// goroutines from racing on directory creation and FFmpeg spawning.
+func (c *Controller) getOrCreateHLSStream(sourceID string) (*HLSStreamInfo, error) {
+	// Fast-path: existing stream (no singleflight overhead)
 	if stream := c.getHLSStream(sourceID); stream != nil {
 		return stream, nil
 	}
 
+	// Serialize creation per sourceID
+	result, err, _ := hlsMgr.streamCreate.Do(sourceID, func() (any, error) {
+		// Re-check: another goroutine may have created it while we waited
+		if stream := c.getHLSStream(sourceID); stream != nil {
+			return stream, nil
+		}
+		return c.createHLSStream(sourceID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.(*HLSStreamInfo), nil
+}
+
+// createHLSStream creates a new HLS stream (called under singleflight serialization).
+func (c *Controller) createHLSStream(sourceID string) (*HLSStreamInfo, error) {
 	GetLogger().Info("Creating new HLS stream", logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)))
 
 	// Generate filesystem-safe name
@@ -794,35 +857,8 @@ func (c *Controller) getOrCreateHLSStream(_ context.Context, sourceID string) (*
 		cancel:       streamCancel,
 	}
 
-	// Handle race condition - check if another goroutine created the stream
+	// Register the stream (singleflight guarantees no concurrent creation for this sourceID)
 	hlsMgr.streamsMu.Lock()
-	if existingStream, exists := hlsMgr.streams[sourceID]; exists {
-		hlsMgr.streamsMu.Unlock()
-
-		// Cleanup our stream
-		stream.cancel()
-		if stream.FFmpegCmd != nil && stream.FFmpegCmd.Process != nil {
-			if killErr := stream.FFmpegCmd.Process.Kill(); killErr != nil {
-				GetLogger().Error("Failed to kill FFmpeg process", logger.Error(killErr))
-			}
-			if _, waitErr := stream.FFmpegCmd.Process.Wait(); waitErr != nil {
-				GetLogger().Error("Failed to wait for FFmpeg process", logger.Error(waitErr))
-			}
-		}
-		// Close log file after process exits
-		if stream.logFile != nil {
-			if closeErr := stream.logFile.Close(); closeErr != nil {
-				GetLogger().Error("Failed to close log file", logger.Error(closeErr))
-			}
-		}
-		if removeErr := secFS.RemoveAll(outputDir); removeErr != nil {
-			GetLogger().Error("Failed to remove output directory", logger.Error(removeErr))
-		}
-
-		GetLogger().Debug("Race condition detected, using existing stream", logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)))
-		return existingStream, nil
-	}
-
 	hlsMgr.streams[sourceID] = stream
 	hlsMgr.streamsMu.Unlock()
 
@@ -963,14 +999,14 @@ func (c *Controller) buildFFmpegArgs(inputSource, outputDir, playlistPath string
 		"-b:a", fmt.Sprintf("%dk", bitrate),
 		"-f", "hls",
 		"-hls_time", fmt.Sprintf("%d", segmentLength),
-		"-hls_list_size", "3",
+		"-hls_list_size", strconv.Itoa(hlsListSize),
 		"-hls_flags", "delete_segments+temp_file",
 		"-hls_segment_type", "fmp4",
 		"-hls_fmp4_init_filename", "init.mp4",
-		"-hls_init_time", "3",
-		"-hls_allow_cache", "1",
+		"-hls_init_time", strconv.Itoa(hlsInitTime),
+		"-hls_allow_cache", strconv.Itoa(hlsAllowCache),
 		"-movflags", "faststart+empty_moov+separate_moof",
-		"-start_number", "0",
+		"-start_number", strconv.Itoa(hlsStartNumber),
 		"-loglevel", logLevel,
 		"-hls_segment_filename", filepath.ToSlash(filepath.Join(outputDir, "segment%03d.m4s")),
 		playlistPath,
@@ -1110,8 +1146,12 @@ func (c *Controller) feedAudioToFFmpeg(sourceID, pipePath string, ctx context.Co
 		}
 	}()
 
-	// Open FIFO
-	fifo, err := secFS.OpenFile(pipePath, os.O_WRONLY, 0)
+	// Open FIFO with O_RDWR to prevent blocking on open() if FFmpeg hasn't started
+	// or crashes before opening the read end. This is a well-known POSIX pattern:
+	// the opener becomes both reader and writer, so open() returns immediately.
+	// Writes still block when the pipe buffer is full (normal backpressure),
+	// and the goroutine responds to ctx.Done() via the select loop.
+	fifo, err := secFS.OpenFile(pipePath, os.O_RDWR, 0)
 	if err != nil {
 		GetLogger().Error("Error opening pipe", logger.Error(err))
 		return
@@ -1223,7 +1263,7 @@ func (c *Controller) handleHLSDisconnect(ctx echo.Context, sourceID, clientID st
 	// Check for premature disconnect
 	hlsMgr.activityMu.Lock()
 	if lastTime, exists := hlsMgr.clientActivity[sourceID+":"+clientID]; exists {
-		if time.Since(lastTime) < 10*time.Second {
+		if time.Since(lastTime) < hlsPrematureDisconnectThreshold {
 			hlsMgr.activityMu.Unlock()
 			c.logAPIRequest(ctx, logger.LogLevelWarn, "Ignoring premature disconnect",
 				logger.String("source_id", privacy.SanitizeRTSPUrl(sourceID)))
@@ -1333,7 +1373,7 @@ func (c *Controller) performHLSCleanup(sourceID string, stream *HLSStreamInfo, r
 	c.cleanupFFmpegProcess(sourceID, stream)
 
 	// Clean up output directory
-	c.cleanupStreamDirectory(stream.OutputDir)
+	cleanupStreamDirectory(stream.OutputDir)
 
 	// Clean up tracking data
 	c.cleanupStreamTracking(sourceID)
@@ -1368,35 +1408,6 @@ func closeLogFile(f *os.File) {
 	}
 	if err := f.Close(); err != nil {
 		GetLogger().Error("Failed to close log file", logger.Error(err))
-	}
-}
-
-// cleanupStreamDirectory removes a single stream's output directory.
-func (c *Controller) cleanupStreamDirectory(outputDir string) {
-	if outputDir == "" {
-		return
-	}
-
-	hlsBaseDir, err := conf.GetHLSDirectory()
-	if err != nil {
-		return
-	}
-
-	secFS, err := securefs.New(hlsBaseDir)
-	if err != nil {
-		return
-	}
-	defer func() {
-		if closeErr := secFS.Close(); closeErr != nil {
-			GetLogger().Error("Failed to close secure filesystem", logger.Error(closeErr))
-		}
-	}()
-
-	if secFS.ExistsNoErr(outputDir) {
-		GetLogger().Debug("Removing stream directory", logger.String("output_dir", outputDir))
-		if removeErr := secFS.RemoveAll(outputDir); removeErr != nil {
-			GetLogger().Error("Failed to remove stream directory", logger.Error(removeErr))
-		}
 	}
 }
 
@@ -1647,8 +1658,8 @@ func shouldCleanupStream(sourceID string) bool {
 
 // getStreamClientCount returns the number of clients for a stream
 func getStreamClientCount(sourceID string) int {
-	hlsMgr.clientsMu.Lock()
-	defer hlsMgr.clientsMu.Unlock()
+	hlsMgr.clientsMu.RLock()
+	defer hlsMgr.clientsMu.RUnlock()
 
 	if clients, exists := hlsMgr.clients[sourceID]; exists {
 		return len(clients)
