@@ -893,6 +893,19 @@
         "species": "Laji"
       }
     },
+    "synonyms": {
+      "tabLabel": "Taksonomiasynonyymit",
+      "description": "Ohita tieteellisten nimien yhdistämiset lintukuvahaussa. BirdNET käyttää 2021E-taksonomiaa, mutta kuvalähteet voivat käyttää päivitettyjä nimiä. Sisäänrakennetut yhdistämiset ladataan aina; omat ohituksesi lisäävät tai korvaavat niitä.",
+      "birdnetName": "BirdNET-nimi",
+      "updatedName": "Päivitetty nimi",
+      "addButton": "Lisää synonyymi",
+      "emptyState": "Ei mukautettuja taksonomiasynonyymejä määritetty.",
+      "errors": {
+        "unknownSpecies": "Lajia ei löydy BirdNET-tunnisteista",
+        "duplicateKey": "Synonyymi tälle lajille on jo olemassa",
+        "emptyUpdatedName": "Päivitetty nimi on pakollinen"
+      }
+    },
     "tracking": {
       "title": "Lajiseuranta",
       "newSpecies": "Uusi laji",

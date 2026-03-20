@@ -893,6 +893,19 @@
         "species": "Suga"
       }
     },
+    "synonyms": {
+      "tabLabel": "Taksonomijas sinonīmi",
+      "description": "Pārrakstīt zinātnisko nosaukumu kartējumus, kas tiek izmantoti putnu attēlu meklēšanai. BirdNET izmanto 2021E taksonomiju, bet attēlu avoti var izmantot atjauninātus nosaukumus. Iebūvētie kartējumi vienmēr tiek ielādēti; jūsu pārrakstījumi papildina vai aizstāj tos.",
+      "birdnetName": "BirdNET nosaukums",
+      "updatedName": "Atjaunināts nosaukums",
+      "addButton": "Pievienot sinonīmu",
+      "emptyState": "Nav konfigurēti pielāgoti taksonomijas sinonīmi.",
+      "errors": {
+        "unknownSpecies": "Suga nav atrasta BirdNET etiķetēs",
+        "duplicateKey": "Sinonīms šai sugai jau pastāv",
+        "emptyUpdatedName": "Atjaunināts nosaukums ir obligāts"
+      }
+    },
     "tracking": {
       "title": "Sugu izsekošana",
       "newSpecies": "Jauna suga",

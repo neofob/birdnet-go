@@ -893,6 +893,19 @@
         "species": "Art"
       }
     },
+    "synonyms": {
+      "tabLabel": "Taxonomiska synonymer",
+      "description": "Åsidosätt vetenskapliga namntilldelningar som används för fågelbildsökning. BirdNET använder 2021E-taxonomin, men bildkällor kan använda uppdaterade namn. Inbyggda tilldelningar laddas alltid; dina åsidosättningar läggs till eller ersätter dem.",
+      "birdnetName": "BirdNET-namn",
+      "updatedName": "Uppdaterat namn",
+      "addButton": "Lägg till synonym",
+      "emptyState": "Inga anpassade taxonomiska synonymer konfigurerade.",
+      "errors": {
+        "unknownSpecies": "Art hittades inte i BirdNET-etiketter",
+        "duplicateKey": "En synonym för denna art finns redan",
+        "emptyUpdatedName": "Uppdaterat namn krävs"
+      }
+    },
     "tracking": {
       "title": "Artspårning",
       "newSpecies": "Ny art",

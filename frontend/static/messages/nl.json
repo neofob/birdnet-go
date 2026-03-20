@@ -893,6 +893,19 @@
         "species": "Soort"
       }
     },
+    "synonyms": {
+      "tabLabel": "Taxonomie-synoniemen",
+      "description": "Overschrijf de toewijzingen van wetenschappelijke namen die worden gebruikt voor het zoeken naar vogelafbeeldingen. BirdNET gebruikt de 2021E-taxonomie, maar afbeeldingsbronnen kunnen bijgewerkte namen gebruiken. Ingebouwde toewijzingen worden altijd geladen; uw overschrijvingen worden toegevoegd of vervangen deze.",
+      "birdnetName": "BirdNET-naam",
+      "updatedName": "Bijgewerkte naam",
+      "addButton": "Synoniem toevoegen",
+      "emptyState": "Geen aangepaste taxonomie-synoniemen geconfigureerd.",
+      "errors": {
+        "unknownSpecies": "Soort niet gevonden in BirdNET-labels",
+        "duplicateKey": "Er bestaat al een synoniem voor deze soort",
+        "emptyUpdatedName": "Bijgewerkte naam is vereist"
+      }
+    },
     "tracking": {
       "title": "Soortmonitoring",
       "newSpecies": "Nieuwe soort",
