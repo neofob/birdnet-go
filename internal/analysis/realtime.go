@@ -192,6 +192,8 @@ func realtimeAnalysisInternal(settings *conf.Settings, quitChan chan struct{}) e
 		} else if consolidated {
 			datastoreLog.Info("database consolidation completed, continuing startup")
 		}
+	} else if hasUnmigrated {
+		datastoreLog.Info("deferring database consolidation until unmigrated records are synced")
 	}
 
 	// Check migration state before initializing database
