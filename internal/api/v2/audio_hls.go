@@ -1724,16 +1724,24 @@ func (c *Controller) waitForHLSPlaylist(ctx echo.Context, sourceID string, strea
 	playlistCtx, cancel := context.WithTimeout(ctx.Request().Context(), hlsPlaylistWaitTimeout)
 	defer cancel()
 
-	// Use ticker for polling, let context timeout control the overall duration
-	ticker := time.NewTicker(1 * time.Second)
+	// Use ticker for polling, let context timeout control the overall duration.
+	// Poll at 500ms to catch the second segment quickly after the first.
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	// Poll until playlist is ready, stream is removed, or context times out
+	// Poll until playlist has enough segments for immediate playback.
+	// HLS.js requires MIN_FRAGMENTS_BEFORE_PLAY (2) fragments before calling play().
+	// If we return with only 1 segment, HLS.js must wait a full playlist reload cycle
+	// (targetDuration seconds) before discovering segment001, causing an audio gap.
+	// By waiting for 2+ segments here, HLS.js can buffer both immediately.
 	for {
 		if secFS.ExistsNoErr(stream.PlaylistPath) {
 			data, err := secFS.ReadFile(stream.PlaylistPath)
-			if err == nil && len(data) > 0 && strings.Contains(string(data), "#EXTM3U") {
-				return true
+			if err == nil && len(data) > 0 {
+				content := string(data)
+				if strings.Contains(content, "#EXTM3U") && strings.Count(content, "#EXTINF:") >= hlsMinSegments {
+					return true
+				}
 			}
 		}
 
