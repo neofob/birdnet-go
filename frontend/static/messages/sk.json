@@ -3227,6 +3227,19 @@
           "description": "Kliknite na \"Pridať konfiguráciu\" pre prispôsobenie nastavení detekcie druhov."
         }
       },
+      "synonyms": {
+        "tabLabel": "Synonymá",
+        "description": "Priraďte názvy druhov BirdNET k vašim preferovaným názvom. Keď detekcia zodpovedá synonymu, použije sa aktualizovaný názov.",
+        "birdnetName": "Názov BirdNET",
+        "updatedName": "Aktualizovaný názov",
+        "addButton": "Pridať synonymum",
+        "emptyState": "Žiadne taxonomické synonymá nie sú nakonfigurované",
+        "errors": {
+          "unknownSpecies": "Druh sa nenašiel v štítkoch BirdNET",
+          "duplicateKey": "Pre tento druh už existuje synonymum",
+          "emptyUpdatedName": "Aktualizovaný názov je povinný"
+        }
+      },
       "actionsModal": {
         "title": "Akcie pre {species}",
         "actionType": {

@@ -3390,6 +3390,19 @@
           "description": "Klik op \"Configuratie Toevoegen\" om soorten detectie instellingen aan te passen."
         }
       },
+      "synonyms": {
+        "tabLabel": "Synoniemen",
+        "description": "Koppel BirdNET-soortennamen aan uw voorkeursnamen. Wanneer een detectie overeenkomt met een synoniem, wordt de bijgewerkte naam gebruikt.",
+        "birdnetName": "BirdNET-naam",
+        "updatedName": "Bijgewerkte naam",
+        "addButton": "Synoniem toevoegen",
+        "emptyState": "Geen taxonomie-synoniemen geconfigureerd",
+        "errors": {
+          "unknownSpecies": "Soort niet gevonden in BirdNET-labels",
+          "duplicateKey": "Er bestaat al een synoniem voor deze soort",
+          "emptyUpdatedName": "De bijgewerkte naam is vereist"
+        }
+      },
       "actionsModal": {
         "title": "Acties voor {species}",
         "actionType": {

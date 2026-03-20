@@ -3426,6 +3426,19 @@
           "description": "Click \"Add Configuration\" to customize species detection settings."
         }
       },
+      "synonyms": {
+        "tabLabel": "Synonyms",
+        "description": "Map BirdNET species names to your preferred names. When a detection matches a synonym, the updated name is used instead.",
+        "birdnetName": "BirdNET Name",
+        "updatedName": "Updated Name",
+        "addButton": "Add Synonym",
+        "emptyState": "No taxonomy synonyms configured",
+        "errors": {
+          "unknownSpecies": "Species not found in BirdNET labels",
+          "duplicateKey": "A synonym for this species already exists",
+          "emptyUpdatedName": "Updated name is required"
+        }
+      },
       "actionsModal": {
         "title": "Actions for {species}",
         "actionType": {

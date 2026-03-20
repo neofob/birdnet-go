@@ -3423,6 +3423,19 @@
           "description": "Noklikšķiniet \"Pievienot konfigurāciju\", lai pielāgotu sugu noteikšanas iestatījumus."
         }
       },
+      "synonyms": {
+        "tabLabel": "Sinonīmi",
+        "description": "Saistiet BirdNET sugu nosaukumus ar vēlamajiem nosaukumiem. Kad noteikšana atbilst sinonīmam, tiks izmantots atjauninātais nosaukums.",
+        "birdnetName": "BirdNET nosaukums",
+        "updatedName": "Atjaunināts nosaukums",
+        "addButton": "Pievienot sinonīmu",
+        "emptyState": "Nav konfigurēti taksonomijas sinonīmi",
+        "errors": {
+          "unknownSpecies": "Suga nav atrasta BirdNET etiķetēs",
+          "duplicateKey": "Šai sugai jau pastāv sinonīms",
+          "emptyUpdatedName": "Atjauninātais nosaukums ir obligāts"
+        }
+      },
       "actionsModal": {
         "title": "Darbības sugai {species}",
         "actionType": {

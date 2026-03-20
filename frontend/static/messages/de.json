@@ -3161,6 +3161,19 @@
           "description": "Klicken Sie auf \"Konfiguration hinzufügen\", um die Artenerkennungseinstellungen anzupassen."
         }
       },
+      "synonyms": {
+        "tabLabel": "Synonyme",
+        "description": "Ordnen Sie BirdNET-Artennamen Ihren bevorzugten Namen zu. Bei einer Erkennung wird der aktualisierte Name verwendet.",
+        "birdnetName": "BirdNET-Name",
+        "updatedName": "Neuer Name",
+        "addButton": "Synonym hinzufügen",
+        "emptyState": "Keine Taxonomie-Synonyme konfiguriert",
+        "errors": {
+          "unknownSpecies": "Art nicht in BirdNET-Labels gefunden",
+          "duplicateKey": "Für diese Art existiert bereits ein Synonym",
+          "emptyUpdatedName": "Der neue Name ist erforderlich"
+        }
+      },
       "actionsModal": {
         "title": "Aktionen für {species}",
         "actionType": {

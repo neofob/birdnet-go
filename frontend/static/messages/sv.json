@@ -3423,6 +3423,19 @@
           "description": "Klicka på \"Lägg till konfiguration\" för att anpassa artdetekteringsinställningar."
         }
       },
+      "synonyms": {
+        "tabLabel": "Synonymer",
+        "description": "Koppla BirdNET-artnamn till dina föredragna namn. När en detektion matchar en synonym används det uppdaterade namnet istället.",
+        "birdnetName": "BirdNET-namn",
+        "updatedName": "Uppdaterat namn",
+        "addButton": "Lägg till synonym",
+        "emptyState": "Inga taxonomisynonymer konfigurerade",
+        "errors": {
+          "unknownSpecies": "Arten hittades inte i BirdNET-etiketter",
+          "duplicateKey": "En synonym för denna art finns redan",
+          "emptyUpdatedName": "Det uppdaterade namnet är obligatoriskt"
+        }
+      },
       "actionsModal": {
         "title": "Åtgärder för {species}",
         "actionType": {
