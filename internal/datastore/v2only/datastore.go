@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -147,6 +148,10 @@ type Datastore struct {
 	// speciesCodeMap provides O(1) lookup from scientific name to eBird species code.
 	// Populated from the eBird taxonomy data passed via Config.SpeciesCodeMap.
 	speciesCodeMap map[string]string
+
+	// loggedMissingNames tracks scientific names already warned about for
+	// missing common name mappings, preventing log spam.
+	loggedMissingNames sync.Map
 
 	// dbstatAvailable caches whether the dbstat virtual table exists.
 	// 0 = unchecked, 1 = available, -1 = not available.
@@ -304,8 +309,10 @@ func buildNameMaps(labels []string) *nameMaps {
 // UpdateNameMaps rebuilds species name lookup maps from updated BirdNET labels.
 // Called after locale or model changes to keep common name resolution current.
 // The new maps are built first, then atomically swapped in — readers are never blocked.
+// Also resets the missing-name warning deduplication so new mismatches are logged.
 func (ds *Datastore) UpdateNameMaps(labels []string) {
 	ds.names.Store(buildNameMaps(labels))
+	ds.loggedMissingNames.Clear()
 }
 
 // Open is a no-op since the manager is already open.
@@ -634,10 +641,7 @@ func (ds *Datastore) detectionToNote(det *entities.Detection) datastore.Note {
 	}
 
 	// Look up common name from pre-built map, fallback to scientific name
-	commonName := scientificName
-	if cn, ok := ds.loadNameMaps().common[scientificName]; ok {
-		commonName = cn
-	}
+	commonName := ds.resolveCommonName(scientificName)
 
 	clipName := ""
 	if det.ClipName != nil {
@@ -759,10 +763,7 @@ func (ds *Datastore) detectionToRecord(det *entities.Detection) datastore.Detect
 	}
 
 	// Look up common name from pre-built map, fallback to scientific name
-	commonName := scientificName
-	if cn, ok := ds.loadNameMaps().common[scientificName]; ok {
-		commonName = cn
-	}
+	commonName := ds.resolveCommonName(scientificName)
 
 	// Timestamp conversion
 	timestamp := time.Unix(det.DetectedAt, 0).In(ds.timezone)
@@ -981,10 +982,7 @@ func (ds *Datastore) GetTopBirdsData(selectedDate string, minConfidenceNormalize
 		sciName := extractScientificName(r.ScientificName)
 
 		// Look up common name from the cached map
-		commonName := sciName
-		if cn, ok := ds.loadNameMaps().common[sciName]; ok {
-			commonName = cn
-		}
+		commonName := ds.resolveCommonName(sciName)
 
 		note := datastore.Note{
 			ScientificName: sciName,
@@ -2180,10 +2178,7 @@ func (ds *Datastore) GetSpeciesSummaryData(ctx context.Context, startDate, endDa
 		sciName := extractScientificName(d.ScientificName)
 
 		// Look up common name from pre-built map, fallback to scientific name
-		commonName := sciName
-		if cn, ok := ds.loadNameMaps().common[sciName]; ok {
-			commonName = cn
-		}
+		commonName := ds.resolveCommonName(sciName)
 
 		result = append(result, datastore.SpeciesSummaryData{
 			ScientificName: sciName,
@@ -2347,10 +2342,7 @@ func (ds *Datastore) convertToNewSpeciesData(_ context.Context, data []speciesFi
 		sciName := extractScientificName(d.ScientificName)
 
 		// Look up common name from pre-built map, fallback to scientific name
-		commonName := sciName
-		if cn, ok := ds.loadNameMaps().common[sciName]; ok {
-			commonName = cn
-		}
+		commonName := ds.resolveCommonName(sciName)
 
 		firstSeenDate := time.Unix(d.FirstDetected, 0).In(ds.timezone).Format(time.DateOnly)
 		result = append(result, datastore.NewSpeciesData{
@@ -2489,10 +2481,21 @@ func thresholdScientificName(t *entities.DynamicThreshold) string {
 // pre-built name maps. Falls back to the scientific name if no mapping exists.
 // Handles legacy concatenated "ScientificName_CommonName" format by extracting
 // only the scientific name portion before lookup.
+// Logs a warning (once per species) when the fallback is used and maps are populated,
+// to help diagnose issues where common names stop appearing.
 func (ds *Datastore) resolveCommonName(scientificName string) string {
 	sciName := extractScientificName(scientificName)
-	if cn, ok := ds.loadNameMaps().common[sciName]; ok {
+	nm := ds.loadNameMaps()
+	if cn, ok := nm.common[sciName]; ok {
 		return cn
+	}
+	// Log once per missing species when maps are populated (not during startup with empty maps)
+	if len(nm.common) > 0 {
+		if _, alreadyLogged := ds.loggedMissingNames.LoadOrStore(sciName, struct{}{}); !alreadyLogged {
+			ds.log.Warn("common name not found in name maps, falling back to scientific name",
+				logger.String("scientific_name", sciName),
+				logger.Int("name_map_size", len(nm.common)))
+		}
 	}
 	return sciName
 }
