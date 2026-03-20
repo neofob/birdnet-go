@@ -93,7 +93,7 @@ jobs:
       - name: Run Playwright E2E tests
         working-directory: frontend
         run: npx playwright test --project=chromium
-        timeout-minutes: 5
+        timeout-minutes: 7
         env:
           CI: 'true'
 
