@@ -17,7 +17,7 @@
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import { onMount } from 'svelte';
 
-  import { Volume, Volume1, Volume2, VolumeX, Play, Square } from '@lucide/svelte';
+  import { Volume, Volume1, Volume2, VolumeX, Play, Square, Tag } from '@lucide/svelte';
   import { t } from '$lib/i18n';
   import { appState, hasLiveAudioAccess } from '$lib/stores/appState.svelte';
   import { HLS_AUDIO_CONFIG } from '$lib/desktop/components/ui/hls-config';
@@ -28,6 +28,14 @@
   import { generateSessionId } from '$lib/utils/session';
   import { loggers } from '$lib/utils/logger';
   import type { ColorMapName } from '$lib/utils/spectrogramColorMaps';
+  import type { PendingDetection } from '$lib/types/pending.types';
+  import type { OverlayLabel, QueuedLabel } from '$lib/utils/detectionOverlay';
+  import {
+    diffPendingSnapshot,
+    shouldDedup,
+    promoteFromQueue,
+    nextYSlot,
+  } from '$lib/utils/detectionOverlay';
 
   const logger = loggers.audio;
   const STORAGE_KEY = 'birdnet-spectrogram-active';
@@ -36,6 +44,9 @@
   const SOURCE_DISCOVERY_TIMEOUT = 5000;
 
   const sessionId = generateSessionId();
+
+  // Props
+  let { pendingDetections = [] }: { pendingDetections?: PendingDetection[] } = $props();
 
   // Volume/gain presets: muted → 0dB → +6dB → +12dB
   const GAIN_PRESETS = [
@@ -49,6 +60,7 @@
   let isActive = $state(false);
   let isConnecting = $state(false);
   let gainPresetIndex = $state(0);
+  let showDetectionLabels = $state(true);
 
   const gainLabel = $derived.by(() => {
     const preset = GAIN_PRESETS[gainPresetIndex];
@@ -62,10 +74,21 @@
 
   // HLS + audio refs
   let hls: Hls | null = null;
-  let audioElement: HTMLAudioElement | null = null;
+  let audioElement = $state<HTMLAudioElement | null>(null);
   let heartbeatTimer: ReturnType<typeof globalThis.setInterval> | null = null;
   let abortController: AbortController | null = null;
-  let activeSourceId: string | null = null;
+  let activeSourceId = $state<string | null>(null);
+
+  // Detection overlay state
+  let overlayLabels = $state<OverlayLabel[]>([]);
+  let labelQueue: QueuedLabel[] = [];
+  let prevSnapshot: PendingDetection[] = [];
+  let lastSeenSpecies = new Map<string, number>();
+  let slotCounter = 0;
+  let streamEpochMs = $state(0);
+  let epochOffset = 0;
+  let epochOffsetCalibrated = false;
+  const MAX_OVERLAY_SLOTS = 4;
 
   // Initialize composable during component init (must be at top level for $effect cleanup)
   const spectro = useSpectrogramAnalyser({ fftSize: FFT_SIZE, audioOutput: false });
@@ -177,6 +200,7 @@
         stream_token: string;
         playlist_url: string;
         playlist_ready: boolean;
+        stream_epoch?: string;
       }>(`/api/v2/streams/hls/${encodedSourceId}/start`, {
         method: 'POST',
         signal,
@@ -186,6 +210,9 @@
       if (signal.aborted) return;
 
       activeStreamToken = data.stream_token;
+      if (data.stream_epoch) {
+        streamEpochMs = new Date(data.stream_epoch).getTime();
+      }
       const hlsUrl = buildAppUrl(data.playlist_url);
 
       audioElement = new globalThis.Audio();
@@ -328,6 +355,16 @@
       audioElement = null;
     }
 
+    // Clear detection overlay state
+    overlayLabels = [];
+    labelQueue = [];
+    prevSnapshot = [];
+    lastSeenSpecies.clear();
+    slotCounter = 0;
+    streamEpochMs = 0;
+    epochOffset = 0;
+    epochOffsetCalibrated = false;
+
     isActive = false;
     isConnecting = false;
   }
@@ -347,6 +384,61 @@
       spectro.setGain(preset.db);
     }
   }
+
+  // Diff incoming pending detections and queue new labels
+  $effect(() => {
+    if (!activeSourceId || pendingDetections.length === 0) return;
+    const newDetections = diffPendingSnapshot(prevSnapshot, pendingDetections, activeSourceId);
+    for (const det of newDetections) {
+      if (shouldDedup(det.species, det.firstDetected, lastSeenSpecies)) continue;
+      lastSeenSpecies.set(det.species, det.firstDetected);
+      const { slot, next } = nextYSlot(slotCounter, MAX_OVERLAY_SLOTS);
+      slotCounter = next;
+      labelQueue.push({ text: det.species, firstDetected: det.firstDetected, ySlot: slot });
+    }
+    prevSnapshot = [...pendingDetections];
+  });
+
+  // Promote queued detection labels when playhead catches up
+  $effect(() => {
+    if (!audioElement || !streamEpochMs) return;
+
+    const interval = globalThis.setInterval(() => {
+      if (!audioElement || !streamEpochMs) return;
+
+      // Calibrate epoch offset once when playback begins.
+      // streamEpoch is set at stream creation (before FFmpeg starts), so
+      // streamEpoch + currentTime lags behind real wall-clock by the FFmpeg
+      // startup delay. hls.latency bridges this gap.
+      if (!epochOffsetCalibrated && audioElement.currentTime > 0) {
+        const rawWallClock = streamEpochMs / 1000 + audioElement.currentTime;
+        const latency = hls ? hls.latency : 6;
+        epochOffset = Date.now() / 1000 - latency - rawWallClock;
+        epochOffsetCalibrated = true;
+      }
+
+      if (labelQueue.length === 0) return;
+      const wallClockAtPlayhead = streamEpochMs / 1000 + audioElement.currentTime + epochOffset;
+      const now = globalThis.performance.now();
+      const { promoted, remaining } = promoteFromQueue(labelQueue, wallClockAtPlayhead, now);
+      if (promoted.length > 0) {
+        labelQueue = remaining;
+        overlayLabels = [...overlayLabels, ...promoted];
+      }
+      const cutoff = now - 60000;
+      overlayLabels = overlayLabels.filter(l => l.birthTime >= cutoff);
+
+      // Prune stale dedup entries (older than 10s in media time — generous
+      // buffer beyond the 6s dedup window in shouldDedup)
+      for (const [species, time] of lastSeenSpecies) {
+        if (wallClockAtPlayhead - time > 10) {
+          lastSeenSpecies.delete(species);
+        }
+      }
+    }, 200);
+
+    return () => globalThis.clearInterval(interval);
+  });
 
   // Use onMount (NOT $effect) for auto-start. This is fire-once initialization:
   // - $effect caused effect_update_depth_exceeded because start() reads $state
@@ -372,6 +464,20 @@
       <h3 class="font-semibold">{t('spectrogram.dashboard.toggle')}</h3>
       <div class="flex items-center gap-1">
         {#if isActive}
+          <button
+            type="button"
+            onclick={() => {
+              showDetectionLabels = !showDetectionLabels;
+            }}
+            class="rounded p-1 transition-colors {showDetectionLabels
+              ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
+              : 'text-[var(--color-base-content)]/60 hover:bg-[var(--color-base-200)]'}"
+            aria-label={t('spectrogram.labels.toggle')}
+            aria-pressed={showDetectionLabels}
+            title={t('spectrogram.labels.toggle')}
+          >
+            <Tag class="size-4" />
+          </button>
           <button
             onclick={cycleVolume}
             class="rounded p-1 transition-colors hover:bg-[var(--color-base-200)]"
@@ -417,6 +523,8 @@
         {frequencyRange}
         {colorMap}
         isActive={spectro.isActive}
+        overlayLabels={showDetectionLabels ? overlayLabels : []}
+        overlayFontSize={9}
         className="h-28 w-full"
       />
     {:else if isActive || isConnecting}
