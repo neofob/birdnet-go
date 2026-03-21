@@ -9,18 +9,27 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/entities"
 	"github.com/tphakala/birdnet-go/internal/logger"
+	"github.com/tphakala/birdnet-go/internal/notification"
 )
 
 type mockNotifCreator struct {
-	calls    []struct{ title, message string }
+	calls []struct {
+		notifType      notification.Type
+		title, message string
+	}
 	keyCalls []struct {
+		notifType                notification.Type
 		title, message, titleKey string
 		titleParams              map[string]any
 		messageKey               string
 		messageParams            map[string]any
 	}
-	testCalls    []struct{ title, message string }
+	testCalls []struct {
+		notifType      notification.Type
+		title, message string
+	}
 	testKeyCalls []struct {
+		notifType                notification.Type
 		title, message, titleKey string
 		titleParams              map[string]any
 		messageKey               string
@@ -28,39 +37,47 @@ type mockNotifCreator struct {
 	}
 }
 
-func (m *mockNotifCreator) CreateAndBroadcast(title, message string) error {
-	m.calls = append(m.calls, struct{ title, message string }{title, message})
+func (m *mockNotifCreator) CreateAndBroadcast(notifType notification.Type, title, message string) error {
+	m.calls = append(m.calls, struct {
+		notifType      notification.Type
+		title, message string
+	}{notifType, title, message})
 	return nil
 }
 
 func (m *mockNotifCreator) CreateAndBroadcastWithKeys(
-	title, message, titleKey string, titleParams map[string]any,
+	notifType notification.Type, title, message, titleKey string, titleParams map[string]any,
 	messageKey string, messageParams map[string]any,
 ) error {
 	m.keyCalls = append(m.keyCalls, struct {
+		notifType                notification.Type
 		title, message, titleKey string
 		titleParams              map[string]any
 		messageKey               string
 		messageParams            map[string]any
-	}{title, message, titleKey, titleParams, messageKey, messageParams})
+	}{notifType, title, message, titleKey, titleParams, messageKey, messageParams})
 	return nil
 }
 
-func (m *mockNotifCreator) CreateAndBroadcastTest(title, message string) error {
-	m.testCalls = append(m.testCalls, struct{ title, message string }{title, message})
+func (m *mockNotifCreator) CreateAndBroadcastTest(notifType notification.Type, title, message string) error {
+	m.testCalls = append(m.testCalls, struct {
+		notifType      notification.Type
+		title, message string
+	}{notifType, title, message})
 	return nil
 }
 
 func (m *mockNotifCreator) CreateAndBroadcastTestWithKeys(
-	title, message, titleKey string, titleParams map[string]any,
+	notifType notification.Type, title, message, titleKey string, titleParams map[string]any,
 	messageKey string, messageParams map[string]any,
 ) error {
 	m.testKeyCalls = append(m.testKeyCalls, struct {
+		notifType                notification.Type
 		title, message, titleKey string
 		titleParams              map[string]any
 		messageKey               string
 		messageParams            map[string]any
-	}{title, message, titleKey, titleParams, messageKey, messageParams})
+	}{notifType, title, message, titleKey, titleParams, messageKey, messageParams})
 	return nil
 }
 
@@ -88,6 +105,7 @@ func TestDispatcher_BellAction(t *testing.T) {
 	dispatcher.Dispatch(rule, event)
 
 	require.Len(t, mock.calls, 1)
+	assert.Equal(t, notification.TypeWarning, mock.calls[0].notifType, "stream disconnect should use TypeWarning")
 	assert.Equal(t, "Stream lost", mock.calls[0].title)
 	assert.Equal(t, "A stream disconnected", mock.calls[0].message)
 	assert.Empty(t, mock.keyCalls, "custom template should use CreateAndBroadcast, not WithKeys")
@@ -143,6 +161,7 @@ func TestDispatcher_DefaultTemplate_EventKey(t *testing.T) {
 	dispatcher.Dispatch(rule, event)
 
 	require.Len(t, mock.keyCalls, 1)
+	assert.Equal(t, notification.TypeDetection, mock.keyCalls[0].notifType, "detection event should use TypeDetection")
 	assert.Equal(t, MsgAlertFiredTitle, mock.keyCalls[0].titleKey)
 	assert.Equal(t, "Species Alert", mock.keyCalls[0].titleParams["rule_name"])
 	assert.Equal(t, RuleKeyNewSpeciesName, mock.keyCalls[0].titleParams["rule_name_key"])
@@ -330,6 +349,7 @@ func TestDispatcher_DefaultTemplate_DetectionMessage(t *testing.T) {
 
 	require.Len(t, mock.keyCalls, 1)
 	call := mock.keyCalls[0]
+	assert.Equal(t, notification.TypeDetection, call.notifType, "detection event should use TypeDetection")
 	assert.Equal(t, MsgAlertDetectionOccurred, call.messageKey)
 	assert.Equal(t, "Eurasian Blue Tit", call.messageParams["species_name"])
 	assert.Equal(t, "92", call.messageParams["confidence"])
@@ -487,6 +507,7 @@ func TestDispatchTest_CustomTemplate_UsesTestMethod(t *testing.T) {
 	assert.Empty(t, mock.calls, "DispatchTest should not use CreateAndBroadcast")
 	assert.Empty(t, mock.keyCalls, "DispatchTest should not use CreateAndBroadcastWithKeys")
 	require.Len(t, mock.testCalls, 1)
+	assert.Equal(t, notification.TypeWarning, mock.testCalls[0].notifType, "stream disconnect test should use TypeWarning")
 	assert.Equal(t, "Stream lost", mock.testCalls[0].title)
 	assert.Equal(t, "A stream disconnected", mock.testCalls[0].message)
 }
@@ -560,6 +581,7 @@ func TestDispatchTest_DefaultTemplate_UsesTestKeysMethod(t *testing.T) {
 	assert.Empty(t, mock.keyCalls, "DispatchTest should not use CreateAndBroadcastWithKeys")
 	require.Len(t, mock.testKeyCalls, 1)
 	call := mock.testKeyCalls[0]
+	assert.Equal(t, notification.TypeDetection, call.notifType, "detection test event should use TypeDetection")
 	assert.Equal(t, MsgAlertFiredTitle, call.titleKey)
 	assert.Equal(t, "New species detected", call.titleParams["rule_name"])
 	assert.Equal(t, MsgAlertDetectionOccurred, call.messageKey)

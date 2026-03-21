@@ -15,24 +15,24 @@ import (
 // alerting and notification subsystems.
 type notificationAdapter struct{}
 
-func (a *notificationAdapter) CreateAndBroadcast(title, message string) error {
+func (a *notificationAdapter) CreateAndBroadcast(notifType notification.Type, title, message string) error {
 	svc := notification.GetService()
 	if svc == nil {
 		return nil // notification service not yet initialized
 	}
-	_, err := svc.Create(notification.TypeWarning, notification.PriorityHigh, title, message)
+	_, err := svc.Create(notifType, notification.PriorityHigh, title, message)
 	return err
 }
 
 func (a *notificationAdapter) CreateAndBroadcastWithKeys(
-	title, message, titleKey string, titleParams map[string]any,
+	notifType notification.Type, title, message, titleKey string, titleParams map[string]any,
 	messageKey string, messageParams map[string]any,
 ) error {
 	svc := notification.GetService()
 	if svc == nil {
 		return nil // notification service not yet initialized
 	}
-	notif := notification.NewNotification(notification.TypeWarning, notification.PriorityHigh, title, message).
+	notif := notification.NewNotification(notifType, notification.PriorityHigh, title, message).
 		WithTitleKey(titleKey, titleParams)
 	if messageKey != "" {
 		notif = notif.WithMessageKey(messageKey, messageParams)
@@ -40,25 +40,25 @@ func (a *notificationAdapter) CreateAndBroadcastWithKeys(
 	return svc.CreateWithMetadata(notif)
 }
 
-func (a *notificationAdapter) CreateAndBroadcastTest(title, message string) error {
+func (a *notificationAdapter) CreateAndBroadcastTest(notifType notification.Type, title, message string) error {
 	svc := notification.GetService()
 	if svc == nil {
 		return nil // notification service not yet initialized
 	}
-	notif := notification.NewNotification(notification.TypeWarning, notification.PriorityHigh, title, message).
+	notif := notification.NewNotification(notifType, notification.PriorityHigh, title, message).
 		WithMetadata(notification.MetadataKeyIsAlertRuleTest, true)
 	return svc.CreateWithMetadata(notif)
 }
 
 func (a *notificationAdapter) CreateAndBroadcastTestWithKeys(
-	title, message, titleKey string, titleParams map[string]any,
+	notifType notification.Type, title, message, titleKey string, titleParams map[string]any,
 	messageKey string, messageParams map[string]any,
 ) error {
 	svc := notification.GetService()
 	if svc == nil {
 		return nil // notification service not yet initialized
 	}
-	notif := notification.NewNotification(notification.TypeWarning, notification.PriorityHigh, title, message).
+	notif := notification.NewNotification(notifType, notification.PriorityHigh, title, message).
 		WithMetadata(notification.MetadataKeyIsAlertRuleTest, true).
 		WithTitleKey(titleKey, titleParams)
 	if messageKey != "" {

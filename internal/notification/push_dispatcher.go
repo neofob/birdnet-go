@@ -118,7 +118,15 @@ func ReconfigureFromSettings(settings *conf.Settings) error {
 
 // initializePushDispatcher performs the actual dispatcher initialization.
 func initializePushDispatcher(settings *conf.Settings, notificationMetrics *metrics.NotificationMetrics) error {
-	if settings == nil || !settings.Notification.Push.Enabled {
+	log := GetLogger()
+	if settings == nil {
+		log.Info("push dispatcher not initialized: settings is nil",
+			logger.String("operation", "initialize_push_dispatcher"))
+		return nil
+	}
+	if !settings.Notification.Push.Enabled {
+		log.Info("push dispatcher not initialized: push notifications disabled",
+			logger.String("operation", "initialize_push_dispatcher"))
 		return nil
 	}
 
@@ -198,7 +206,18 @@ func warnIfLocalhostWithExternalWebhooks(pd *pushDispatcher, settings *conf.Sett
 
 // startDispatcherIfNeeded starts the dispatcher if it's enabled and has providers.
 func startDispatcherIfNeeded(pd *pushDispatcher) error {
-	if !pd.enabled || len(pd.providers) == 0 {
+	if !pd.enabled {
+		if pd.log != nil {
+			pd.log.Info("push dispatcher not started: disabled",
+				logger.String("operation", "start_dispatcher"))
+		}
+		return nil
+	}
+	if len(pd.providers) == 0 {
+		if pd.log != nil {
+			pd.log.Info("push dispatcher not started: no providers configured",
+				logger.String("operation", "start_dispatcher"))
+		}
 		return nil
 	}
 	if err := pd.start(); err != nil {
@@ -260,13 +279,27 @@ func (d *pushDispatcher) runDispatchLoop(ctx context.Context, ch <-chan *Notific
 				return
 			}
 			if isToastNotification(notif) {
+				d.log.Debug("skipping toast notification in dispatch loop",
+					logger.String("operation", "dispatch_loop"),
+					logger.String("notification_id", notif.ID),
+					logger.String("type", string(notif.Type)))
 				continue
 			}
 			// Alert rule test notifications should only appear in the
 			// notification bell, not be forwarded to external push providers.
 			if isAlertRuleTestNotification(notif) {
+				d.log.Debug("skipping alert rule test notification in dispatch loop",
+					logger.String("operation", "dispatch_loop"),
+					logger.String("notification_id", notif.ID),
+					logger.String("type", string(notif.Type)))
 				continue
 			}
+			d.log.Debug("notification received in dispatch loop, dispatching to providers",
+				logger.String("operation", "dispatch_loop"),
+				logger.String("notification_id", notif.ID),
+				logger.String("type", string(notif.Type)),
+				logger.String("priority", string(notif.Priority)),
+				logger.Int("provider_count", len(d.providers)))
 			go d.dispatch(ctx, notif)
 		case <-ctx.Done():
 			return
@@ -285,9 +318,19 @@ func (d *pushDispatcher) startHealthChecker(ctx context.Context) {
 }
 
 func (d *pushDispatcher) dispatch(ctx context.Context, notif *Notification) {
+	matchedCount := 0
 	for i := range d.providers {
 		ep := &d.providers[i]
 		if !d.shouldDispatchToProvider(ep, notif) {
+			if d.log != nil {
+				d.log.Debug("provider filtered out for notification",
+					logger.String("operation", "dispatch"),
+					logger.String("provider", ep.name),
+					logger.String("notification_id", notif.ID),
+					logger.String("type", string(notif.Type)),
+					logger.Bool("enabled", ep.prov.IsEnabled()),
+					logger.Bool("supports_type", ep.prov.SupportsType(notif.Type)))
+			}
 			continue
 		}
 
@@ -295,13 +338,46 @@ func (d *pushDispatcher) dispatch(ctx context.Context, notif *Notification) {
 			continue
 		}
 
+		matchedCount++
+		if d.log != nil {
+			d.log.Debug("dispatching notification to provider",
+				logger.String("operation", "dispatch"),
+				logger.String("provider", ep.name),
+				logger.String("notification_id", notif.ID),
+				logger.String("type", string(notif.Type)))
+		}
 		d.spawnDispatchGoroutine(ctx, ep, notif)
+	}
+
+	if matchedCount == 0 && d.log != nil {
+		d.log.Info("no providers matched notification",
+			logger.String("operation", "dispatch"),
+			logger.String("notification_id", notif.ID),
+			logger.String("type", string(notif.Type)),
+			logger.String("priority", string(notif.Priority)),
+			logger.Int("total_providers", len(d.providers)))
 	}
 }
 
 // shouldDispatchToProvider checks if notification should be dispatched to provider.
 func (d *pushDispatcher) shouldDispatchToProvider(ep *enhancedProvider, notif *Notification) bool {
-	if !ep.prov.IsEnabled() || !ep.prov.SupportsType(notif.Type) {
+	if !ep.prov.IsEnabled() {
+		if d.log != nil {
+			d.log.Debug("provider disabled, skipping",
+				logger.String("operation", "should_dispatch"),
+				logger.String("provider", ep.name),
+				logger.String("notification_id", notif.ID))
+		}
+		return false
+	}
+	if !ep.prov.SupportsType(notif.Type) {
+		if d.log != nil {
+			d.log.Debug("provider does not support notification type",
+				logger.String("operation", "should_dispatch"),
+				logger.String("provider", ep.name),
+				logger.String("notification_type", string(notif.Type)),
+				logger.String("notification_id", notif.ID))
+		}
 		return false
 	}
 	return d.matchesFilter(ep, notif)
