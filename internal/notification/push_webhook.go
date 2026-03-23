@@ -191,7 +191,7 @@ func NewWebhookProvider(name string, enabled bool, endpoints []WebhookEndpoint, 
 
 	// Parse custom template if provided
 	if templateStr != "" {
-		tmpl, err := template.New("webhook").Funcs(TemplateFuncs).Parse(templateStr)
+		tmpl, err := newTemplateWithFuncs("webhook").Parse(templateStr)
 		if err != nil {
 			return nil, errors.New(err).Component("notification").Category(errors.CategoryConfiguration).Context("operation", "parse_webhook_template").Build()
 		}

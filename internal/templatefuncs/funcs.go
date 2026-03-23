@@ -29,6 +29,7 @@ var Funcs = template.FuncMap{
 
 // FormatTime formats a time value using the given Go layout string.
 // Accepts both time.Time and string (attempts to parse RFC3339).
+// Returns an empty string for unsupported types (int, bool, etc.).
 // Example usage in templates: {{formatTime .Timestamp "2006-01-02"}}
 func FormatTime(t any, layout string) string {
 	switch v := t.(type) {

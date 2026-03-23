@@ -99,6 +99,12 @@ func TestFuncs_TemplateExecution(t *testing.T) {
 			data:     map[string]any{"ts": "not-a-date"},
 			expected: "not-a-date",
 		},
+		{
+			name:     "formatTime with unsupported type returns empty string",
+			tmplStr:  `[{{formatTime .ts "2006-01-02"}}]`,
+			data:     map[string]any{"ts": 12345},
+			expected: "[]",
+		},
 	}
 
 	for _, tt := range tests {
