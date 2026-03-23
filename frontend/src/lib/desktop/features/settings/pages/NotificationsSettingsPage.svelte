@@ -1322,13 +1322,13 @@
     <ErrorAlert type="warning" className="mb-4">
       {#snippet children()}
         {t('settings.alerts.v2Required')}
-        <button
-          type="button"
+        <a
+          href="/ui/system/database"
           class="underline font-medium ml-1 hover:opacity-80"
-          onclick={() => navigation.navigate('/ui/system/database')}
+          onclick={(e: MouseEvent) => { e.preventDefault(); navigation.navigate('/ui/system/database'); }}
         >
           {t('settings.alerts.v2RequiredLink')}
-        </button>
+        </a>
       {/snippet}
     </ErrorAlert>
   {/if}
