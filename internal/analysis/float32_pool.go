@@ -1,4 +1,6 @@
-package myaudio
+// float32_pool.go provides a thread-safe pool of float32 slices to reduce
+// allocations during audio conversion in the BirdNET analysis pipeline.
+package analysis
 
 import (
 	"sync"
@@ -21,7 +23,7 @@ type Float32Pool struct {
 	discarded atomic.Uint64
 }
 
-// Float32PoolStats contains statistics about pool usage
+// Float32PoolStats contains statistics about pool usage.
 type Float32PoolStats struct {
 	Hits      uint64 // Number of successful buffer reuses (Gets - News)
 	Misses    uint64 // Number of new allocations (News)
@@ -33,7 +35,7 @@ type Float32PoolStats struct {
 func NewFloat32Pool(size int) (*Float32Pool, error) {
 	if size <= 0 {
 		return nil, errors.Newf("invalid float32 pool size: %d", size).
-			Component("myaudio").
+			Component("analysis").
 			Category(errors.CategoryValidation).
 			Context("operation", "create_float32_pool").
 			Context("requested_size", size).
@@ -78,13 +80,20 @@ func (fp *Float32Pool) Put(buf []float32) {
 	fp.pool.Put(buf)
 }
 
-// GetStats returns current pool statistics
+// GetStats returns current pool statistics.
 func (fp *Float32Pool) GetStats() Float32PoolStats {
-	gets := fp.gets.Load()
+	// Load news before gets so that a concurrent miss between the two loads
+	// cannot produce news > gets (which would wrap the unsigned subtraction).
 	news := fp.news.Load()
+	gets := fp.gets.Load()
+
+	hits := uint64(0)
+	if gets >= news {
+		hits = gets - news
+	}
 
 	return Float32PoolStats{
-		Hits:      gets - news,
+		Hits:      hits,
 		Misses:    news,
 		Discarded: fp.discarded.Load(),
 	}

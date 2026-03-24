@@ -1,5 +1,7 @@
-// process.go
-package myaudio
+// process.go provides the BirdNET analysis pipeline entry point.
+// ProcessData converts PCM audio to float32, runs BirdNET inference,
+// and enqueues results for downstream processing.
+package analysis
 
 import (
 	"fmt"
@@ -7,10 +9,10 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/tphakala/birdnet-go/internal/audiocore/convert"
 	"github.com/tphakala/birdnet-go/internal/birdnet"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
-	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/observability/metrics"
 	"github.com/tphakala/birdnet-go/internal/telemetry"
@@ -24,8 +26,8 @@ var (
 )
 
 const (
-	// Float32BufferSize is the number of float32 samples in a standard buffer
-	// For 16-bit audio: conf.BufferSize / 2 (bytes per sample) = 144384 samples
+	// Float32BufferSize is the number of float32 samples in a standard buffer.
+	// For 16-bit audio: conf.BufferSize / 2 (bytes per sample) = 144384 samples.
 	Float32BufferSize = conf.BufferSize / 2
 
 	// bufferOverrunReportCooldown is the tumbling window duration for aggregating overruns.
@@ -102,7 +104,7 @@ func reportBufferOverruns(count int64, maxElapsed, bufferLen, window time.Durati
 	telemetry.FastCaptureMessageWithExtras(
 		"sustained BirdNET processing buffer overruns detected",
 		sentry.LevelWarning,
-		"myaudio",
+		"analysis",
 		extras,
 	)
 }
@@ -138,7 +140,7 @@ func ReturnFloat32Buffer(buffer []float32) {
 	}
 }
 
-// processData processes the given audio data to detect bird species, logs the detected species
+// ProcessData processes the given audio data to detect bird species, logs the detected species
 // and optionally saves the audio clip if a bird species is detected above the configured threshold.
 func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt time.Time, source string) error {
 	log := GetLogger()
@@ -146,7 +148,7 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt ti
 	predictStart := time.Now()
 
 	// convert audio data to float32
-	sampleData, err := ConvertToFloat32(data, conf.BitDepth)
+	sampleData, err := convertToFloat32WithPool(data, conf.BitDepth)
 	if err != nil {
 		return fmt.Errorf("error converting %v bit PCM data to float32: %w", conf.BitDepth, err)
 	}
@@ -231,39 +233,14 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt ti
 		}
 	}
 
-	// Get AudioSource struct from registry for the Results message
-	var audioSource datastore.AudioSource
-	registry := GetRegistry()
-	if registry != nil {
-		// Try to get existing source by ID first
-		if registrySource, exists := registry.GetSourceByID(source); exists {
-			audioSource = datastore.AudioSource{
-				ID:          registrySource.ID,
-				SafeString:  registrySource.SafeString,
-				DisplayName: registrySource.DisplayName,
-			}
-		} else if registrySource, exists := registry.GetSourceByConnection(source); exists {
-			// Try by connection string (legacy case)
-			audioSource = datastore.AudioSource{
-				ID:          registrySource.ID,
-				SafeString:  registrySource.SafeString,
-				DisplayName: registrySource.DisplayName,
-			}
-		} else {
-			// Source not in registry - create basic AudioSource
-			audioSource = datastore.AudioSource{
-				ID:          source,
-				SafeString:  source, // Assume safe for non-registered sources
-				DisplayName: source,
-			}
-		}
-	} else {
-		// Registry not available - create basic AudioSource
-		audioSource = datastore.AudioSource{
-			ID:          source,
-			SafeString:  source,
-			DisplayName: source,
-		}
+	// Build AudioSource for the Results message.
+	// Source metadata (display name, safe string) will be enriched by the
+	// AudioEngine's source registry in a future refactor. For now, use the
+	// raw source ID which is sufficient for detection processing.
+	audioSource := datastore.AudioSource{
+		ID:          source,
+		SafeString:  source,
+		DisplayName: source,
 	}
 
 	// Create a Results message to be sent through queue to processor
@@ -293,29 +270,19 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt ti
 	return nil
 }
 
-// ConvertToFloat32 converts a byte slice representing sample to a 2D slice of float32 samples.
-// The function supports 16, 24, and 32 bit depths.
-func ConvertToFloat32(sample []byte, bitDepth int) ([][]float32, error) {
-	switch bitDepth {
-	case 16:
-		return [][]float32{convert16BitToFloat32(sample)}, nil
-	case 24:
-		return [][]float32{convert24BitToFloat32(sample)}, nil
-	case 32:
-		return [][]float32{convert32BitToFloat32(sample)}, nil
-	default:
-		return nil, errors.Newf("unsupported audio bit depth: %d", bitDepth).
-			Component("myaudio").
-			Category(errors.CategoryValidation).
-			Context("operation", "convert_to_float32").
-			Context("bit_depth", bitDepth).
-			Context("supported_bit_depths", "16,24,32").
-			Build()
+// convertToFloat32WithPool converts a byte slice representing samples to a 2D slice of float32 samples.
+// For 16-bit audio, it uses the float32 pool when available for reduced allocations.
+// For other bit depths, it delegates to audiocore/convert.ConvertToFloat32.
+func convertToFloat32WithPool(sample []byte, bitDepth int) ([][]float32, error) {
+	if bitDepth == 16 {
+		return [][]float32{convert16BitToFloat32WithPool(sample)}, nil
 	}
+	// Delegate non-16-bit conversions to audiocore/convert
+	return convert.ConvertToFloat32(sample, bitDepth)
 }
 
-// convert16BitToFloat32 converts 16-bit sample to float32 values.
-func convert16BitToFloat32(sample []byte) []float32 {
+// convert16BitToFloat32WithPool converts 16-bit samples to float32, using the pool when available.
+func convert16BitToFloat32WithPool(sample []byte) []float32 {
 	length := len(sample) / 2
 
 	// Try to get buffer from pool if available
@@ -331,37 +298,6 @@ func convert16BitToFloat32(sample []byte) []float32 {
 
 	for i := range length {
 		sample := int16(sample[i*2]) | int16(sample[i*2+1])<<8
-		float32Data[i] = float32(sample) / divisor
-	}
-
-	return float32Data
-}
-
-// convert24BitToFloat32 converts 24-bit sample to float32 values.
-func convert24BitToFloat32(sample []byte) []float32 {
-	length := len(sample) / 3
-	float32Data := make([]float32, length)
-	divisor := float32(8388608.0)
-
-	for i := range length {
-		sample := int32(sample[i*3]) | int32(sample[i*3+1])<<8 | int32(sample[i*3+2])<<16
-		if (sample & 0x00800000) > 0 {
-			sample |= ^0x00FFFFFF // Two's complement sign extension
-		}
-		float32Data[i] = float32(sample) / divisor
-	}
-
-	return float32Data
-}
-
-// convert32BitToFloat32 converts 32-bit sample to float32 values.
-func convert32BitToFloat32(sample []byte) []float32 {
-	length := len(sample) / 4
-	float32Data := make([]float32, length)
-	divisor := float32(2147483648.0)
-
-	for i := range length {
-		sample := int32(sample[i*4]) | int32(sample[i*4+1])<<8 | int32(sample[i*4+2])<<16 | int32(sample[i*4+3])<<24
 		float32Data[i] = float32(sample) / divisor
 	}
 

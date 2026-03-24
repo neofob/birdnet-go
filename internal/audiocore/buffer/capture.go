@@ -143,14 +143,14 @@ func (cb *CaptureBuffer) Write(data []byte) error {
 		cb.writtenBytes = cb.bufferSize
 	}
 
-	// When the write pointer wraps (crosses zero), the oldest data has been
-	// overwritten. Slide the wall-clock anchor so that external callers see
-	// a valid [startTime, startTime+bufferDuration] window. The internal
-	// byte offset calculation uses totalBytesWritten, so this adjustment
-	// only affects the external API boundary checks.
+	// Once the buffer has filled (wrapped at least once), continuously
+	// update startTime to reflect the oldest data still in the ring.
+	// Before the first wrap, startTime stays at the initial Write() time.
 	if cb.writeIndex <= prevIndex && dataLen > 0 {
-		cb.startTime = time.Now().Add(-cb.bufferDuration)
 		cb.wrapped = true
+	}
+	if cb.wrapped {
+		cb.startTime = time.Now().Add(-cb.bufferDuration)
 	}
 
 	return nil
@@ -197,28 +197,39 @@ func (cb *CaptureBuffer) ReadSegment(startTime, endTime time.Time) ([]byte, erro
 			Build()
 	}
 
-	startOffset := startTime.Sub(cb.startTime)
-	endOffset := endTime.Sub(cb.startTime)
+	// Clamp startTime to the oldest available data so that requests for
+	// audio slightly before the buffer window still return what we have
+	// rather than failing outright. cb.startTime is kept current by Write()
+	// which refreshes it on every call after the buffer wraps.
+	if startTime.Before(cb.startTime) {
+		startTime = cb.startTime
+	}
 
-	if startOffset < 0 {
-		return nil, errors.Newf("startTime is before the buffer's oldest data").
+	// After clamping, re-check that we still have a valid time range.
+	// Clamping can make startTime == endTime (zero-length read).
+	if !endTime.After(startTime) {
+		return nil, errors.Newf("requested time range is empty after clamping to buffer window").
 			Component("audiocore").
 			Category(errors.CategoryValidation).
 			Context("operation", "capture_buffer_read_segment").
 			Context("source", cb.source).
 			Context("start_time", startTime.Format(time.RFC3339Nano)).
-			Context("buffer_start_time", cb.startTime.Format(time.RFC3339Nano)).
+			Context("end_time", endTime.Format(time.RFC3339Nano)).
 			Build()
 	}
 
-	if endOffset > cb.bufferDuration {
-		return nil, errors.Newf("endTime is beyond the buffer's current timeframe").
+	startOffset := startTime.Sub(cb.startTime)
+	endOffset := endTime.Sub(cb.startTime)
+
+	// Sanity: endOffset must be non-negative.
+	if endOffset < 0 {
+		return nil, errors.Newf("endTime is before the buffer's start time").
 			Component("audiocore").
 			Category(errors.CategoryValidation).
 			Context("operation", "capture_buffer_read_segment").
 			Context("source", cb.source).
 			Context("end_time", endTime.Format(time.RFC3339Nano)).
-			Context("buffer_end_time", cb.startTime.Add(cb.bufferDuration).Format(time.RFC3339Nano)).
+			Context("buffer_start_time", cb.startTime.Format(time.RFC3339Nano)).
 			Build()
 	}
 

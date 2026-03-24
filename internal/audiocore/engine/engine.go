@@ -6,11 +6,13 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/tphakala/birdnet-go/internal/audiocore"
 	"github.com/tphakala/birdnet-go/internal/audiocore/buffer"
 	"github.com/tphakala/birdnet-go/internal/audiocore/ffmpeg"
 	"github.com/tphakala/birdnet-go/internal/audiocore/schedule"
+	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
 )
@@ -47,8 +49,11 @@ const (
 	// 144000 bytes = 1.5 seconds of 16-bit 48 kHz mono audio.
 	defaultAnalysisReadSize = 144000
 
-	// defaultCaptureDuration is the capture buffer duration in seconds.
-	defaultCaptureDuration = 15
+	// defaultCaptureBufferSeconds is the ring buffer capacity in seconds.
+	// This determines how much audio history is retained for clip export.
+	// Must be large enough to cover the export length + detection window
+	// + pre-capture offset. Matches conf.DefaultCaptureBufferSeconds.
+	defaultCaptureBufferSeconds = conf.DefaultCaptureBufferSeconds
 
 	// defaultBytesPerSample is the default PCM bytes per sample (16-bit).
 	defaultBytesPerSample = 2
@@ -61,6 +66,33 @@ const (
 type Config struct {
 	// Logger is the structured logger for engine operations.
 	Logger logger.Logger
+
+	// FFmpegPath is the absolute path to the FFmpeg binary.
+	// It is passed to StreamConfig when starting stream-type sources.
+	FFmpegPath string
+
+	// SoxPath is the absolute path to the SoX binary.
+	// Reserved for future use by audio processing subsystems.
+	SoxPath string
+
+	// Transport is the default RTSP transport protocol ("tcp" or "udp").
+	Transport string
+
+	// FFmpegParameters are additional FFmpeg command-line parameters
+	// applied to all stream sources.
+	FFmpegParameters []string
+
+	// LogLevel is the FFmpeg log level (e.g., "error", "warning").
+	LogLevel string
+
+	// Debug enables verbose debug logging for stream capture.
+	Debug bool
+
+	// CaptureBufferSeconds is the ring buffer capacity for audio history.
+	// When zero, defaults to conf.DefaultCaptureBufferSeconds (120).
+	// Should be set from settings.Realtime.ExtendedCapture.EffectiveCaptureBufferSeconds()
+	// to support extended capture mode.
+	CaptureBufferSeconds int
 
 	// RouterMetrics is optional; nil-safe.
 	// NOTE: Not yet wired to subsystems; metrics plumbing is planned for a future PR.
@@ -79,6 +111,14 @@ type Config struct {
 	DeviceMetrics audiocore.DeviceMetrics
 }
 
+// captureBufferSecs returns v if positive, otherwise the default capture buffer size.
+func captureBufferSecs(v int) int {
+	if v > 0 {
+		return v
+	}
+	return defaultCaptureBufferSeconds
+}
+
 // AudioEngine coordinates all audio subsystems: source registry, audio router,
 // FFmpeg stream manager, device manager, buffer manager, and quiet hours
 // scheduler. It provides a single point of control for adding, removing, and
@@ -89,10 +129,25 @@ type AudioEngine struct {
 	ffmpegMgr *ffmpeg.Manager
 	deviceMgr *audiocore.DeviceManager
 	bufferMgr *buffer.Manager
-	scheduler *schedule.QuietHoursScheduler
+	scheduler atomic.Pointer[schedule.QuietHoursScheduler]
 	logger    logger.Logger
 	ctx       context.Context
 	cancel    context.CancelCauseFunc
+
+	// ffmpegPath is the absolute path to the FFmpeg binary.
+	ffmpegPath string
+	// soxPath is the absolute path to the SoX binary.
+	soxPath string
+	// transport is the default RTSP transport protocol.
+	transport string
+	// ffmpegParameters are additional FFmpeg command-line parameters.
+	ffmpegParameters []string
+	// logLevel is the FFmpeg log level.
+	logLevel string
+	// debug enables verbose debug logging for stream capture.
+	debug bool
+	// captureBufferSeconds is the ring buffer capacity for audio history.
+	captureBufferSeconds int
 }
 
 // New creates an AudioEngine with all subsystems initialised.
@@ -114,17 +169,27 @@ func New(ctx context.Context, cfg *Config, scheduler *schedule.QuietHoursSchedul
 	}, nil, log)
 	deviceMgr := audiocore.NewDeviceManager(router, log)
 
-	return &AudioEngine{
-		registry:  audiocore.NewSourceRegistry(log),
-		router:    router,
-		ffmpegMgr: ffmpegMgr,
-		deviceMgr: deviceMgr,
-		bufferMgr: bufMgr,
-		scheduler: scheduler,
-		logger:    log.With(logger.String("component", "audio_engine")),
-		ctx:       engineCtx,
-		cancel:    cancel,
+	e := &AudioEngine{
+		registry:             audiocore.NewSourceRegistry(log),
+		router:               router,
+		ffmpegMgr:            ffmpegMgr,
+		deviceMgr:            deviceMgr,
+		bufferMgr:            bufMgr,
+		logger:               log.With(logger.String("component", "audio_engine")),
+		ctx:                  engineCtx,
+		cancel:               cancel,
+		ffmpegPath:           cfg.FFmpegPath,
+		soxPath:              cfg.SoxPath,
+		transport:            cfg.Transport,
+		ffmpegParameters:     cfg.FFmpegParameters,
+		logLevel:             cfg.LogLevel,
+		debug:                cfg.Debug,
+		captureBufferSeconds: captureBufferSecs(cfg.CaptureBufferSeconds),
 	}
+	if scheduler != nil {
+		e.scheduler.Store(scheduler)
+	}
+	return e
 }
 
 // Registry returns the source registry.
@@ -154,14 +219,14 @@ func (e *AudioEngine) DeviceManager() *audiocore.DeviceManager {
 
 // Scheduler returns the quiet hours scheduler, which may be nil.
 func (e *AudioEngine) Scheduler() *schedule.QuietHoursScheduler {
-	return e.scheduler
+	return e.scheduler.Load()
 }
 
 // SetScheduler replaces the engine's quiet hours scheduler.
 // This supports deferred initialization when the scheduler depends on
 // resources (SunCalc, ControlChan) only available after service startup.
 func (e *AudioEngine) SetScheduler(s *schedule.QuietHoursScheduler) {
-	e.scheduler = s
+	e.scheduler.Store(s)
 }
 
 // AddSource registers a new audio source and allocates its buffers.
@@ -194,7 +259,7 @@ func (e *AudioEngine) AddSource(cfg *audiocore.SourceConfig) error {
 	}
 	if err := e.bufferMgr.AllocateCapture(
 		sourceID,
-		defaultCaptureDuration,
+		e.captureBufferSeconds,
 		sampleRate,
 		defaultBytesPerSample,
 	); err != nil {
@@ -206,13 +271,18 @@ func (e *AudioEngine) AddSource(cfg *audiocore.SourceConfig) error {
 	// 4. Start capture based on source type.
 	if isStreamType(cfg.Type) {
 		streamCfg := &ffmpeg.StreamConfig{
-			SourceID:   sourceID,
-			SourceName: src.DisplayName,
-			URL:        cfg.ConnectionString,
-			Type:       string(cfg.Type),
-			SampleRate: sampleRate,
-			BitDepth:   cfg.BitDepth,
-			Channels:   cfg.Channels,
+			SourceID:         sourceID,
+			SourceName:       src.DisplayName,
+			URL:              cfg.ConnectionString,
+			Type:             string(cfg.Type),
+			SampleRate:       sampleRate,
+			BitDepth:         cfg.BitDepth,
+			Channels:         cfg.Channels,
+			FFmpegPath:       e.ffmpegPath,
+			Transport:        e.transport,
+			FFmpegParameters: e.ffmpegParameters,
+			LogLevel:         e.logLevel,
+			Debug:            e.debug,
 		}
 		if err := e.ffmpegMgr.StartStream(streamCfg); err != nil {
 			e.bufferMgr.DeallocateSource(sourceID)
@@ -307,7 +377,7 @@ func (e *AudioEngine) ReconfigureSource(sourceID string, newCfg *audiocore.Sourc
 	}
 	if err := e.bufferMgr.AllocateCapture(
 		sourceID,
-		defaultCaptureDuration,
+		e.captureBufferSeconds,
 		sampleRate,
 		defaultBytesPerSample,
 	); err != nil {
@@ -323,13 +393,18 @@ func (e *AudioEngine) ReconfigureSource(sourceID string, newCfg *audiocore.Sourc
 
 	if isStreamType(newType) {
 		streamCfg := &ffmpeg.StreamConfig{
-			SourceID:   sourceID,
-			SourceName: src.DisplayName,
-			URL:        newCfg.ConnectionString,
-			Type:       string(newType),
-			SampleRate: sampleRate,
-			BitDepth:   newCfg.BitDepth,
-			Channels:   newCfg.Channels,
+			SourceID:         sourceID,
+			SourceName:       src.DisplayName,
+			URL:              newCfg.ConnectionString,
+			Type:             string(newType),
+			SampleRate:       sampleRate,
+			BitDepth:         newCfg.BitDepth,
+			Channels:         newCfg.Channels,
+			FFmpegPath:       e.ffmpegPath,
+			Transport:        e.transport,
+			FFmpegParameters: e.ffmpegParameters,
+			LogLevel:         e.logLevel,
+			Debug:            e.debug,
 		}
 		if err := e.ffmpegMgr.StartStream(streamCfg); err != nil {
 			// Source stays registered — mark it as errored so callers can see the failure.
@@ -376,8 +451,8 @@ func (e *AudioEngine) Stop() {
 	e.router.Close()
 
 	// Stop the scheduler if present.
-	if e.scheduler != nil {
-		e.scheduler.Stop()
+	if sched := e.scheduler.Load(); sched != nil {
+		sched.Stop()
 	}
 
 	e.logger.Info("audio engine stopped")

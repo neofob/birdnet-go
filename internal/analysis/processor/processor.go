@@ -92,6 +92,7 @@ type Processor struct {
 	flusherCancel       context.CancelFunc // Function to cancel flusher goroutine
 	preRenderer         PreRendererSubmit  // Spectrogram pre-renderer for background generation
 	preRendererOnce     sync.Once          // Ensures pre-renderer is initialized only once
+	startOnce           sync.Once          // Ensures Start() is called only once
 	// SSE related fields
 	SSEBroadcaster      func(note *datastore.Note, birdImage *imageprovider.BirdImage) error // Function to broadcast detection via SSE
 	sseBroadcasterMutex sync.RWMutex                                                         // Mutex to protect SSE broadcaster access
@@ -460,17 +461,9 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 	// Initialize species tracker if enabled
 	p.NewSpeciesTracker = initSpeciesTracker(settings, ds)
 
-	// Start the detection processor
-	p.startDetectionProcessor()
-
-	// Start the worker pool for action processing
-	p.startWorkerPool()
-
-	// Create context for pending detections flusher
-	p.flusherCtx, p.flusherCancel = context.WithCancel(context.Background())
-
-	// Start the held detection flusher
-	p.pendingDetectionsFlusher()
+	// NOTE: Background goroutines (detection processor, worker pool, flusher)
+	// are NOT started here. Call Start() after wiring BufferMgr and Registry
+	// to avoid a race where detections arrive before the buffer manager is set.
 
 	// Initialize BirdWeather client if enabled
 	p.initBirdWeatherClient(settings)
@@ -521,13 +514,32 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 	return p
 }
 
-// Start goroutine to process detections from the queue
+// Start launches the background goroutines that process detections.
+// It must be called AFTER BufferMgr and Registry are wired — otherwise
+// detections arrive before the buffer manager is available and audio
+// clip export silently fails.
+func (p *Processor) Start() {
+	p.startOnce.Do(func() {
+		GetLogger().Info("Processor.Start() called — BufferMgr and Registry wired, launching detection goroutines",
+			logger.Bool("buffer_mgr_set", p.BufferMgr != nil),
+			logger.Bool("registry_set", p.Registry() != nil),
+			logger.String("operation", "processor_start"))
+
+		p.startDetectionProcessor()
+		p.startWorkerPool()
+
+		p.flusherCtx, p.flusherCancel = context.WithCancel(context.Background())
+		p.pendingDetectionsFlusher()
+	})
+}
+
+// startDetectionProcessor starts the goroutine that processes detections from the queue.
 func (p *Processor) startDetectionProcessor() {
 	// Add structured logging for detection processor startup
 	GetLogger().Info("Starting detection processor",
 		logger.String("operation", "detection_processor_startup"))
 	go func() {
-		// ResultsQueue is fed by myaudio.ProcessData()
+		// ResultsQueue is fed by analysis.ProcessData()
 		for item := range birdnet.ResultsQueue {
 			// Pass by value since we own the data (see queue.go ownership comment)
 			p.processDetections(item)
