@@ -23,7 +23,6 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
-	"github.com/tphakala/birdnet-go/internal/analysis/processor"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
 	"github.com/tphakala/birdnet-go/internal/errors"
@@ -170,30 +169,28 @@ var cpuCache = &CPUCache{
 
 // UpdateCPUCache updates the cached CPU usage data
 func UpdateCPUCache(ctx context.Context) {
+	ticker := time.NewTicker(cpuCacheUpdateInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
-			// Context canceled, exit the goroutine
 			return
 		default:
 			// Get CPU usage (this will block for 1 second)
 			percent, err := cpu.Percent(time.Second, false)
 			if err == nil && len(percent) > 0 {
-				// Update the cache
 				cpuCache.mu.Lock()
 				cpuCache.cpuPercent = percent
 				cpuCache.lastUpdated = time.Now()
 				cpuCache.mu.Unlock()
 			}
 
-			// Wait before next update (can be adjusted based on needs)
-			// We add a small buffer to ensure we don't constantly block
-			// Use time.After in a select to make it cancellable
+			// Wait for next tick or context cancellation
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(cpuCacheUpdateInterval):
-				// Continue to next iteration
+			case <-ticker.C:
 			}
 		}
 	}
@@ -224,9 +221,8 @@ func (c *Controller) GetJobQueueStats(ctx echo.Context) error {
 		logger.String("ip", ctx.RealIP()),
 	)
 
-	// Get the processor from the context
-	processorObj := ctx.Get("processor")
-	if processorObj == nil {
+	// Check if processor is available
+	if c.Processor == nil {
 		c.logErrorIfEnabled("Processor not available for job queue stats",
 			logger.String("path", ctx.Request().URL.Path),
 			logger.String("ip", ctx.RealIP()),
@@ -234,19 +230,8 @@ func (c *Controller) GetJobQueueStats(ctx echo.Context) error {
 		return c.HandleError(ctx, fmt.Errorf("processor not available"), "Processor not available", http.StatusInternalServerError)
 	}
 
-	// Get the processor with the correct type
-	p, ok := processorObj.(*processor.Processor)
-	if !ok {
-		c.logErrorIfEnabled("Invalid processor type for job queue stats",
-			logger.String("actual_type", fmt.Sprintf("%T", processorObj)),
-			logger.String("path", ctx.Request().URL.Path),
-			logger.String("ip", ctx.RealIP()),
-		)
-		return c.HandleError(ctx, fmt.Errorf("invalid processor type"), "Invalid processor type", http.StatusInternalServerError)
-	}
-
 	// Check if job queue is available
-	if p.JobQueue == nil {
+	if c.Processor.JobQueue == nil {
 		c.logErrorIfEnabled("Job queue not available",
 			logger.String("path", ctx.Request().URL.Path),
 			logger.String("ip", ctx.RealIP()),
@@ -255,7 +240,7 @@ func (c *Controller) GetJobQueueStats(ctx echo.Context) error {
 	}
 
 	// Get job queue stats
-	stats := p.JobQueue.GetStats()
+	stats := c.Processor.JobQueue.GetStats()
 
 	// Convert to JSON
 	jsonStats, err := stats.ToJSON()
@@ -1721,6 +1706,12 @@ func (c *Controller) DownloadDatabaseBackup(ctx echo.Context) error {
 		}
 		dbPath = c.V2Manager.Path()
 		gormDB = c.V2Manager.DB()
+	}
+
+	// Verify we have a valid database handle before proceeding
+	if gormDB == nil {
+		return c.HandleError(ctx, fmt.Errorf("database handle not available"),
+			"Database connection not initialized", http.StatusServiceUnavailable)
 	}
 
 	// Get source database size for disk space check

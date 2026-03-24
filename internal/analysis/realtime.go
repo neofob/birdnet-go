@@ -648,8 +648,18 @@ func realtimeAnalysisInternal(settings *conf.Settings, quitChan chan struct{}) e
 					}
 				}
 
-				// Step 6: Close controlChan to signal goroutines selecting on it to stop
-				log.Info("shutdown step 6: closing control channel after producers shutdown",
+				// Step 6a: Stop quiet hours scheduler before closing controlChan.
+				// The scheduler's Evaluate() sends on controlChan via a non-blocking
+				// select; sending on a closed channel panics even with a default case.
+				// Stopping the scheduler first cancels its context (exiting the run
+				// loop) and sets a stopped flag that guards the send in Evaluate().
+				log.Info("shutdown step 6a: stopping quiet hours scheduler",
+					logger.Int("step", 6),
+					logger.String("operation", "shutdown_quiet_hours_scheduler"))
+				quietHoursScheduler.Stop()
+
+				// Step 6b: Close controlChan to signal goroutines selecting on it to stop
+				log.Info("shutdown step 6b: closing control channel after producers shutdown",
 					logger.Int("step", 6),
 					logger.String("operation", "close_control_channel"))
 				close(controlChan)
@@ -783,14 +793,15 @@ func realtimeAnalysisInternal(settings *conf.Settings, quitChan chan struct{}) e
 				// Ensure migration worker is stopped on timeout
 				apiv2.StopMigrationWorker()
 				cancel()
-				// Give the shutdown goroutine a brief grace period to exit.
-				// With the timeout-aware wg.Wait(), it should exit quickly
-				// after context cancellation. But if it doesn't, don't block
-				// forever — let deferred cleanup handle the rest.
+				// Give the shutdown goroutine a grace period to exit.
+				// Must be larger than processor.MinJobQueueGracePeriod (500ms)
+				// so the job queue can drain before closeDataStore fires.
+				// The goroutine also runs steps 6a–8 before reaching the job
+				// queue, so add an extra second of margin.
 				select {
 				case <-shutdownComplete:
 					// Goroutine exited cleanly
-				case <-time.After(500 * time.Millisecond):
+				case <-time.After(processor.MinJobQueueGracePeriod + time.Second):
 					GetLogger().Warn("shutdown goroutine did not exit within grace period",
 						logger.String("operation", "shutdown_forced_exit"))
 				}
