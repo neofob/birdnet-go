@@ -683,8 +683,8 @@ func (s *testLegacyInterface) SpeciesDetections(_, _, _ string, _ int, _ bool, _
 }
 func (s *testLegacyInterface) GetLastDetections(_ int) ([]datastore.Note, error) { return nil, nil }
 func (s *testLegacyInterface) GetAllDetectedSpecies() ([]datastore.Note, error)  { return nil, nil }
-func (s *testLegacyInterface) SearchNotes(_ string, _ bool, _, _ int) ([]datastore.Note, error) {
-	return nil, nil
+func (s *testLegacyInterface) SearchNotes(_ string, _ bool, _, _ int) ([]datastore.Note, int64, error) {
+	return nil, 0, nil
 }
 func (s *testLegacyInterface) SearchNotesAdvanced(_ *datastore.AdvancedSearchFilters) ([]datastore.Note, int64, error) {
 	return nil, 0, nil
@@ -717,7 +717,6 @@ func (s *testLegacyInterface) GetHourlyDetections(_, _ string, _, _, _ int) ([]d
 func (s *testLegacyInterface) CountSpeciesDetections(_, _, _ string, _ int) (int64, error) {
 	return 0, nil
 }
-func (s *testLegacyInterface) CountSearchResults(_ string) (int64, error)        { return 0, nil }
 func (s *testLegacyInterface) Transaction(_ func(tx *gorm.DB) error) error       { return nil }
 func (s *testLegacyInterface) LockNote(_ string) error                           { return nil }
 func (s *testLegacyInterface) UnlockNote(_ string) error                         { return nil }
