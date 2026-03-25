@@ -484,6 +484,9 @@ func (m *moduleLogger) Module(name string) Logger {
 	if m == nil {
 		return nil
 	}
+	if m.logger == nil {
+		return m
+	}
 
 	return &moduleLogger{
 		module:   m.module + "." + name,
@@ -496,7 +499,7 @@ func (m *moduleLogger) Module(name string) Logger {
 
 // Trace logs a trace message (most verbose level)
 func (m *moduleLogger) Trace(msg string, fields ...Field) {
-	if m == nil || m.level > traceLevelValue {
+	if m == nil || m.logger == nil || m.level > traceLevelValue {
 		return
 	}
 	m.log(traceLevelValue, msg, fields...)
@@ -504,7 +507,7 @@ func (m *moduleLogger) Trace(msg string, fields ...Field) {
 
 // Debug logs a debug message
 func (m *moduleLogger) Debug(msg string, fields ...Field) {
-	if m == nil || m.level > slog.LevelDebug {
+	if m == nil || m.logger == nil || m.level > slog.LevelDebug {
 		return
 	}
 	m.log(slog.LevelDebug, msg, fields...)
@@ -512,7 +515,7 @@ func (m *moduleLogger) Debug(msg string, fields ...Field) {
 
 // Info logs an info message
 func (m *moduleLogger) Info(msg string, fields ...Field) {
-	if m == nil || m.level > slog.LevelInfo {
+	if m == nil || m.logger == nil || m.level > slog.LevelInfo {
 		return
 	}
 	m.log(slog.LevelInfo, msg, fields...)
@@ -520,7 +523,7 @@ func (m *moduleLogger) Info(msg string, fields ...Field) {
 
 // Warn logs a warning message
 func (m *moduleLogger) Warn(msg string, fields ...Field) {
-	if m == nil || m.level > slog.LevelWarn {
+	if m == nil || m.logger == nil || m.level > slog.LevelWarn {
 		return
 	}
 	m.log(slog.LevelWarn, msg, fields...)
@@ -528,7 +531,7 @@ func (m *moduleLogger) Warn(msg string, fields ...Field) {
 
 // Error logs an error message
 func (m *moduleLogger) Error(msg string, fields ...Field) {
-	if m == nil {
+	if m == nil || m.logger == nil {
 		return
 	}
 	m.log(slog.LevelError, msg, fields...)
@@ -536,7 +539,7 @@ func (m *moduleLogger) Error(msg string, fields ...Field) {
 
 // Log logs a message with explicit level
 func (m *moduleLogger) Log(level LogLevel, msg string, fields ...Field) {
-	if m == nil {
+	if m == nil || m.logger == nil {
 		return
 	}
 	m.log(parseSlogLevel(level), msg, fields...)
@@ -546,6 +549,9 @@ func (m *moduleLogger) Log(level LogLevel, msg string, fields ...Field) {
 func (m *moduleLogger) With(fields ...Field) Logger {
 	if m == nil {
 		return nil
+	}
+	if m.logger == nil {
+		return m
 	}
 
 	return &moduleLogger{
@@ -561,6 +567,9 @@ func (m *moduleLogger) With(fields ...Field) Logger {
 func (m *moduleLogger) WithContext(ctx context.Context) Logger {
 	if m == nil {
 		return nil
+	}
+	if m.logger == nil {
+		return m
 	}
 
 	if ctx == nil {
@@ -585,7 +594,7 @@ func (m *moduleLogger) Flush() error {
 
 // log is the internal logging method
 func (m *moduleLogger) log(level slog.Level, msg string, fields ...Field) {
-	if m == nil {
+	if m == nil || m.logger == nil {
 		return
 	}
 
