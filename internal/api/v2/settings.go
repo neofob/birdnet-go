@@ -1921,6 +1921,8 @@ var settingsChangeChecks = []settingsChangeCheck{
 	{"BirdNET", "reload_birdnet", birdnetSettingsChanged, "Reloading BirdNET model with new settings...", notification.MsgSettingsReloadingBirdnet, "info", toastDurationLong},
 	{"Range filter", "rebuild_range_filter", rangeFilterSettingsChanged, "Rebuilding species range filter...", notification.MsgSettingsRebuildingRangeFilter, "info", toastDurationMedium},
 	{"Species interval", "update_detection_intervals", intervalSettingsChanged, "Updating detection intervals...", notification.MsgSettingsUpdatingIntervals, "info", toastDurationShort},
+	{"Base threshold", "recalculate_dynamic_thresholds", baseThresholdChanged, "Recalculating dynamic thresholds...", notification.MsgSettingsRecalculatingThresholds, "info", toastDurationShort},
+	{"Dynamic thresholds", "reconfigure_dynamic_thresholds", dynamicThresholdEnabledChanged, "Reconfiguring dynamic thresholds...", notification.MsgSettingsReconfiguringDynamicThresholds, "info", toastDurationMedium},
 	{"MQTT", "reconfigure_mqtt", mqttSettingsChanged, "Reconfiguring MQTT connection...", notification.MsgSettingsReconfiguringMqtt, "info", toastDurationMedium},
 	{"BirdWeather", "reconfigure_birdweather", birdWeatherSettingsChanged, "Reconfiguring BirdWeather integration...", notification.MsgSettingsReconfiguringBirdweather, "info", toastDurationMedium},
 	{"Streams", "reconfigure_rtsp_sources", streamsSettingsChanged, "Reconfiguring audio streams...", notification.MsgSettingsReconfiguringStreams, "info", toastDurationMedium},
@@ -2000,6 +2002,20 @@ func birdnetSettingsChanged(oldSettings, currentSettings *conf.Settings) bool {
 	}
 
 	return false
+}
+
+// baseThresholdChanged checks if the global BirdNET confidence threshold has changed.
+// When this changes, dynamic threshold CurrentValue entries must be recalculated
+// since they store absolute values derived from the base threshold.
+func baseThresholdChanged(oldSettings, currentSettings *conf.Settings) bool {
+	return oldSettings.BirdNET.Threshold != currentSettings.BirdNET.Threshold
+}
+
+// dynamicThresholdEnabledChanged checks if the DynamicThreshold.Enabled flag was toggled.
+// When this changes, the persistence and cleanup goroutines must be started or stopped
+// to match the new state.
+func dynamicThresholdEnabledChanged(oldSettings, currentSettings *conf.Settings) bool {
+	return oldSettings.Realtime.DynamicThreshold.Enabled != currentSettings.Realtime.DynamicThreshold.Enabled
 }
 
 // rangeFilterSettingsChanged checks if range filter settings have changed
