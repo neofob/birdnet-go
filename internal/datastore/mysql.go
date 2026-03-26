@@ -17,6 +17,9 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+// MySQL connection pool constants are defined in mysql_pool.go and shared
+// with the v2 store to keep both within MySQL's max_connections budget.
+
 // validTableNameRegex matches valid table names: alphanumeric, underscores, and dashes only
 var validTableNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
@@ -76,6 +79,23 @@ func (store *MySQLStore) Open() error {
 		GetLogger().Error("Failed to open MySQL database", logger.Error(err))
 		return fmt.Errorf("failed to open MySQL database: %w", err)
 	}
+
+	// Configure connection pool for MySQL.
+	// Unlike SQLite which serializes with MaxOpenConns(1), MySQL handles
+	// concurrent connections natively. These settings prevent resource
+	// exhaustion while keeping warm connections for latency.
+	sqlDB, err := db.DB()
+	if err != nil {
+		return errors.New(err).
+			Component("datastore").
+			Category(errors.CategoryDatabase).
+			Context("operation", "get_underlying_sqldb").
+			Build()
+	}
+	sqlDB.SetMaxOpenConns(MySQLMaxOpenConns)
+	sqlDB.SetMaxIdleConns(MySQLMaxIdleConns)
+	sqlDB.SetConnMaxLifetime(MySQLConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(MySQLConnMaxIdleTime)
 
 	store.DB = db
 
