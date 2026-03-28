@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/tphakala/birdnet-go/internal/audiocore/convert"
+	"github.com/tphakala/birdnet-go/internal/audiocore/ffmpeg"
+	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
 	"github.com/tphakala/birdnet-go/internal/detection"
 	"github.com/tphakala/birdnet-go/internal/events"
 	"github.com/tphakala/birdnet-go/internal/logger"
-	"github.com/tphakala/birdnet-go/internal/myaudio"
 )
 
 // Execute logs the note to the log file.
@@ -304,13 +306,6 @@ func (a *SaveAudioAction) Execute(ctx context.Context, _ any) error {
 	}
 
 	// Resolve NoteID from DetectionContext (set by DatabaseAction).
-	// The NoteID field is 0 at construction time because the action is built
-	// before the database save runs. Since SaveAudioAction runs as an independent
-	// job queue task, it may start before the CompositeAction (DB -> SSE -> MQTT)
-	// finishes on another worker. Poll briefly for the NoteID to be set, which
-	// ensures the DB save has committed before we use the ID for spectrogram
-	// pre-render correlation. If the timeout expires, proceed with NoteID=0 --
-	// the audio file is still saved, just without pre-render correlation.
 	if a.DetectionCtx != nil {
 		const noteIDWaitTimeout = 5 * time.Second
 		const noteIDPollInterval = 50 * time.Millisecond
@@ -320,11 +315,8 @@ func (a *SaveAudioAction) Execute(ctx context.Context, _ any) error {
 				a.NoteID = liveID
 				break
 			}
-			// Use select to respect context cancellation (e.g., during shutdown)
-			// instead of blocking with time.Sleep.
 			select {
 			case <-ctx.Done():
-				// Context cancelled; proceed with current NoteID (may be 0)
 			case <-time.After(noteIDPollInterval):
 			}
 			if ctx.Err() != nil {
@@ -343,11 +335,29 @@ func (a *SaveAudioAction) Execute(ctx context.Context, _ any) error {
 	}
 
 	if a.Settings.Realtime.Audio.Export.Type == "wav" {
-		if err := myaudio.SavePCMDataToWAV(outputPath, a.pcmData); err != nil {
+		if err := convert.SavePCMDataToWAV(outputPath, a.pcmData, conf.SampleRate, conf.BitDepth); err != nil {
 			return err
 		}
 	} else {
-		if err := myaudio.ExportAudioWithFFmpeg(a.pcmData, outputPath, &a.Settings.Realtime.Audio); err != nil {
+		exportSettings := &a.Settings.Realtime.Audio.Export
+		opts := &ffmpeg.ExportOptions{
+			PCMData:    a.pcmData,
+			OutputPath: outputPath,
+			Format:     exportSettings.Type,
+			Bitrate:    exportSettings.Bitrate,
+			SampleRate: conf.SampleRate,
+			Channels:   conf.NumChannels,
+			BitDepth:   conf.BitDepth,
+			FFmpegPath: a.Settings.Realtime.Audio.FfmpegPath,
+			GainDB:     exportSettings.Gain,
+			Normalization: ffmpeg.ExportNormalization{
+				Enabled:       exportSettings.Normalization.Enabled,
+				TargetLUFS:    exportSettings.Normalization.TargetLUFS,
+				TruePeak:      exportSettings.Normalization.TruePeak,
+				LoudnessRange: exportSettings.Normalization.LoudnessRange,
+			},
+		}
+		if err := ffmpeg.ExportAudio(ctx, opts); err != nil {
 			return err
 		}
 	}

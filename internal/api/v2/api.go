@@ -20,6 +20,8 @@ import (
 	"github.com/tphakala/birdnet-go/internal/alerting"
 	"github.com/tphakala/birdnet-go/internal/analysis/processor"
 	"github.com/tphakala/birdnet-go/internal/api/auth"
+	"github.com/tphakala/birdnet-go/internal/audiocore"
+	"github.com/tphakala/birdnet-go/internal/audiocore/engine"
 	"github.com/tphakala/birdnet-go/internal/birdnet"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
@@ -29,7 +31,6 @@ import (
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
 	"github.com/tphakala/birdnet-go/internal/logger"
-	"github.com/tphakala/birdnet-go/internal/myaudio"
 	"github.com/tphakala/birdnet-go/internal/observability"
 	"github.com/tphakala/birdnet-go/internal/securefs"
 	"github.com/tphakala/birdnet-go/internal/spectrogram"
@@ -90,7 +91,10 @@ type Controller struct {
 
 	// Audio level channel for SSE streaming
 	// TODO: Consider moving to a dedicated audio manager
-	audioLevelChan chan myaudio.AudioLevelData
+	audioLevelChan chan audiocore.AudioLevelData
+
+	// engine provides access to the unified audio subsystem (sources, buffers, routing).
+	engine *engine.AudioEngine
 
 	// V2Manager provides access to the v2 normalized database for stats and backup
 	V2Manager datastoreV2.Manager
@@ -155,6 +159,13 @@ func WithMetricsStore(store observability.MetricsStore) Option {
 func WithV2Manager(mgr datastoreV2.Manager) Option {
 	return func(c *Controller) {
 		c.V2Manager = mgr
+	}
+}
+
+// WithAudioEngine sets the AudioEngine for audio subsystem access.
+func WithAudioEngine(e *engine.AudioEngine) Option {
+	return func(c *Controller) {
+		c.engine = e
 	}
 }
 
@@ -249,11 +260,13 @@ func New(e *echo.Echo, ds datastore.Interface, settings *conf.Settings,
 // resolveAndValidateMediaPath resolves a potentially relative media path and ensures it exists as a directory.
 // Returns the absolute path and any error encountered.
 func resolveAndValidateMediaPath(configPath string) (string, error) {
-	if configPath == "" {
-		return "", fmt.Errorf("settings.realtime.audio.export.path must not be empty")
-	}
-
 	mediaPath := configPath
+	if mediaPath == "" {
+		mediaPath = defaultExportPath
+		GetLogger().Warn("Audio export path is empty, using default",
+			logger.String("default_path", defaultExportPath),
+		)
+	}
 
 	// Resolve relative path to absolute based on working directory
 	if !filepath.IsAbs(mediaPath) {

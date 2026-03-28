@@ -23,11 +23,11 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
+	"github.com/tphakala/birdnet-go/internal/audiocore"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
-	"github.com/tphakala/birdnet-go/internal/myaudio"
 	"github.com/tphakala/birdnet-go/internal/restart"
 	"github.com/tphakala/birdnet-go/internal/sysinfo"
 	"golang.org/x/text/cases"
@@ -108,7 +108,7 @@ type DiskInfo struct {
 	IsReadOnly      bool    `json:"is_read_only"`                   // Whether the filesystem is mounted as read-only
 }
 
-// AudioDeviceInfo wraps the myaudio.AudioDeviceInfo struct for API responses
+// AudioDeviceInfo wraps the audiocore.DeviceInfo struct for API responses
 type AudioDeviceInfo struct {
 	Index int    `json:"index"`
 	Name  string `json:"name"`
@@ -832,7 +832,7 @@ func (c *Controller) GetAudioDevices(ctx echo.Context) error {
 	)
 
 	// Get audio devices
-	devices, err := myaudio.ListAudioSources()
+	devices, err := audiocore.ListCaptureDevices()
 	if err != nil {
 		c.logErrorIfEnabled("Failed to list audio devices",
 			logger.Error(err),
@@ -920,7 +920,7 @@ func (c *Controller) GetActiveAudioDevice(ctx echo.Context) error {
 	}
 
 	// Try to get additional device info and validate the device exists
-	devices, err := myaudio.ListAudioSources()
+	devices, err := audiocore.ListCaptureDevices()
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to list audio devices: %v", err)
 		c.Debug("%s", errorMsg)

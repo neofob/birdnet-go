@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/tphakala/birdnet-go/internal/myaudio"
+	"github.com/tphakala/birdnet-go/internal/audiocore/schedule"
 	"github.com/tphakala/birdnet-go/internal/privacy"
 )
 
@@ -28,7 +28,10 @@ func (c *Controller) initQuietHoursRoutes() {
 // GetQuietHoursStatus returns the current quiet hours suppression state for all sources.
 func (c *Controller) GetQuietHoursStatus(ctx echo.Context) error {
 	settings := c.Settings
-	scheduler := myaudio.GetGlobalScheduler()
+	var scheduler *schedule.QuietHoursScheduler
+	if c.engine != nil {
+		scheduler = c.engine.Scheduler()
+	}
 
 	response := QuietHoursStatusResponse{
 		SuppressedStreams: make(map[string]bool),

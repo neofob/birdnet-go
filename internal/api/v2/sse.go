@@ -14,10 +14,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/tphakala/birdnet-go/internal/audiocore/soundlevel"
 	"github.com/tphakala/birdnet-go/internal/datastore"
+	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
 	"github.com/tphakala/birdnet-go/internal/logger"
-	"github.com/tphakala/birdnet-go/internal/myaudio"
 	"github.com/tphakala/birdnet-go/internal/observability/metrics"
 )
 
@@ -187,7 +188,7 @@ func newSSEDetectionData(note *datastore.Note, birdImage *imageprovider.BirdImag
 
 // SSESoundLevelData represents sound level data sent via SSE
 type SSESoundLevelData struct {
-	myaudio.SoundLevelData
+	soundlevel.SoundLevelData
 	EventType string `json:"eventType"`
 }
 
@@ -827,6 +828,12 @@ func (c *Controller) safeMarshalJSON(event string, data any) (jsonData []byte, e
 				logger.Any("panic", r),
 				logger.String("stack", string(debug.Stack())),
 			)
+			_ = errors.Newf("SSE JSON marshal panic: %v", r).
+				Component("api").
+				Category(errors.CategoryBroadcast).
+				Context("operation", "sse_marshal_panic").
+				Priority(errors.PriorityCritical).
+				Build()
 		}
 	}()
 	return json.Marshal(data)
@@ -883,7 +890,7 @@ func (c *Controller) BroadcastDetection(note *datastore.Note, birdImage *imagepr
 }
 
 // BroadcastSoundLevel is a helper method to broadcast sound level data from the controller
-func (c *Controller) BroadcastSoundLevel(soundLevel *myaudio.SoundLevelData) error {
+func (c *Controller) BroadcastSoundLevel(soundLevel *soundlevel.SoundLevelData) error {
 	if c.sseManager == nil {
 		return fmt.Errorf("SSE manager not initialized")
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/tphakala/birdnet-go/internal/conf"
@@ -77,7 +76,11 @@ func (store *MySQLStore) Open() error {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: gormLogger})
 	if err != nil {
 		GetLogger().Error("Failed to open MySQL database", logger.Error(err))
-		return fmt.Errorf("failed to open MySQL database: %w", err)
+		return errors.New(err).
+			Component("datastore").
+			Category(errors.CategoryDatabase).
+			Context("operation", "mysql_open").
+			Build()
 	}
 
 	// Configure connection pool for MySQL.
@@ -215,8 +218,9 @@ func (store *MySQLStore) Optimize(ctx context.Context) error {
 
 		// Run OPTIMIZE TABLE
 		if err := store.DB.Exec(fmt.Sprintf("OPTIMIZE TABLE `%s`", table)).Error; err != nil {
-			// MySQL may return a note/warning for InnoDB tables, which is not an error
-			if !strings.Contains(err.Error(), "Table does not support optimize") {
+			// MySQL error 1031 (ER_ILLEGAL_HA) is returned for InnoDB tables
+			// that don't support OPTIMIZE TABLE -- this is expected, not an error.
+			if !isMySQLError(err, mysqlErrIllegalHA) {
 				optimizeLogger.Warn("Failed to optimize table",
 					logger.String("table", table),
 					logger.Error(err),

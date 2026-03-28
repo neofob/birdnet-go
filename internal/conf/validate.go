@@ -25,6 +25,20 @@ const MinSoundLevelInterval = 5
 // DefaultCleanupCheckInterval is the default disk cleanup check interval in minutes
 const DefaultCleanupCheckInterval = 15
 
+// Valid retention policy values
+const (
+	RetentionPolicyNone  = "none"  // No retention cleanup
+	RetentionPolicyAge   = "age"   // Age-based retention cleanup
+	RetentionPolicyUsage = "usage" // Disk usage-based retention cleanup
+)
+
+// validRetentionPolicies contains all valid retention policy values
+var validRetentionPolicies = []string{
+	RetentionPolicyNone,
+	RetentionPolicyAge,
+	RetentionPolicyUsage,
+}
+
 // Precompiled regular expressions for validation
 var (
 	// birdweatherIDPattern validates Birdweather ID format (24 alphanumeric characters)
@@ -626,6 +640,11 @@ func ValidateSettings(settings *Settings) error {
 		ve.Errors = append(ve.Errors, err.Error())
 	}
 
+	// Validate Retention settings (policy, maxAge, maxUsage)
+	if err := validateRetentionSettings(&settings.Realtime.Audio.Export.Retention); err != nil {
+		ve.Errors = append(ve.Errors, err.Error())
+	}
+
 	// Validate Dashboard settings
 	if err := validateDashboardSettings(&settings.Realtime.Dashboard); err != nil {
 		ve.Errors = append(ve.Errors, err.Error())
@@ -671,16 +690,11 @@ func validateBirdNETSettings(birdnetSettings *BirdNETConfig, settings *Settings)
 			Build()
 	}
 
-	// Handle warnings (side effects: logging + storing in settings)
+	// Handle warnings (side effects: logging)
+	// Locale fallback warnings are debug-level since the fallback works correctly
+	// and common locales like "en" or "en-US" always resolve to "en-uk"
 	for _, warning := range result.Warnings {
-		GetLogger().Warn("Configuration warning", logger.String("message", warning))
-
-		// Store the validation warning for telemetry reporting
-		if settings.ValidationWarnings == nil {
-			settings.ValidationWarnings = make([]string, 0)
-		}
-		settings.ValidationWarnings = append(settings.ValidationWarnings,
-			fmt.Sprintf("config-locale-validation: %s", warning))
+		GetLogger().Debug("Configuration notice", logger.String("message", warning))
 	}
 
 	// Return errors if validation failed
@@ -1217,7 +1231,49 @@ func validateAudioSettings(settings *AudioSettings) error {
 	return nil
 }
 
-// Add this new function
+// validateRetentionSettings validates retention policy, MaxAge, and MaxUsage at startup.
+// This catches invalid values early instead of failing silently at runtime when the
+// disk manager first attempts cleanup.
+func validateRetentionSettings(settings *RetentionSettings) error {
+	// Empty policy means retention is disabled — treat as "none"
+	if settings.Policy == "" {
+		return nil
+	}
+
+	// Validate policy against known values
+	if !slices.Contains(validRetentionPolicies, settings.Policy) {
+		return errors.Newf("retention policy must be one of %v, got %q", validRetentionPolicies, settings.Policy).
+			Category(errors.CategoryValidation).
+			Context("validation_type", "retention-policy").
+			Context("policy", settings.Policy).
+			Build()
+	}
+
+	// Validate MaxAge when age-based policy is active
+	if settings.Policy == RetentionPolicyAge {
+		if _, err := ParseRetentionPeriod(settings.MaxAge); err != nil {
+			return errors.Newf("retention maxAge %q is invalid: %v", settings.MaxAge, err).
+				Category(errors.CategoryValidation).
+				Context("validation_type", "retention-max-age").
+				Context("max_age", settings.MaxAge).
+				Build()
+		}
+	}
+
+	// Validate MaxUsage when usage-based policy is active
+	if settings.Policy == RetentionPolicyUsage {
+		if _, err := ParsePercentage(settings.MaxUsage, "retention.maxUsage"); err != nil {
+			return errors.Newf("retention maxUsage %q is invalid: %v", settings.MaxUsage, err).
+				Category(errors.CategoryValidation).
+				Context("validation_type", "retention-max-usage").
+				Context("max_usage", settings.MaxUsage).
+				Build()
+		}
+	}
+
+	return nil
+}
+
 func validateDashboardSettings(settings *Dashboard) error {
 	// Validate deprecated root SummaryLimit (only when non-zero, i.e. not yet migrated)
 	if settings.SummaryLimit != 0 && (settings.SummaryLimit < 10 || settings.SummaryLimit > 1000) {

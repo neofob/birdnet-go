@@ -422,6 +422,9 @@ func init() {
 	RegisterComponent("worker", "analysis.worker")
 	RegisterComponent("threshold", "analysis.threshold")
 	RegisterComponent("tracker", "analysis.tracker")
+
+	// audiocore package
+	RegisterComponent("audiocore", "audiocore")
 }
 
 // Helper functions for auto-detection and categorization
@@ -755,4 +758,44 @@ func IsCategory(err error, category ErrorCategory) bool {
 // This is commonly used for expected conditions like unknown species or missing resources.
 func IsNotFound(err error) bool {
 	return IsCategory(err, CategoryNotFound)
+}
+
+// IsNetwork checks if an error is an EnhancedError with CategoryNetwork.
+// This is used to detect transient network errors (DNS, timeout, connection issues)
+// that represent infrastructure problems rather than code bugs.
+func IsNetwork(err error) bool {
+	return IsCategory(err, CategoryNetwork)
+}
+
+// IsTransientNetworkError checks if an error represents a transient network condition
+// by examining both the error category (CategoryNetwork, CategoryTimeout) and the
+// error message for known transient patterns. This is used to downgrade logging
+// and suppress Sentry reporting for expected external service failures.
+func IsTransientNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a categorized network/timeout error
+	if IsCategory(err, CategoryNetwork) || IsCategory(err, CategoryTimeout) {
+		return true
+	}
+
+	// Also check the error message for transient network patterns,
+	// even if the error wasn't wrapped as an EnhancedError
+	errMsg := strings.ToLower(err.Error())
+	transientPatterns := []string{
+		"dns", "timeout", "deadline exceeded",
+		"connection refused", "connection reset",
+		"no such host", "i/o timeout",
+		"network is unreachable", "no route to host",
+		"tls handshake timeout",
+	}
+	for _, pattern := range transientPatterns {
+		if strings.Contains(errMsg, pattern) {
+			return true
+		}
+	}
+
+	return false
 }

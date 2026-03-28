@@ -17,6 +17,9 @@ import (
 
 	"github.com/tphakala/birdnet-go/internal/analysis/jobqueue"
 	"github.com/tphakala/birdnet-go/internal/analysis/species"
+	"github.com/tphakala/birdnet-go/internal/audiocore"
+	"github.com/tphakala/birdnet-go/internal/audiocore/buffer"
+	"github.com/tphakala/birdnet-go/internal/audiocore/convert"
 	"github.com/tphakala/birdnet-go/internal/birdnet"
 	"github.com/tphakala/birdnet-go/internal/birdweather"
 	"github.com/tphakala/birdnet-go/internal/conf"
@@ -25,7 +28,6 @@ import (
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/mqtt"
-	"github.com/tphakala/birdnet-go/internal/myaudio"
 	"github.com/tphakala/birdnet-go/internal/notification"
 	"github.com/tphakala/birdnet-go/internal/observability"
 	"github.com/tphakala/birdnet-go/internal/privacy"
@@ -92,6 +94,7 @@ type Processor struct {
 	flusherCancel       context.CancelFunc // Function to cancel flusher goroutine
 	preRenderer         PreRendererSubmit  // Spectrogram pre-renderer for background generation
 	preRendererOnce     sync.Once          // Ensures pre-renderer is initialized only once
+	startOnce           sync.Once          // Ensures Start() is called only once
 	// SSE related fields
 	SSEBroadcaster      func(note *datastore.Note, birdImage *imageprovider.BirdImage) error // Function to broadcast detection via SSE
 	sseBroadcasterMutex sync.RWMutex                                                         // Mutex to protect SSE broadcaster access
@@ -103,6 +106,15 @@ type Processor struct {
 	pendingFlushNotifsMu    sync.Mutex                           // Mutex to protect pendingFlushNotifs
 	lastBroadcastSnapshot   []SSEPendingDetection                // Last broadcast snapshot for change detection
 	lastBroadcastSnapshotMu sync.Mutex                           // Mutex to protect lastBroadcastSnapshot
+
+	// SourceRegistry provides access to registered audio sources (injected via SetRegistry).
+	registry   *audiocore.SourceRegistry
+	registryMu sync.RWMutex
+
+	// BufferMgr provides access to capture buffers for audio clip extraction.
+	// Set once during pipeline initialization (audio_pipeline_service.go) and never replaced;
+	// no synchronization needed for concurrent reads.
+	BufferMgr *buffer.Manager
 
 	// Backup system fields (optional)
 	backupManager   any // Use interface{} to avoid import cycle
@@ -452,17 +464,9 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 	// Initialize species tracker if enabled
 	p.NewSpeciesTracker = initSpeciesTracker(settings, ds)
 
-	// Start the detection processor
-	p.startDetectionProcessor()
-
-	// Start the worker pool for action processing
-	p.startWorkerPool()
-
-	// Create context for pending detections flusher
-	p.flusherCtx, p.flusherCancel = context.WithCancel(context.Background())
-
-	// Start the held detection flusher
-	p.pendingDetectionsFlusher()
+	// NOTE: Background goroutines (detection processor, worker pool, flusher)
+	// are NOT started here. Call Start() after wiring BufferMgr and Registry
+	// to avoid a race where detections arrive before the buffer manager is set.
 
 	// Initialize BirdWeather client if enabled
 	p.initBirdWeatherClient(settings)
@@ -513,13 +517,32 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 	return p
 }
 
-// Start goroutine to process detections from the queue
+// Start launches the background goroutines that process detections.
+// It must be called AFTER BufferMgr and Registry are wired — otherwise
+// detections arrive before the buffer manager is available and audio
+// clip export silently fails.
+func (p *Processor) Start() {
+	p.startOnce.Do(func() {
+		GetLogger().Info("Processor.Start() called — BufferMgr and Registry wired, launching detection goroutines",
+			logger.Bool("buffer_mgr_set", p.BufferMgr != nil),
+			logger.Bool("registry_set", p.Registry() != nil),
+			logger.String("operation", "processor_start"))
+
+		p.startDetectionProcessor()
+		p.startWorkerPool()
+
+		p.flusherCtx, p.flusherCancel = context.WithCancel(context.Background())
+		p.pendingDetectionsFlusher()
+	})
+}
+
+// startDetectionProcessor starts the goroutine that processes detections from the queue.
 func (p *Processor) startDetectionProcessor() {
 	// Add structured logging for detection processor startup
 	GetLogger().Info("Starting detection processor",
 		logger.String("operation", "detection_processor_startup"))
 	go func() {
-		// ResultsQueue is fed by myaudio.ProcessData()
+		// ResultsQueue is fed by analysis.ProcessData()
 		for item := range birdnet.ResultsQueue {
 			// Pass by value since we own the data (see queue.go ownership comment)
 			p.processDetections(item)
@@ -902,14 +925,14 @@ func (p *Processor) resolveAudioSource(source datastore.AudioSource) detection.A
 
 	// Try to get additional details from registry
 	// Use same lookup order as NewWithSpeciesInfo: connection string first, then ID
-	registry := myaudio.GetRegistry()
+	registry := p.Registry()
 	if registry != nil {
-		if existingSource, exists := registry.GetSourceByConnection(source.ID); exists {
+		if existingSource, exists := registry.GetByConnection(source.ID); exists {
 			audioSource.ID = existingSource.ID
 			audioSource.SafeString = existingSource.SafeString
 			audioSource.DisplayName = existingSource.DisplayName
 			audioSource.Type = detection.DetermineSourceType(existingSource.SafeString)
-		} else if existingSource, exists := registry.GetSourceByID(source.ID); exists {
+		} else if existingSource, exists := registry.Get(source.ID); exists {
 			audioSource.ID = existingSource.ID
 			audioSource.SafeString = existingSource.SafeString
 			audioSource.DisplayName = existingSource.DisplayName
@@ -1056,7 +1079,7 @@ func (p *Processor) buildClipPath(scientificName string, confidence float32, dur
 	timestamp := t.Format("20060102T150405Z")
 	year := t.Format("2006")
 	month := t.Format("01")
-	fileType := myaudio.GetFileExtension(p.Settings.Realtime.Audio.Export.Type)
+	fileType := convert.GetFileExtension(p.Settings.Realtime.Audio.Export.Type)
 
 	var filename string
 	if durationSeconds > 0 {
@@ -1747,7 +1770,7 @@ func (p *Processor) buildSaveAudioAction(det *Detections, detectionCtx *Detectio
 	// Read PCM data from the capture buffer NOW, while the data is still in the
 	// ring buffer. By the time the job queue picks up the SaveAudioAction, the
 	// buffer may have been overwritten with newer audio data.
-	pcmData, err := myaudio.ReadSegmentFromCaptureBuffer(det.Result.AudioSource.ID, det.Result.BeginTime, captureLength)
+	pcmData, err := p.readCaptureSegment(det.Result.AudioSource.ID, det.Result.BeginTime, captureLength)
 	if err != nil {
 		GetLogger().Error("Failed to read capture buffer for audio export",
 			logger.String("component", "analysis.processor.actions"),
@@ -1777,6 +1800,21 @@ func (p *Processor) buildSaveAudioAction(det *Detections, detectionCtx *Detectio
 		DetectionCtx:  detectionCtx,
 		CorrelationID: det.CorrelationID,
 	}
+}
+
+// readCaptureSegment reads PCM data from the audiocore capture buffer.
+// startTime is the segment start, duration is in seconds.
+func (p *Processor) readCaptureSegment(sourceID string, startTime time.Time, duration int) ([]byte, error) {
+	safeSource := privacy.SanitizeStreamUrl(sourceID)
+	if p.BufferMgr == nil {
+		return nil, fmt.Errorf("buffer manager not available for source %s", safeSource)
+	}
+	cb, err := p.BufferMgr.CaptureBuffer(sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("no capture buffer for source %s: %w", safeSource, err)
+	}
+	endTime := startTime.Add(time.Duration(duration) * time.Second)
+	return cb.ReadSegment(startTime, endTime)
 }
 
 // GetBwClient safely returns the current BirdWeather client
@@ -1938,15 +1976,15 @@ func (p *Processor) CleanupEventTracker(staleAfter time.Duration) int {
 // Falls back to sanitized source if lookup fails (prevents credential exposure)
 // TODO: Consider moving to AudioSource struct throughout the pipeline to eliminate this lookup
 func (p *Processor) getDisplayNameForSource(sourceID string) string {
-	registry := myaudio.GetRegistry()
+	registry := p.Registry()
 	if registry != nil {
 		// Try lookup by ID first
-		if source, exists := registry.GetSourceByID(sourceID); exists {
+		if source, exists := registry.Get(sourceID); exists {
 			return source.DisplayName
 		}
 
 		// Try lookup by connection string (handles legacy case)
-		if source, exists := registry.GetSourceByConnection(sourceID); exists {
+		if source, exists := registry.GetByConnection(sourceID); exists {
 			return source.DisplayName
 		}
 	}
@@ -2081,25 +2119,15 @@ func (p *Processor) logDetectionResults(source string, rawCount, filteredCount i
 	shouldLog, reason := p.logDedup.ShouldLog(source, rawCount, filteredCount)
 
 	if shouldLog {
-		// Only log at INFO level when there are actual filtered detections
-		// This prevents log spam from empty analysis cycles
-		if filteredCount > 0 {
-			GetLogger().Info("Detection processing results",
-				logger.String("source", p.getDisplayNameForSource(source)),
-				logger.Int("raw_results_count", rawCount),
-				logger.Int("filtered_detections_count", filteredCount),
-				logger.String("log_reason", reason),
-				logger.String("operation", "process_detections_summary"))
-		} else {
-			// Log zero-detection cycles at DEBUG level for troubleshooting
-			// without flooding INFO logs with noise
-			GetLogger().Debug("Detection processing results",
-				logger.String("source", p.getDisplayNameForSource(source)),
-				logger.Int("raw_results_count", rawCount),
-				logger.Int("filtered_detections_count", 0),
-				logger.String("log_reason", reason),
-				logger.String("operation", "process_detections_summary"))
-		}
+		// Log all processing results at DEBUG level to avoid flooding console.
+		// Actual detections are logged at INFO when they become pending/confirmed
+		// detections (see "Created new pending detection" log message).
+		GetLogger().Debug("Detection processing results",
+			logger.String("source", p.getDisplayNameForSource(source)),
+			logger.Int("raw_results_count", rawCount),
+			logger.Int("filtered_detections_count", filteredCount),
+			logger.String("log_reason", reason),
+			logger.String("operation", "process_detections_summary"))
 	}
 }
 
