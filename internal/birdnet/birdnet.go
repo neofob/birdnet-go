@@ -98,6 +98,18 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 			Build()
 	}
 
+	// Load labels before model initialization — ONNX models require labels
+	// at construction time for output dimension validation.
+	if err := bn.loadLabels(); err != nil {
+		return nil, errors.New(err).
+			Component("birdnet").
+			Category(errors.CategoryModelInit).
+			Context("operation", "load_labels").
+			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
+			Context("locale", settings.BirdNET.Locale).
+			Build()
+	}
+
 	if err := bn.initializeModel(); err != nil {
 		return nil, errors.New(err).
 			Component("birdnet").
@@ -113,16 +125,6 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 			Category(errors.CategoryModelInit).
 			Context("operation", "initialize_range_filter").
 			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
-			Build()
-	}
-
-	if err := bn.loadLabels(); err != nil {
-		return nil, errors.New(err).
-			Component("birdnet").
-			Category(errors.CategoryModelInit).
-			Context("operation", "load_labels").
-			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
-			Context("locale", settings.BirdNET.Locale).
 			Build()
 	}
 
@@ -154,8 +156,26 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 	return bn, nil
 }
 
+// isONNXModel returns true if the model path points to an ONNX model file.
+// Expands environment variables before checking the extension.
+func isONNXModel(path string) bool {
+	expanded := os.ExpandEnv(path)
+	return strings.HasSuffix(strings.ToLower(expanded), ".onnx")
+}
+
 // initializeModel loads and initializes the primary BirdNET model.
+// Dispatches to ONNX or TFLite backend based on the model file extension.
 func (bn *BirdNET) initializeModel() error {
+	// If model path ends with .onnx, use the ONNX backend
+	if isONNXModel(bn.Settings.BirdNET.ModelPath) {
+		return bn.initializeONNXModel()
+	}
+
+	return bn.initializeTFLiteModel()
+}
+
+// initializeTFLiteModel loads and initializes a TFLite model as the classifier backend.
+func (bn *BirdNET) initializeTFLiteModel() error {
 	start := time.Now()
 
 	modelData, err := bn.loadModel()
@@ -306,6 +326,16 @@ func (bn *BirdNET) getMetaModelData() ([]byte, error) {
 
 // initializeMetaModel loads and initializes the meta model used for range filtering.
 func (bn *BirdNET) initializeMetaModel() error {
+	// If range filter model path ends with .onnx, use the ONNX backend
+	if isONNXModel(bn.Settings.BirdNET.RangeFilter.ModelPath) {
+		return bn.initializeONNXMetaModel()
+	}
+
+	return bn.initializeTFLiteMetaModel()
+}
+
+// initializeTFLiteMetaModel loads and initializes a TFLite range filter model.
+func (bn *BirdNET) initializeTFLiteMetaModel() error {
 	start := time.Now()
 
 	metaModelData, err := bn.getMetaModelData()
@@ -851,6 +881,19 @@ func (bn *BirdNET) ReloadModel() error {
 	}
 	bn.Debug("Taxonomy data reloaded successfully")
 
+	// Reload labels before model initialization — ONNX models require labels
+	// at construction time for output dimension validation.
+	if err := bn.loadLabels(); err != nil {
+		rollback()
+		return errors.New(err).
+			Component("birdnet").
+			Category(errors.CategoryModelInit).
+			Context("operation", "reload_model").
+			Context("step", "load_labels").
+			Build()
+	}
+	bn.Debug("Labels loaded successfully")
+
 	// Initialize new model
 	if err := bn.initializeModel(); err != nil {
 		rollback()
@@ -874,18 +917,6 @@ func (bn *BirdNET) ReloadModel() error {
 			Build()
 	}
 	bn.Debug("Meta model initialized successfully")
-
-	// Reload labels
-	if err := bn.loadLabels(); err != nil {
-		rollback()
-		return errors.New(err).
-			Component("birdnet").
-			Category(errors.CategoryModelInit).
-			Context("operation", "reload_model").
-			Context("step", "load_labels").
-			Build()
-	}
-	bn.Debug("Labels loaded successfully")
 
 	// Validate that the model and labels match
 	if err := bn.validateModelAndLabels(); err != nil {
