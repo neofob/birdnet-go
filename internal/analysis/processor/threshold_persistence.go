@@ -242,11 +242,15 @@ func (p *Processor) persistDynamicThresholds() error {
 // persistence cycle was in progress. Because the periodic batch upsert could
 // re-insert a stale snapshot of a deleted species, this method re-deletes them
 // from the database after the batch write completes.
+//
+// If any DB delete fails, the failed items are requeued into pendingResets so
+// they will be retried on the next persistence cycle rather than silently lost.
 func (p *Processor) drainPendingResets() {
 	p.thresholdsMutex.Lock()
 	resets := p.pendingResets
 	resetAll := p.pendingResetAll
-	// Reset the pending state. Use nil-safe initialization since tests may
+	// Clear the pending state under lock so new resets can accumulate while
+	// we perform DB operations. Use nil-safe initialization since tests may
 	// create Processor structs without initializing pendingResets.
 	if p.pendingResets != nil {
 		p.pendingResets = make(map[string]struct{})
@@ -261,32 +265,66 @@ func (p *Processor) drainPendingResets() {
 	log := GetLogger()
 
 	if resetAll {
+		var requeue bool
+
 		if _, err := p.Ds.DeleteAllDynamicThresholds(); err != nil {
-			log.Warn("failed to re-delete all dynamic thresholds after persistence",
+			requeue = true
+			log.Warn("failed to re-delete all dynamic thresholds after persistence, requeuing",
 				logger.Error(err),
 				logger.String("operation", "drain_pending_resets"))
 		}
 		if _, err := p.Ds.DeleteAllThresholdEvents(); err != nil {
-			log.Warn("failed to re-delete all threshold events after persistence",
+			requeue = true
+			log.Warn("failed to re-delete all threshold events after persistence, requeuing",
 				logger.Error(err),
 				logger.String("operation", "drain_pending_resets"))
+		}
+
+		// If either delete-all failed, requeue the resetAll flag
+		if requeue {
+			p.thresholdsMutex.Lock()
+			p.pendingResetAll = true
+			p.thresholdsMutex.Unlock()
 		}
 		return
 	}
 
+	// Track species whose DB deletes failed so we can requeue them.
+	var failedResets []string
+
 	for speciesName := range resets {
-		if err := p.Ds.DeleteDynamicThreshold(speciesName); err != nil {
-			log.Warn("failed to re-delete dynamic threshold after persistence",
+		thresholdErr := p.Ds.DeleteDynamicThreshold(speciesName)
+		if thresholdErr != nil {
+			log.Warn("failed to re-delete dynamic threshold after persistence, requeuing",
 				logger.String("species", speciesName),
-				logger.Error(err),
+				logger.Error(thresholdErr),
 				logger.String("operation", "drain_pending_resets"))
 		}
-		if err := p.Ds.DeleteThresholdEvents(speciesName); err != nil {
-			log.Warn("failed to re-delete threshold events after persistence",
+		eventsErr := p.Ds.DeleteThresholdEvents(speciesName)
+		if eventsErr != nil {
+			log.Warn("failed to re-delete threshold events after persistence, requeuing",
 				logger.String("species", speciesName),
-				logger.Error(err),
+				logger.Error(eventsErr),
 				logger.String("operation", "drain_pending_resets"))
 		}
+		if thresholdErr != nil || eventsErr != nil {
+			failedResets = append(failedResets, speciesName)
+		}
+	}
+
+	// Requeue any species whose deletes failed so the next cycle retries them.
+	if len(failedResets) > 0 {
+		p.thresholdsMutex.Lock()
+		for _, speciesName := range failedResets {
+			if p.pendingResets != nil {
+				p.pendingResets[speciesName] = struct{}{}
+			}
+		}
+		p.thresholdsMutex.Unlock()
+
+		log.Warn("requeued failed pending resets for next cycle",
+			logger.Int("requeued_count", len(failedResets)),
+			logger.String("operation", "drain_pending_resets"))
 	}
 }
 

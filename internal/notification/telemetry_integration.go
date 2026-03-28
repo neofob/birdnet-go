@@ -226,9 +226,11 @@ func (nt *NotificationTelemetry) WebhookRequestError(
 	// intentionally avoid ShouldReport which would increment
 	// consecutiveFailures and suppress the next real (non-connection) error.
 	if isConnectionError(err) {
-		if nt.suppressor != nil && err != nil {
-			nt.suppressor.RecordFailure(providerName, err.Error())
-		}
+		// Connection errors are not tracked by the error suppressor to avoid
+		// interfering with the suppression logic for reportable errors.
+		// Recording them would set sampleError, causing misleading recovery
+		// notifications that report a connection error as the cause of a
+		// different error streak.
 		return
 	}
 
