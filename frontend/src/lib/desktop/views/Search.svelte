@@ -64,7 +64,7 @@
     hasAudio: boolean;
   }
 
-  type VerifiedStatus = 'any' | 'verified' | 'unverified';
+  type VerifiedStatus = 'any' | 'verified' | 'unverified' | 'false_positive';
   type LockedStatus = 'any' | 'locked' | 'unlocked';
   type TimeOfDayFilter = 'any' | 'day' | 'night' | 'sunrise' | 'sunset';
   type SortBy = 'date_desc' | 'date_asc' | 'species_asc' | 'confidence_desc';
@@ -565,6 +565,7 @@
                   <option value="any">{t('search.verifiedOptions.any')}</option>
                   <option value="verified">{t('search.verifiedOptions.verified')}</option>
                   <option value="unverified">{t('search.verifiedOptions.unverified')}</option>
+                  <option value="false_positive">{t('common.review.status.falsePositive')}</option>
                 </select>
               </div>
 
@@ -856,7 +857,7 @@
                         {result.verified === 'correct'
                           ? t('search.statusBadges.verified')
                           : result.verified === 'false_positive'
-                            ? t('search.statusBadges.false')
+                            ? t('common.review.status.falsePositive')
                             : t('search.statusBadges.unverified')}
                       </div>
                       <div class="status-badge {result.locked ? 'locked' : 'unverified'}">
@@ -1114,7 +1115,7 @@
                         {result.verified === 'correct'
                           ? t('search.statusBadges.verified')
                           : result.verified === 'false_positive'
-                            ? t('search.statusBadges.false')
+                            ? t('common.review.status.falsePositive')
                             : t('search.statusBadges.unverified')}
                       </div>
                       <div class="status-badge {result.locked ? 'locked' : 'unverified'}">
