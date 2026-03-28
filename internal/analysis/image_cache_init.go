@@ -1,11 +1,13 @@
 package analysis
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/tphakala/birdnet-go/internal/api"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
+	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/observability"
@@ -122,6 +124,21 @@ func warmUpImageCache(cache *imageprovider.BirdImageCache, species []string) {
 		wg.Add(1)
 		go func(sciName string) {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicErr := fmt.Errorf("panic in image cache warm-up: %v", r)
+					log.Error("panic in image cache warm-up",
+						logger.String("species", sciName),
+						logger.Any("panic", r))
+					_ = errors.New(panicErr).
+						Component("analysis.image_cache").
+						Category(errors.CategorySystem).
+						Context("operation", "image_cache_warmup_panic").
+						Context("species", sciName).
+						Priority(errors.PriorityCritical).
+						Build()
+				}
+			}()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 

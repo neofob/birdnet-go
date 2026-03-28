@@ -6,6 +6,7 @@ package analysis
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -13,6 +14,7 @@ import (
 	"github.com/tphakala/birdnet-go/internal/birdnet"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
+	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/observability/metrics"
 	"github.com/tphakala/birdnet-go/internal/telemetry"
@@ -50,6 +52,9 @@ type bufferOverrunTracker struct {
 
 // overrunTracker is the package-level tracker instance.
 var overrunTracker bufferOverrunTracker
+
+// lastQueueOverflowReport tracks the last time a queue overflow was reported to Sentry.
+var lastQueueOverflowReport atomic.Int64
 
 // recordBufferOverrun records a buffer overrun event and reports to Sentry
 // when the tumbling window expires with enough accumulated overruns.
@@ -150,7 +155,12 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt ti
 	// convert audio data to float32
 	sampleData, err := convertToFloat32WithPool(data, conf.BitDepth)
 	if err != nil {
-		return fmt.Errorf("error converting %v bit PCM data to float32: %w", conf.BitDepth, err)
+		return errors.New(err).
+			Component("analysis").
+			Category(errors.CategoryAudio).
+			Context("operation", "pcm_to_float32").
+			Context("bit_depth", fmt.Sprintf("%d", conf.BitDepth)).
+			Build()
 	}
 
 	// run BirdNET inference
@@ -173,7 +183,11 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt ti
 	}
 
 	if err != nil {
-		return fmt.Errorf("error predicting species: %w", err)
+		return errors.New(err).
+			Component("analysis").
+			Category(errors.CategoryAudioAnalysis).
+			Context("operation", "birdnet_predict").
+			Build()
 	}
 
 	// get elapsed time (includes conversion + inference for overrun check)
@@ -265,6 +279,22 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime, audioCapturedAt ti
 			logger.String("source", source))
 		if pm != nil {
 			pm.RecordAudioQueueOperation(source, "enqueue", "dropped")
+		}
+		// Rate-limit queue overflow telemetry to prevent Sentry floods under sustained backpressure.
+		now := time.Now().Unix()
+		last := lastQueueOverflowReport.Load()
+		if telemetry.IsTelemetryEnabled() && (now-last >= int64(bufferOverrunReportCooldown.Seconds())) {
+			if lastQueueOverflowReport.CompareAndSwap(last, now) {
+				telemetry.FastCaptureMessageWithExtras(
+					"results queue full, detections dropped",
+					sentry.LevelWarning,
+					"analysis",
+					map[string]any{
+						"source":     source,
+						"queue_size": len(birdnet.ResultsQueue),
+					},
+				)
+			}
 		}
 	}
 	return nil
