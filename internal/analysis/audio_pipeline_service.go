@@ -3,8 +3,10 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/tphakala/birdnet-go/internal/audiocore/engine"
 	"github.com/tphakala/birdnet-go/internal/audiocore/schedule"
 	"github.com/tphakala/birdnet-go/internal/audiocore/soundlevel"
+	"github.com/tphakala/birdnet-go/internal/classifier"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
 	"github.com/tphakala/birdnet-go/internal/diskmanager"
@@ -352,34 +355,37 @@ func (p *AudioPipelineService) setupAudioSources(audioLevelChan chan audiocore.A
 
 	// Add audio sources via engine — this registers sources, allocates buffers,
 	// and starts capture (FFmpeg streams or device capture).
-	sourceConfigs := p.buildSourceConfigs()
+	sourceConfigs := p.buildSourceConfigsWithModels()
+	sourceModelMap := make(map[string][]string, len(sourceConfigs))
 	var sourceIDs []string
-	for _, cfg := range sourceConfigs {
-		if addErr := p.engine.AddSource(cfg); addErr != nil {
+	for _, scm := range sourceConfigs {
+		if addErr := p.engine.AddSource(scm.config); addErr != nil {
 			log.Error("failed to add audio source",
-				logger.String("source_id", cfg.ID),
-				logger.String("source_type", string(cfg.Type)),
-				logger.String("connection", privacy.SanitizeStreamUrl(cfg.ConnectionString)),
+				logger.String("source_id", scm.config.ID),
+				logger.String("source_type", string(scm.config.Type)),
+				logger.String("connection", privacy.SanitizeStreamUrl(scm.config.ConnectionString)),
 				logger.Error(addErr),
 				logger.String("operation", operation))
 			continue
 		}
-		if src, ok := p.engine.Registry().GetByConnection(cfg.ConnectionString); ok {
+		if src, ok := p.engine.Registry().GetByConnection(scm.config.ConnectionString); ok {
 			sourceIDs = append(sourceIDs, src.ID)
+			sourceModelMap[src.ID] = scm.modelIDs
 		} else {
 			log.Warn("source added but not found in registry by connection string",
-				logger.String("connection", privacy.SanitizeStreamUrl(cfg.ConnectionString)),
+				logger.String("connection", privacy.SanitizeStreamUrl(scm.config.ConnectionString)),
 				logger.String("operation", operation))
 		}
 	}
 
 	// Register buffer, audio level, and sound level consumers for all sources.
-	p.registerConsumersForSources(sourceIDs, audioLevelChan, operation)
+	p.registerConsumersForSources(sourceIDs, sourceModelMap, audioLevelChan, operation)
 	p.registerSoundLevelConsumers(sourceIDs, operation)
 
 	// Update buffer monitors for the new sources.
 	if len(sourceIDs) > 0 {
-		if monErr := p.bufferMgr.UpdateMonitors(sourceIDs); monErr != nil {
+		sourceMonitorConfigs := p.buildMonitorConfigs(sourceModelMap, sourceIDs)
+		if monErr := p.bufferMgr.UpdateMonitors(sourceMonitorConfigs); monErr != nil {
 			log.Warn("buffer monitor update completed with errors",
 				logger.Error(monErr),
 				logger.Int("source_count", len(sourceIDs)),
@@ -449,20 +455,38 @@ func (p *AudioPipelineService) registerSoundLevelConsumers(sourceIDs []string, o
 }
 
 // registerConsumersForSources registers BufferConsumer and AudioLevelConsumer
-// on the AudioRouter for each source ID. Shared by setupAudioSources and
-// reconfigureChangedSources.
-func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, audioLevelChan chan audiocore.AudioLevelData, operation string) {
+// on the AudioRouter for each source ID. The sourceModelMap carries the
+// config-level model IDs for each source so that buffer consumers fan out to
+// only the models assigned to that source. When a source has no configured
+// models (empty slice), the primary model is used as a fallback.
+func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, sourceModelMap map[string][]string, audioLevelChan chan audiocore.AudioLevelData, operation string) {
 	log := GetLogger()
 
-	// Build model targets from the primary model's actual metadata.
-	// Phase 3e: single model only — future phases will iterate all models
-	// from the Orchestrator's registry.
-	primaryInfo := &p.bnAnalyzer.BirdNET().ModelInfo
-	targets := []ModelTarget{
-		{ModelID: primaryInfo.ID, SampleRate: primaryInfo.Spec.SampleRate},
+	// Build a lookup of all loaded model infos keyed by registry ID.
+	modelInfoSlice := p.bnAnalyzer.BirdNET().ModelInfos()
+	allModelInfos := make(map[string]classifier.ModelInfo, len(modelInfoSlice))
+	for i := range modelInfoSlice {
+		allModelInfos[modelInfoSlice[i].ID] = modelInfoSlice[i]
 	}
 
+	// Primary model fallback targets for sources with no model config.
+	primaryInfo := &p.bnAnalyzer.BirdNET().ModelInfo
+	primaryTargets := []classifier.ModelInfo{*primaryInfo}
+
 	for _, sid := range sourceIDs {
+		// Resolve per-source model targets. Fall back to primary if the
+		// source has no configured models or none could be resolved.
+		modelInfos := resolveModelTargets(sourceModelMap[sid], allModelInfos)
+		if len(modelInfos) == 0 {
+			modelInfos = primaryTargets
+		}
+
+		// Convert to ModelTarget for the buffer consumer
+		targets := make([]ModelTarget, len(modelInfos))
+		for i := range modelInfos {
+			targets[i] = ModelTarget{ModelID: modelInfos[i].ID, SampleRate: modelInfos[i].Spec.SampleRate}
+		}
+
 		bc, bcErr := NewBufferConsumer(
 			fmt.Sprintf("buffer_%s", sid),
 			p.engine.BufferManager(),
@@ -511,11 +535,11 @@ func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, a
 func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan audiocore.AudioLevelData) {
 	log := GetLogger()
 
-	// Build desired config keyed by connection string.
-	desiredConfigs := p.buildSourceConfigs()
-	desired := make(map[string]*audiocore.SourceConfig, len(desiredConfigs))
-	for _, cfg := range desiredConfigs {
-		desired[cfg.ConnectionString] = cfg
+	// Build desired config keyed by connection string, including model IDs.
+	desiredConfigs := p.buildSourceConfigsWithModels()
+	desired := make(map[string]sourceConfigWithModels, len(desiredConfigs))
+	for _, scm := range desiredConfigs {
+		desired[scm.config.ConnectionString] = scm
 	}
 
 	// Determine which desired configs already have a running source.
@@ -524,20 +548,22 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 	// connection strings instead.
 	registry := p.engine.Registry()
 	alreadyRunning := make(map[string]string) // connStr → sourceID (for sources that stay)
+	sourceModelMap := make(map[string][]string)
 	var newSourceIDs []string
 	var keptCount int
 
-	for connStr, cfg := range desired {
+	for connStr, scm := range desired {
 		if src, found := registry.GetByConnection(connStr); found {
 			// Source already running — keep it.
 			alreadyRunning[connStr] = src.ID
+			sourceModelMap[src.ID] = scm.modelIDs
 			keptCount++
 		} else {
 			// New source — add it.
 			log.Info("adding new stream from config",
 				logger.String("connection", privacy.SanitizeStreamUrl(connStr)),
 				logger.String("operation", "reconfigure_diff"))
-			if err := p.engine.AddSource(cfg); err != nil {
+			if err := p.engine.AddSource(scm.config); err != nil {
 				log.Warn("failed to add source during reconfigure",
 					logger.String("connection", privacy.SanitizeStreamUrl(connStr)),
 					logger.Error(err))
@@ -545,6 +571,7 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 			}
 			if src, ok := registry.GetByConnection(connStr); ok {
 				newSourceIDs = append(newSourceIDs, src.ID)
+				sourceModelMap[src.ID] = scm.modelIDs
 			}
 		}
 	}
@@ -576,10 +603,17 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 
 	// Register consumers and monitors only for newly added sources.
 	if len(newSourceIDs) > 0 {
-		p.registerConsumersForSources(newSourceIDs, audioLevelChan, "reconfigure_diff")
+		p.registerConsumersForSources(newSourceIDs, sourceModelMap, audioLevelChan, "reconfigure_diff")
 		p.registerSoundLevelConsumers(newSourceIDs, "reconfigure_diff")
+	}
 
-		if monErr := p.bufferMgr.UpdateMonitors(newSourceIDs); monErr != nil {
+	// Sync monitors for ALL active sources (kept + new) so UpdateMonitors
+	// receives the full desired state and removes stale monitors correctly.
+	allActiveIDs := slices.Collect(maps.Values(alreadyRunning))
+	allActiveIDs = append(allActiveIDs, newSourceIDs...)
+	if len(allActiveIDs) > 0 {
+		monitorMap := p.buildMonitorConfigs(sourceModelMap, allActiveIDs)
+		if monErr := p.bufferMgr.UpdateMonitors(monitorMap); monErr != nil {
 			log.Warn("buffer monitor update failed during reconfigure", logger.Error(monErr))
 		}
 	}
@@ -591,10 +625,19 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 		logger.String("operation", "reconfigure_diff"))
 }
 
-// buildSourceConfigs constructs audiocore.SourceConfig entries from the current settings.
-func (p *AudioPipelineService) buildSourceConfigs() []*audiocore.SourceConfig {
+// sourceConfigWithModels pairs an audiocore.SourceConfig with the config-level
+// model IDs assigned to that source. This allows the pipeline to build
+// per-source model targets when registering buffer consumers.
+type sourceConfigWithModels struct {
+	config   *audiocore.SourceConfig
+	modelIDs []string // config-level IDs, e.g., ["birdnet", "perch_v2"]
+}
+
+// buildSourceConfigsWithModels constructs audiocore.SourceConfig entries from
+// the current settings, paired with their configured model IDs.
+func (p *AudioPipelineService) buildSourceConfigsWithModels() []sourceConfigWithModels {
 	settings := conf.Setting()
-	var configs []*audiocore.SourceConfig
+	var result []sourceConfigWithModels
 
 	// RTSP streams.
 	for i := range settings.Realtime.RTSP.Streams {
@@ -602,13 +645,16 @@ func (p *AudioPipelineService) buildSourceConfigs() []*audiocore.SourceConfig {
 		if stream.URL == "" {
 			continue
 		}
-		configs = append(configs, &audiocore.SourceConfig{
-			DisplayName:      stream.Name,
-			Type:             audiocore.StreamTypeToSourceType(stream.Type),
-			ConnectionString: stream.URL,
-			SampleRate:       conf.SampleRate,
-			BitDepth:         conf.BitDepth,
-			Channels:         1,
+		result = append(result, sourceConfigWithModels{
+			config: &audiocore.SourceConfig{
+				DisplayName:      stream.Name,
+				Type:             audiocore.StreamTypeToSourceType(stream.Type),
+				ConnectionString: stream.URL,
+				SampleRate:       conf.SampleRate,
+				BitDepth:         conf.BitDepth,
+				Channels:         1,
+			},
+			modelIDs: stream.Models,
 		})
 	}
 
@@ -618,17 +664,95 @@ func (p *AudioPipelineService) buildSourceConfigs() []*audiocore.SourceConfig {
 		if src.Device == "" {
 			continue
 		}
-		configs = append(configs, &audiocore.SourceConfig{
-			DisplayName:      src.Name,
-			Type:             audiocore.SourceTypeAudioCard,
-			ConnectionString: src.Device,
-			SampleRate:       conf.SampleRate,
-			BitDepth:         conf.BitDepth,
-			Channels:         1,
+		result = append(result, sourceConfigWithModels{
+			config: &audiocore.SourceConfig{
+				DisplayName:      src.Name,
+				Type:             audiocore.SourceTypeAudioCard,
+				ConnectionString: src.Device,
+				SampleRate:       conf.SampleRate,
+				BitDepth:         conf.BitDepth,
+				Channels:         1,
+			},
+			modelIDs: src.Models,
 		})
 	}
 
-	return configs
+	return result
+}
+
+// buildMonitorConfigs builds the map[sourceID][]monitorConfig needed by
+// UpdateMonitors. It resolves per-source model IDs to full ModelInfo so that
+// monitorConfig gets the correct spec (sample rate + clip length).
+func (p *AudioPipelineService) buildMonitorConfigs(sourceModelMap map[string][]string, sourceIDs []string) map[string][]monitorConfig {
+	// Build lookup of loaded models by registry ID.
+	modelInfoSlice := p.bnAnalyzer.BirdNET().ModelInfos()
+	loadedModels := make(map[string]classifier.ModelInfo, len(modelInfoSlice))
+	for i := range modelInfoSlice {
+		loadedModels[modelInfoSlice[i].ID] = modelInfoSlice[i]
+	}
+
+	primaryInfo := p.bnAnalyzer.BirdNET().ModelInfo
+	result := make(map[string][]monitorConfig, len(sourceIDs))
+
+	for _, sid := range sourceIDs {
+		// Resolve config-level model IDs to ModelInfo entries.
+		var infos []classifier.ModelInfo
+		for _, configID := range sourceModelMap[sid] {
+			registryID, known := classifier.ResolveConfigModelID(configID)
+			if !known {
+				continue
+			}
+			if info, loaded := loadedModels[registryID]; loaded {
+				infos = append(infos, info)
+			}
+		}
+		if len(infos) == 0 {
+			infos = []classifier.ModelInfo{primaryInfo}
+		}
+
+		configs := make([]monitorConfig, len(infos))
+		for i := range infos {
+			spec := infos[i].Spec
+			clipLenSec := int(spec.ClipLength.Seconds())
+			readSize := spec.SampleRate * clipLenSec * conf.NumChannels * (conf.BitDepth / 8)
+			configs[i] = monitorConfig{
+				sourceID: sid,
+				modelID:  infos[i].ID,
+				spec:     spec,
+				readSize: readSize,
+			}
+		}
+		result[sid] = configs
+	}
+
+	return result
+}
+
+// resolveModelTargets converts config-level model IDs to ModelTarget entries
+// using the loaded model registry. Unknown or unloaded models are skipped
+// with a warning log.
+func resolveModelTargets(configModelIDs []string, loadedModels map[string]classifier.ModelInfo) []classifier.ModelInfo {
+	if len(configModelIDs) == 0 {
+		return nil
+	}
+	targets := make([]classifier.ModelInfo, 0, len(configModelIDs))
+	for _, configID := range configModelIDs {
+		registryID, known := classifier.ResolveConfigModelID(configID)
+		if !known {
+			GetLogger().Warn("unknown model ID in source config, skipping",
+				logger.String("config_id", configID))
+			continue
+		}
+		info, loaded := loadedModels[registryID]
+		if !loaded {
+			GetLogger().Warn("model configured for source but not loaded",
+				logger.String("config_id", configID),
+				logger.String("registry_id", registryID))
+			continue
+		}
+		targets = append(targets, info)
+	}
+	return targets
 }
 
 // startWeatherPolling initializes and starts the weather polling routine.

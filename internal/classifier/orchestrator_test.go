@@ -49,6 +49,34 @@ func newTestOrchestrator(t *testing.T, mocks ...*mockModelInstance) *Orchestrato
 	}
 }
 
+func TestResolveConfigModelID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		configID   string
+		wantID     string
+		wantExists bool
+	}{
+		{"birdnet maps to registry ID", "birdnet", "BirdNET_GLOBAL_6K_V2.4", true},
+		{"perch_v2 maps to registry ID", "perch_v2", "Perch_V2", true},
+		{"unknown returns false", "unknown_model", "", false},
+		{"case insensitive", "BIRDNET", "BirdNET_GLOBAL_6K_V2.4", true},
+		{"case insensitive perch", "PERCH_V2", "Perch_V2", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotID, gotExists := ResolveConfigModelID(tt.configID)
+			assert.Equal(t, tt.wantExists, gotExists)
+			if gotExists {
+				assert.Equal(t, tt.wantID, gotID)
+			}
+		})
+	}
+}
+
 func TestNewOrchestrator_SyncsSharedState(t *testing.T) {
 	t.Parallel()
 
@@ -193,4 +221,56 @@ func TestOrchestrator_PredictModel_NoCrossModelBlocking(t *testing.T) {
 	assert.True(t, fastFinish.Before(slowFinish),
 		"fast model should finish before slow model; fast=%v slow=%v",
 		fastFinish, slowFinish)
+}
+
+func TestOrchestrator_ModelInfos(t *testing.T) {
+	t.Parallel()
+
+	o := &Orchestrator{
+		models: map[string]*modelEntry{
+			"BirdNET_GLOBAL_6K_V2.4": {instance: &mockModelInstance{id: "BirdNET_GLOBAL_6K_V2.4"}},
+			"Perch_V2":               {instance: &mockModelInstance{id: "Perch_V2"}},
+		},
+	}
+
+	infos := o.ModelInfos()
+
+	assert.Len(t, infos, 2)
+	ids := make(map[string]bool)
+	for _, info := range infos {
+		ids[info.ID] = true
+	}
+	assert.True(t, ids["BirdNET_GLOBAL_6K_V2.4"])
+	assert.True(t, ids["Perch_V2"])
+}
+
+func TestOrchestrator_LoadAdditionalModels_UnknownModelSkipped(t *testing.T) {
+	t.Parallel()
+
+	settings := &conf.Settings{}
+	settings.Models.Enabled = []string{"birdnet", "unknown_model"}
+
+	o := &Orchestrator{
+		Settings: settings,
+		models:   map[string]*modelEntry{},
+	}
+
+	err := o.loadAdditionalModels(map[string]int{})
+	assert.NoError(t, err)
+}
+
+func TestOrchestrator_ModelInfos_SkipsNilInstances(t *testing.T) {
+	t.Parallel()
+
+	o := &Orchestrator{
+		models: map[string]*modelEntry{
+			"BirdNET_GLOBAL_6K_V2.4": {instance: &mockModelInstance{id: "BirdNET_GLOBAL_6K_V2.4"}},
+			"Perch_V2":               {instance: nil}, // closed/deleted
+		},
+	}
+
+	infos := o.ModelInfos()
+
+	assert.Len(t, infos, 1)
+	assert.Equal(t, "BirdNET_GLOBAL_6K_V2.4", infos[0].ID)
 }

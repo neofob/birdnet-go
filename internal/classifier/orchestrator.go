@@ -1,10 +1,10 @@
 // orchestrator.go is the primary entry point for model management and inference.
-// In Phase 3b it wraps a single BirdNET instance with no behavior change.
-// Future phases add multi-model support behind the same API.
+// Manages one or more classifier models with per-model locking and name resolution.
 package classifier
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,9 +22,7 @@ type modelEntry struct {
 
 // Orchestrator manages classifier model instances and provides the primary
 // inference API. It replaces direct *BirdNET usage at all call sites.
-//
-// Phase 3b: wraps a single BirdNET instance. All methods are passthroughs.
-// Phase 3c+: manages multiple models with per-model locking and name resolution.
+// Supports multiple models with per-model locking and name resolution.
 type Orchestrator struct {
 	// Public fields — same layout as BirdNET for drop-in caller migration.
 	Settings        *conf.Settings
@@ -39,13 +37,14 @@ type Orchestrator struct {
 	// Model management.
 	// NOTE: models map is keyed by ModelInfo.ID at construction time. If ReloadModel
 	// changes the model ID, the key goes stale. Delete() iterates values so cleanup
-	// is unaffected. Phase 3c should re-key models on reload.
+	// is unaffected. ReloadModel re-keys the map after reload.
 	mu      sync.RWMutex // protects the models map
 	models  map[string]*modelEntry
-	primary *BirdNET // Phase 3b: direct access to the single model
+	primary *BirdNET // direct access to the primary model
 }
 
-// NewOrchestrator creates a new Orchestrator wrapping a single BirdNET model.
+// NewOrchestrator creates a new Orchestrator with BirdNET as the primary model
+// and loads any additional models from configuration.
 // This is the primary constructor — callers should use this instead of NewBirdNET.
 func NewOrchestrator(settings *conf.Settings) (*Orchestrator, error) {
 	bn, err := NewBirdNET(settings)
@@ -67,12 +66,24 @@ func NewOrchestrator(settings *conf.Settings) (*Orchestrator, error) {
 		},
 		primary: bn,
 	}
+
+	// Pre-compute thread allocation so model constructors receive their share.
+	// BirdNET already uses settings.BirdNET.Threads at construction; additional
+	// models get their allocated count passed to their constructor.
+	threadAlloc := o.computeThreadAllocation(settings, bn.ModelInfo.ID)
+
+	// Load additional models from configuration
+	if err := o.loadAdditionalModels(threadAlloc); err != nil {
+		// Clean up all models registered so far (primary + any partially loaded)
+		o.Delete()
+		return nil, err
+	}
+
 	return o, nil
 }
 
 // Predict runs inference using the primary model.
-// Phase 3b: relies on BirdNET's internal locking.
-// Phase 3c+ will use modelEntry.mu for per-model serialization.
+// Relies on BirdNET's internal locking.
 func (o *Orchestrator) Predict(ctx context.Context, sample [][]float32) ([]datastore.Results, error) {
 	return o.primary.Predict(ctx, sample)
 }
@@ -190,6 +201,14 @@ func (o *Orchestrator) ReloadModel() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
+	if o.models == nil {
+		// Orchestrator has been deleted, abort the reload.
+		return errors.Newf("orchestrator has been deleted, cannot reload model").
+			Component("classifier.orchestrator").
+			Category(errors.CategorySystem).
+			Build()
+	}
+
 	o.ModelInfo = o.primary.ModelInfo
 	o.TaxonomyMap = o.primary.TaxonomyMap
 	o.TaxonomyPath = o.primary.TaxonomyPath
@@ -234,4 +253,117 @@ func (o *Orchestrator) Delete() {
 // Debug prints debug messages if debug mode is enabled.
 func (o *Orchestrator) Debug(format string, v ...any) {
 	o.primary.Debug(format, v...)
+}
+
+// ModelInfos returns ModelInfo for all registered models. Thread-safe.
+// Used by the pipeline to build ModelTarget lists for buffer fan-out.
+func (o *Orchestrator) ModelInfos() []ModelInfo {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+
+	if o.models == nil {
+		return nil
+	}
+
+	infos := make([]ModelInfo, 0, len(o.models))
+	for id, entry := range o.models {
+		if entry.instance == nil {
+			continue
+		}
+		info, exists := supportedModels[id]
+		if !exists {
+			info = ModelInfo{
+				ID:   entry.instance.ModelID(),
+				Name: entry.instance.ModelName(),
+				Spec: entry.instance.Spec(),
+			}
+		}
+		infos = append(infos, info)
+	}
+	return infos
+}
+
+// computeThreadAllocation pre-computes thread distribution for all models
+// that will be loaded. This runs before loading additional models so
+// constructors receive their allocated thread count.
+func (o *Orchestrator) computeThreadAllocation(settings *conf.Settings, primaryID string) map[string]int {
+	// Collect unique model IDs that will be loaded. Deduplicates
+	// case variants like ["perch_v2", "PERCH_V2"] that resolve to the same ID.
+	seen := map[string]bool{primaryID: true}
+	modelIDs := []string{primaryID}
+	for _, configID := range settings.Models.Enabled {
+		registryID, known := ResolveConfigModelID(configID)
+		if !known || seen[registryID] {
+			continue
+		}
+		seen[registryID] = true
+		modelIDs = append(modelIDs, registryID)
+	}
+
+	alloc := divideThreads(settings.BirdNET.Threads, modelIDs, primaryID)
+
+	if len(modelIDs) > 1 {
+		GetLogger().Info("Thread allocation for multi-model",
+			logger.Int("total_threads", settings.BirdNET.Threads),
+			logger.Int("model_count", len(modelIDs)))
+		for id, threads := range alloc {
+			GetLogger().Debug("Model thread allocation",
+				logger.String("model_id", id),
+				logger.Int("threads", threads))
+		}
+	}
+
+	return alloc
+}
+
+// loadAdditionalModels iterates settings.Models.Enabled and loads any
+// non-primary models. Each loaded model is registered in the models map.
+// threadAlloc provides the pre-computed thread count for each model.
+func (o *Orchestrator) loadAdditionalModels(threadAlloc map[string]int) error {
+	log := GetLogger()
+
+	for _, configID := range o.Settings.Models.Enabled {
+		registryID, known := ResolveConfigModelID(configID)
+		if !known {
+			log.Warn("skipping unknown model ID in models.enabled",
+				logger.String("model_id", configID))
+			continue
+		}
+
+		// Skip the primary model (already loaded)
+		if _, exists := o.models[registryID]; exists {
+			continue
+		}
+
+		threads := threadAlloc[registryID]
+
+		switch registryID {
+		case "Perch_V2":
+			//nolint:staticcheck // SA4023: loadPerch always errors in non-onnx build, but returns nil in onnx build
+			if err := o.loadPerch(threads); err != nil {
+				return err
+			}
+		default:
+			log.Warn("model registered but no loader implemented",
+				logger.String("registry_id", registryID))
+		}
+	}
+
+	return nil
+}
+
+// configToRegistryID maps user-facing config model IDs (lowercase) to internal
+// registry IDs used by supportedModels and the models map.
+// SYNC: keys must match conf.knownModelIDs in config.go.
+var configToRegistryID = map[string]string{
+	"birdnet":  "BirdNET_GLOBAL_6K_V2.4",
+	"perch_v2": "Perch_V2",
+}
+
+// ResolveConfigModelID maps a user-facing config model ID to the internal
+// registry ID. Returns the registry ID and true if found, or empty and false
+// if the config ID is unknown. Case-insensitive.
+func ResolveConfigModelID(configID string) (string, bool) {
+	id, ok := configToRegistryID[strings.ToLower(configID)]
+	return id, ok
 }
