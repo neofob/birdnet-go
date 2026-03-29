@@ -449,11 +449,21 @@ func (p *AudioPipelineService) registerSoundLevelConsumers(sourceIDs []string, o
 // reconfigureChangedSources.
 func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, audioLevelChan chan audiocore.AudioLevelData, operation string) {
 	log := GetLogger()
+
+	// Build model targets from the primary model's actual metadata.
+	// Phase 3e: single model only — future phases will iterate all models
+	// from the Orchestrator's registry.
+	primaryInfo := &p.bnAnalyzer.BirdNET().ModelInfo
+	targets := []ModelTarget{
+		{ModelID: primaryInfo.ID, SampleRate: primaryInfo.Spec.SampleRate},
+	}
+
 	for _, sid := range sourceIDs {
 		bc, bcErr := NewBufferConsumer(
 			fmt.Sprintf("buffer_%s", sid),
 			p.engine.BufferManager(),
 			conf.SampleRate, conf.BitDepth, 1,
+			targets,
 		)
 		if bcErr != nil {
 			log.Warn("failed to create buffer consumer",
