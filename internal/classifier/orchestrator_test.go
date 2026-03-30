@@ -49,34 +49,6 @@ func newTestOrchestrator(t *testing.T, mocks ...*mockModelInstance) *Orchestrato
 	}
 }
 
-func TestResolveConfigModelID(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		configID   string
-		wantID     string
-		wantExists bool
-	}{
-		{"birdnet maps to registry ID", "birdnet", "BirdNET_GLOBAL_6K_V2.4", true},
-		{"perch_v2 maps to registry ID", "perch_v2", "Perch_V2", true},
-		{"unknown returns false", "unknown_model", "", false},
-		{"case insensitive", "BIRDNET", "BirdNET_GLOBAL_6K_V2.4", true},
-		{"case insensitive perch", "PERCH_V2", "Perch_V2", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			gotID, gotExists := ResolveConfigModelID(tt.configID)
-			assert.Equal(t, tt.wantExists, gotExists)
-			if gotExists {
-				assert.Equal(t, tt.wantID, gotID)
-			}
-		})
-	}
-}
-
 func TestNewOrchestrator_SyncsSharedState(t *testing.T) {
 	t.Parallel()
 
@@ -228,8 +200,8 @@ func TestOrchestrator_ModelInfos(t *testing.T) {
 
 	o := &Orchestrator{
 		models: map[string]*modelEntry{
-			"BirdNET_GLOBAL_6K_V2.4": {instance: &mockModelInstance{id: "BirdNET_GLOBAL_6K_V2.4"}},
-			"Perch_V2":               {instance: &mockModelInstance{id: "Perch_V2"}},
+			"BirdNET_V2.4": {instance: &mockModelInstance{id: "BirdNET_V2.4"}},
+			"Perch_V2":     {instance: &mockModelInstance{id: "Perch_V2"}},
 		},
 	}
 
@@ -240,7 +212,7 @@ func TestOrchestrator_ModelInfos(t *testing.T) {
 	for _, info := range infos {
 		ids[info.ID] = true
 	}
-	assert.True(t, ids["BirdNET_GLOBAL_6K_V2.4"])
+	assert.True(t, ids["BirdNET_V2.4"])
 	assert.True(t, ids["Perch_V2"])
 }
 
@@ -264,13 +236,13 @@ func TestOrchestrator_ModelInfos_SkipsNilInstances(t *testing.T) {
 
 	o := &Orchestrator{
 		models: map[string]*modelEntry{
-			"BirdNET_GLOBAL_6K_V2.4": {instance: &mockModelInstance{id: "BirdNET_GLOBAL_6K_V2.4"}},
-			"Perch_V2":               {instance: nil}, // closed/deleted
+			"BirdNET_V2.4": {instance: &mockModelInstance{id: "BirdNET_V2.4"}},
+			"Perch_V2":     {instance: nil}, // closed/deleted
 		},
 	}
 
 	infos := o.ModelInfos()
 
 	assert.Len(t, infos, 1)
-	assert.Equal(t, "BirdNET_GLOBAL_6K_V2.4", infos[0].ID)
+	assert.Equal(t, "BirdNET_V2.4", infos[0].ID)
 }

@@ -27,7 +27,7 @@ import (
 )
 
 // Default model version for the embedded model
-const DefaultModelVersion = "BirdNET_GLOBAL_6K_V2.4"
+const DefaultModelVersion = "BirdNET_V2.4"
 
 // defaultModelVersionString is the default human-readable model version.
 const defaultModelVersionString = "BirdNET GLOBAL 6K V2.4 FP32"
@@ -59,7 +59,9 @@ type BirdNET struct {
 }
 
 // NewBirdNET initializes a new BirdNET instance with given settings.
-func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
+// If modelInfo is non-nil it is used directly (orchestrator path); otherwise
+// the function walks a 4-tier resolution chain: config version > filename > default.
+func NewBirdNET(settings *conf.Settings, modelInfo *ModelInfo) (*BirdNET, error) {
 	bn := &BirdNET{
 		Settings:     settings,
 		TaxonomyPath: "", // Default to embedded taxonomy
@@ -67,27 +69,47 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 		speciesCache: make(map[string]*speciesCacheEntry),
 	}
 
-	// Determine model info based on settings
-	var modelIdentifier string
-	if settings.BirdNET.ModelPath != "" {
-		// Use custom model path
-		modelIdentifier = settings.BirdNET.ModelPath
-	} else {
-		// Use default embedded model
-		modelIdentifier = DefaultModelVersion
-	}
-
-	// Get model info
+	// Resolve model identity via the resolution chain
 	var err error
-	bn.ModelInfo, err = DetermineModelInfo(modelIdentifier)
-	if err != nil {
-		return nil, errors.New(err).
-			Component("birdnet").
-			Category(errors.CategoryModelInit).
-			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
-			Context("operation", "determine_model_info").
-			Context("model_identifier", modelIdentifier).
-			Build()
+	switch {
+	case modelInfo != nil:
+		// Tier 1: caller provided (orchestrator path)
+		bn.ModelInfo = *modelInfo
+	case settings.BirdNET.Version != "":
+		// Tier 2: explicit config version field
+		info, ok := ResolveBirdNETVersion(settings.BirdNET.Version)
+		if !ok {
+			return nil, errors.Newf("unknown BirdNET version: %s", settings.BirdNET.Version).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				Context("version", settings.BirdNET.Version).
+				Build()
+		}
+		bn.ModelInfo = info
+		if settings.BirdNET.ModelPath != "" {
+			bn.ModelInfo.CustomPath = settings.BirdNET.ModelPath
+		}
+	case settings.BirdNET.ModelPath != "":
+		// Tier 3: filename-based fallback
+		bn.ModelInfo, err = DetermineModelInfo(settings.BirdNET.ModelPath)
+		if err != nil {
+			return nil, errors.New(err).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				ModelContext(settings.BirdNET.ModelPath, settings.BirdNET.ModelPath).
+				Context("operation", "determine_model_info").
+				Build()
+		}
+	default:
+		// Tier 4: default embedded model
+		info, ok := ModelRegistry[DefaultModelVersion]
+		if !ok {
+			return nil, errors.Newf("default model version %s not found in registry", DefaultModelVersion).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				Build()
+		}
+		bn.ModelInfo = info
 	}
 
 	// Load taxonomy data
@@ -108,7 +130,7 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 			Component("birdnet").
 			Category(errors.CategoryModelInit).
 			Context("operation", "load_labels").
-			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
+			ModelContext(settings.BirdNET.ModelPath, bn.ModelInfo.ID).
 			Context("locale", settings.BirdNET.Locale).
 			Build()
 	}
@@ -118,7 +140,7 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 			Component("birdnet").
 			Category(errors.CategoryModelInit).
 			Context("operation", "initialize_model").
-			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
+			ModelContext(settings.BirdNET.ModelPath, bn.ModelInfo.ID).
 			Build()
 	}
 
@@ -127,7 +149,7 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 			Component("birdnet").
 			Category(errors.CategoryModelInit).
 			Context("operation", "initialize_range_filter").
-			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
+			ModelContext(settings.BirdNET.ModelPath, bn.ModelInfo.ID).
 			Build()
 	}
 
@@ -213,15 +235,21 @@ func (bn *BirdNET) initializeTFLiteModel() error {
 
 	bn.classifier = classifier
 
-	// Update model version based on custom model path if provided
+	// Update model version based on custom model path if provided.
+	// Only derive the ID from the filename when the resolution chain did not
+	// already determine a specific model (i.e., ID is empty or still "Custom").
+	// After NewBirdNET's 4-tier resolution, ModelInfo.ID may already be set
+	// correctly and must not be overwritten here.
 	if bn.Settings.BirdNET.ModelPath != "" {
-		// Extract model version from the file name if possible
-		fileName := filepath.Base(bn.Settings.BirdNET.ModelPath)
-		if strings.HasPrefix(fileName, "BirdNET_") && strings.Contains(fileName, "_Model_") {
-			parts := strings.Split(fileName, "_Model_")
-			bn.ModelInfo.ID = parts[0]
-		} else {
-			bn.ModelInfo.ID = "Custom"
+		if bn.ModelInfo.ID == "" || bn.ModelInfo.ID == modelIDCustom {
+			// Extract model version from the file name if possible
+			fileName := filepath.Base(bn.Settings.BirdNET.ModelPath)
+			if strings.HasPrefix(fileName, "BirdNET_") && strings.Contains(fileName, "_Model_") {
+				parts := strings.Split(fileName, "_Model_")
+				bn.ModelInfo.ID = parts[0]
+			} else {
+				bn.ModelInfo.ID = modelIDCustom
+			}
 		}
 		bn.modelVersion = bn.Settings.BirdNET.ModelPath
 	}
@@ -855,10 +883,34 @@ func (bn *BirdNET) ReloadModel() error {
 		bn.Settings.BirdNET.Locale = oldLocale
 	}
 
-	// Re-determine model info if using a custom model path
-	if bn.Settings.BirdNET.ModelPath != "" {
-		var err error
-		bn.ModelInfo, err = DetermineModelInfo(bn.Settings.BirdNET.ModelPath)
+	// Check if model version changed — if so, the orchestrator must handle
+	// the switch via pipeline cold restart, not ReloadModel.
+	if bn.Settings.BirdNET.Version != "" {
+		newInfo, ok := ResolveBirdNETVersion(bn.Settings.BirdNET.Version)
+		if !ok {
+			rollback()
+			return errors.Newf("unknown BirdNET version: %s", bn.Settings.BirdNET.Version).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				Context("operation", "reload_model").
+				Context("version", bn.Settings.BirdNET.Version).
+				Build()
+		}
+		newInfo.CustomPath = bn.Settings.BirdNET.ModelPath
+		if newInfo.ID != bn.ModelInfo.ID || newInfo.CustomPath != bn.ModelInfo.CustomPath {
+			rollback()
+			return errors.Newf("model identity changed from %s to %s: requires orchestrator restart", bn.ModelInfo.ID, newInfo.ID).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				Context("operation", "reload_model").
+				Context("current_model", bn.ModelInfo.ID).
+				Context("requested_model", newInfo.ID).
+				Build()
+		}
+		bn.ModelInfo = newInfo
+	} else if bn.Settings.BirdNET.ModelPath != "" {
+		// Fallback: re-derive from filename for legacy configs
+		newInfo, err := DetermineModelInfo(bn.Settings.BirdNET.ModelPath)
 		if err != nil {
 			rollback()
 			return errors.New(err).
@@ -868,6 +920,19 @@ func (bn *BirdNET) ReloadModel() error {
 				Context("step", "determine_model_info").
 				Build()
 		}
+		sameIdentity := newInfo.ID == bn.ModelInfo.ID
+		if newInfo.ID == modelIDCustom || bn.ModelInfo.ID == modelIDCustom {
+			sameIdentity = sameIdentity && newInfo.CustomPath == bn.ModelInfo.CustomPath
+		}
+		if !sameIdentity {
+			rollback()
+			return errors.Newf("model changed from %s to %s: requires orchestrator restart", bn.ModelInfo.ID, newInfo.ID).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				Context("operation", "reload_model").
+				Build()
+		}
+		bn.ModelInfo = newInfo
 	}
 
 	// Reload taxonomy data if needed

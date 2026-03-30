@@ -4,7 +4,6 @@ package classifier
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -47,7 +46,18 @@ type Orchestrator struct {
 // and loads any additional models from configuration.
 // This is the primary constructor — callers should use this instead of NewBirdNET.
 func NewOrchestrator(settings *conf.Settings) (*Orchestrator, error) {
-	bn, err := NewBirdNET(settings)
+	// Resolve primary model identity from config
+	var primaryInfo *ModelInfo
+	if settings.BirdNET.Version != "" {
+		info, ok := ResolveBirdNETVersion(settings.BirdNET.Version)
+		if ok {
+			if settings.BirdNET.ModelPath != "" {
+				info.CustomPath = settings.BirdNET.ModelPath
+			}
+			primaryInfo = &info
+		}
+	}
+	bn, err := NewBirdNET(settings, primaryInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -270,12 +280,13 @@ func (o *Orchestrator) ModelInfos() []ModelInfo {
 		if entry.instance == nil {
 			continue
 		}
-		info, exists := supportedModels[id]
+		info, exists := ModelRegistry[id]
 		if !exists {
 			info = ModelInfo{
-				ID:   entry.instance.ModelID(),
-				Name: entry.instance.ModelName(),
-				Spec: entry.instance.Spec(),
+				ID:         entry.instance.ModelID(),
+				Name:       entry.instance.ModelName(),
+				Spec:       entry.instance.Spec(),
+				NumSpecies: entry.instance.NumSpecies(),
 			}
 		}
 		infos = append(infos, info)
@@ -350,20 +361,4 @@ func (o *Orchestrator) loadAdditionalModels(threadAlloc map[string]int) error {
 	}
 
 	return nil
-}
-
-// configToRegistryID maps user-facing config model IDs (lowercase) to internal
-// registry IDs used by supportedModels and the models map.
-// SYNC: keys must match conf.knownModelIDs in config.go.
-var configToRegistryID = map[string]string{
-	"birdnet":  "BirdNET_GLOBAL_6K_V2.4",
-	"perch_v2": "Perch_V2",
-}
-
-// ResolveConfigModelID maps a user-facing config model ID to the internal
-// registry ID. Returns the registry ID and true if found, or empty and false
-// if the config ID is unknown. Case-insensitive.
-func ResolveConfigModelID(configID string) (string, bool) {
-	id, ok := configToRegistryID[strings.ToLower(configID)]
-	return id, ok
 }
