@@ -567,8 +567,8 @@ func (c *Controller) ServeAudioByID(ctx echo.Context) error {
 	originalFilename := filepath.Base(clipPath)
 	ext := strings.ToLower(filepath.Ext(originalFilename))
 
-	// Set proper Content-Type for audio files BEFORE ServeRelativeFile
-	// This ensures Safari recognizes the file as audio
+	// Set proper Content-Type for audio files BEFORE ServeRelativeFile.
+	// This ensures Safari recognizes the file as audio.
 	switch ext {
 	case ".flac":
 		ctx.Response().Header().Set("Content-Type", MimeTypeFLAC)
@@ -584,25 +584,26 @@ func (c *Controller) ServeAudioByID(ctx echo.Context) error {
 		// Let ServeRelativeFile handle the content type
 	}
 
-	// Set Content-Disposition as inline to enable playback in browser
-	// Use filename* for proper UTF-8 filename encoding
-	// Only set filename if we have a valid, non-empty filename
+	// Set Content-Disposition as inline to enable playback in browser.
+	// Use filename* for proper UTF-8 filename encoding.
 	if isValidFilename(originalFilename) {
 		ctx.Response().Header().Set("Content-Disposition", fmt.Sprintf("inline; filename*=UTF-8''%s", url.QueryEscape(originalFilename)))
 	}
 
-	// Ensure Accept-Ranges header is set for iOS Safari
-	// This might be set by middleware but we ensure it's present
+	// Ensure Accept-Ranges header is set for iOS Safari.
 	ctx.Response().Header().Set("Accept-Ranges", "bytes")
 
-	// Serve the file using SecureFS. It handles path validation (relative/absolute within baseDir).
-	// ServeFile internally calls relativePath which ensures the path is within the SecureFS baseDir.
-	// Use ServeRelativeFile as clipPath is already relative to the baseDir
+	// Serve the file using SecureFS.
 	err = c.SFS.ServeRelativeFile(ctx, normalizedClipPath)
 	if err != nil {
-		// Check if this is a 404 for a file that's still being encoded by FFmpeg.
-		// The detection DB record is committed before audio export completes, so the
-		// frontend may request the file before it exists on disk.
+		// Clear audio-specific headers before error handling so 404 responses
+		// don't carry Content-Type: audio/wav on JSON error bodies.
+		if !ctx.Response().Committed {
+			ctx.Response().Header().Del("Content-Type")
+			ctx.Response().Header().Del("Content-Disposition")
+			ctx.Response().Header().Del("Accept-Ranges")
+		}
+
 		var httpErr *echo.HTTPError
 		if errors.As(err, &httpErr) && httpErr.Code == http.StatusNotFound {
 			return c.handleAudio404WithWait(ctx, normalizedClipPath, err,
