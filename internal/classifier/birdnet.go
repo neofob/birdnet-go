@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -992,13 +993,21 @@ func (bn *BirdNET) ReloadModel() error {
 			Build()
 	}
 
-	// Explicitly close old backends to release resources promptly
+	// Explicitly close old backends to release native resources promptly.
+	// ONNX Close() calls session.Destroy() which frees via ort_api->ReleaseSession().
+	// TFLite Close() calls interpreter.Delete() which immediately frees native
+	// resources via C.TfLiteInterpreterDelete and cascades to model/options/delegates.
 	if oldClassifier != nil {
 		oldClassifier.Close()
 	}
 	if oldRangeFilter != nil {
 		oldRangeFilter.Close()
 	}
+
+	// Return freed native pages to the OS. Both backends free native memory in
+	// Close() above, but libc may retain freed pages. FreeOSMemory hints the
+	// runtime and libc to release them, reducing RSS after reload.
+	debug.FreeOSMemory()
 
 	// Clear species cache as model/labels have changed
 	bn.clearSpeciesCache()
