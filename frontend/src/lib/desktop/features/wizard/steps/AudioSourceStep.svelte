@@ -27,7 +27,10 @@
   let skipped = $state(false);
 
   let isValid = $derived(
-    skipped || (sourceType === 'soundcard' ? selectedDevice !== '' : rtspUrl.trim() !== '')
+    skipped ||
+      (sourceType === 'soundcard'
+        ? selectedDevice !== '' && devices.some(d => d.value === selectedDevice)
+        : rtspUrl.trim() !== '')
   );
 
   $effect(() => {
@@ -78,12 +81,14 @@
 
   function setSourceType(type: SourceType) {
     sourceType = type;
+    skipped = false;
     dirty = true;
   }
 
   function setDevice(value: string | string[]) {
     if (typeof value === 'string') {
       selectedDevice = value;
+      skipped = false;
       dirty = true;
     }
   }
@@ -179,7 +184,7 @@
         {t('wizard.steps.audioSource.deviceLabel')}
       </label>
       {#if devicesLoading}
-        <p class="text-sm text-[var(--color-base-content)] opacity-80">
+        <p role="status" class="text-sm text-[var(--color-base-content)] opacity-80">
           {t('wizard.steps.audioSource.deviceLoading')}
         </p>
       {:else if devices.length === 0}
@@ -214,6 +219,7 @@
         bind:value={rtspUrl}
         placeholder={t('wizard.steps.audioSource.rtspUrlPlaceholder')}
         oninput={() => {
+          skipped = false;
           dirty = true;
         }}
       />

@@ -4395,7 +4395,7 @@
         "geolocationDenied": "Locatietoestemming is geweigerd. Voer de coördinaten handmatig in of gebruik de kaart.",
         "geolocationFailed": "Uw locatie kon niet worden bepaald. Voer de coördinaten handmatig in of gebruik de kaart.",
         "localesLoading": "Talen laden...",
-        "localesLoadFailed": "Kon taalopties niet laden. Engels is als standaard geselecteerd."
+        "localesLoadFailed": "Kon de taalopties niet laden. Engels wordt standaard gebruikt."
       },
       "audioSource": {
         "title": "Audiobron",

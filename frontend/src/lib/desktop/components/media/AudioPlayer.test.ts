@@ -33,10 +33,14 @@ vi.mock('$lib/i18n', () => ({
 vi.mock('$lib/utils/logger', () => ({
   loggers: {
     audio: {
+      debug: vi.fn(),
+      info: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
+      group: vi.fn(),
+      groupEnd: vi.fn(),
+      time: vi.fn(),
+      timeEnd: vi.fn(),
     },
   },
   getLogger: vi.fn(() => ({
@@ -44,6 +48,10 @@ vi.mock('$lib/utils/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    group: vi.fn(),
+    groupEnd: vi.fn(),
+    time: vi.fn(),
+    timeEnd: vi.fn(),
   })),
 }));
 
