@@ -133,7 +133,7 @@ export interface AudioSourceConfig {
   name: string;
   device: string;
   gain: number;
-  model: string; // "birdnet" | "perch_v2" | "bat" | "" (empty = default birdnet)
+  models: string[]; // e.g. ["birdnet", "perch_v2"]
   equalizer?: EqualizerSettings;
   quietHours?: QuietHoursConfig;
 }

@@ -2,7 +2,7 @@
   import { cn } from '$lib/utils/cn';
   import type { Snippet, Component } from 'svelte';
   import type { SelectOption, SelectDropdownVariant } from './SelectDropdown.types';
-  import { X, ChevronDown } from '@lucide/svelte';
+  import { X, ChevronDown, Check } from '@lucide/svelte';
   import { dropdown } from '$lib/utils/transitions';
   import { portal } from '$lib/utils/portal';
   import {
@@ -535,15 +535,11 @@
                   role="option"
                   aria-selected={isSelected(option)}
                 >
-                  {#if multiple}
-                    <input
-                      type="checkbox"
-                      checked={isSelected(option)}
-                      disabled={option.disabled}
-                      class="size-4 accent-[var(--color-primary)] cursor-pointer"
-                      tabindex="-1"
-                    />
-                  {/if}
+                  <span class="size-4 shrink-0 flex items-center justify-center">
+                    {#if isSelected(option)}
+                      <Check class="size-4 text-[var(--color-primary)]" />
+                    {/if}
+                  </span>
 
                   {#if option.icon}
                     {#if isComponentIcon(option.icon)}

@@ -81,7 +81,7 @@
   let editName = $state('');
   let editDevice = $state('');
   let editGain = $state(0);
-  let editModel = $state('');
+  let editModels = $state<string[]>([]);
   let editEqualizer = $state<LocalEqualizerSettings>({ enabled: false, filters: [] });
   let editQuietHours = $state<QuietHoursConfig>({ ...defaultQuietHoursConfig });
   let showDeleteConfirm = $state(false);
@@ -92,11 +92,11 @@
     audioDevices.find(d => d.id === source.device)?.name ?? source.device
   );
 
-  // Model display name
+  // Model display names (comma-separated for multiple)
   let modelDisplayName = $derived(
-    modelOptions.find(m => m.value === source.model)?.label ??
-      modelOptions[0]?.label ??
-      source.model
+    source.models.length > 0
+      ? source.models.map(id => modelOptions.find(m => m.value === id)?.label ?? id).join(', ')
+      : (modelOptions[0]?.label ?? '')
   );
 
   // Device dropdown options
@@ -107,7 +107,7 @@
     editName = source.name;
     editDevice = source.device;
     editGain = source.gain;
-    editModel = source.model;
+    editModels = [...source.models];
     editEqualizer = source.equalizer
       ? { ...source.equalizer, filters: [...source.equalizer.filters] }
       : { enabled: false, filters: [] };
@@ -140,7 +140,7 @@
       name: trimmedName,
       device: editDevice,
       gain: editGain,
-      model: editModel,
+      models: editModels,
       equalizer: transformedEqualizer,
       quietHours: editQuietHours,
     };
@@ -257,7 +257,7 @@
         />
 
         <!-- Gain and Model Row -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <InlineSlider
             label={t('settings.audio.soundCards.gainLabel')}
             value={editGain}
@@ -270,10 +270,11 @@
           />
 
           <SelectDropdown
-            value={editModel}
+            value={editModels}
             label={t('settings.audio.soundCards.modelLabel')}
             options={modelOptions}
-            onChange={value => (editModel = value as string)}
+            multiple={true}
+            onChange={value => (editModels = value as string[])}
             groupBy={false}
             menuSize="sm"
           />

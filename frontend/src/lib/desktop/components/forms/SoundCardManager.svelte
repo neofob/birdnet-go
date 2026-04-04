@@ -115,7 +115,7 @@
   let newName = $state('');
   let newDevice = $state('');
   let newGain = $state(0);
-  let newModel = $state('');
+  let newModels = $state<string[]>([]);
   let newEqualizer = $state<LocalEqualizerSettings>({ enabled: false, filters: [] });
   let newQuietHours = $state<QuietHoursConfig>({ ...defaultQuietHoursConfig });
   let showNewEqualizer = $state(false);
@@ -136,7 +136,7 @@
     newName = '';
     newDevice = '';
     newGain = 0;
-    newModel = '';
+    newModels = [];
     newEqualizer = { enabled: false, filters: [] };
     newQuietHours = { ...defaultQuietHoursConfig };
     showNewEqualizer = false;
@@ -190,7 +190,7 @@
       name: trimmedName,
       device: newDevice,
       gain: newGain,
-      model: newModel,
+      models: newModels,
       equalizer: transformedEqualizer,
       quietHours: newQuietHours,
     };
@@ -365,7 +365,7 @@
             </div>
 
             <!-- Gain and Model -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
               <InlineSlider
                 label={t('settings.audio.soundCards.gainLabel')}
                 value={newGain}
@@ -378,11 +378,12 @@
               />
 
               <SelectDropdown
-                value={newModel}
+                value={newModels}
                 label={t('settings.audio.soundCards.modelLabel')}
                 options={modelOptions}
+                multiple={true}
                 {disabled}
-                onChange={value => (newModel = value as string)}
+                onChange={value => (newModels = value as string[])}
                 groupBy={false}
                 menuSize="sm"
               />
