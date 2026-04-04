@@ -14,7 +14,7 @@
   @component
 -->
 <script lang="ts">
-  import { Plus, Volume2, RefreshCw, ChevronDown } from '@lucide/svelte';
+  import { Plus, Mic, RefreshCw, ChevronDown } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import { slide } from 'svelte/transition';
   import { t } from '$lib/i18n';
@@ -256,7 +256,7 @@
   {#if sources.length > 0}
     <div class="flex items-center justify-between p-3 bg-[var(--color-base-200)] rounded-lg">
       <div class="flex items-center gap-2">
-        <Volume2 class="size-4 text-[var(--color-base-content)]/70" />
+        <Mic class="size-4 text-[var(--color-base-content)]/70" />
         <span class="text-sm font-medium">
           {t('settings.audio.soundCards.summary', { count: sources.length })}
         </span>
@@ -277,7 +277,7 @@
   <!-- Source Cards -->
   {#if sources.length === 0 && !showAddForm}
     <EmptyState
-      icon={Volume2}
+      icon={Mic}
       title={t('settings.audio.soundCards.emptyState.title')}
       description={t('settings.audio.soundCards.emptyState.description')}
       hints={[
@@ -365,7 +365,7 @@
             </div>
 
             <!-- Gain and Model -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InlineSlider
                 label={t('settings.audio.soundCards.gainLabel')}
                 value={newGain}
@@ -375,6 +375,7 @@
                 step={1}
                 unit=" dB"
                 {disabled}
+                className="h-full [&>input]:my-auto"
               />
 
               <SelectDropdown

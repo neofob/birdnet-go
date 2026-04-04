@@ -17,16 +17,7 @@
   @component
 -->
 <script lang="ts">
-  import {
-    Settings,
-    Trash2,
-    Check,
-    X,
-    AlertCircle,
-    Volume2,
-    Moon,
-    ChevronDown,
-  } from '@lucide/svelte';
+  import { Settings, Trash2, Check, X, AlertCircle, Mic, Moon, ChevronDown } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import { t } from '$lib/i18n';
   import { cn } from '$lib/utils/cn';
@@ -257,7 +248,7 @@
         />
 
         <!-- Gain and Model Row -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <InlineSlider
             label={t('settings.audio.soundCards.gainLabel')}
             value={editGain}
@@ -267,6 +258,7 @@
             step={1}
             unit=" dB"
             {disabled}
+            className="h-full [&>input]:my-auto"
           />
 
           <SelectDropdown
@@ -346,7 +338,7 @@
         <div
           class="flex-shrink-0 size-10 rounded-lg flex items-center justify-center border bg-[color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)] border-[color-mix(in_srgb,var(--color-primary)_25%,transparent)]"
         >
-          <Volume2 class="size-5" />
+          <Mic class="size-5" />
         </div>
 
         <!-- Source Info -->
