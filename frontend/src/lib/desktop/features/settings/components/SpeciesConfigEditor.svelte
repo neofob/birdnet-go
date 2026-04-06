@@ -50,9 +50,13 @@
   }: Props = $props();
 
   // Form state initialized from props — parent uses {#key} to reset on species change
+  // svelte-ignore state_referenced_locally
   const existingAction = config?.actions?.[0];
+  // svelte-ignore state_referenced_locally
   let speciesName = $state(species ?? '');
+  // svelte-ignore state_referenced_locally
   let threshold = $state(config?.threshold ?? 0.5);
+  // svelte-ignore state_referenced_locally
   let interval = $state(config?.interval ?? 0);
   let showActions = $state(!!existingAction);
   let actionCommand = $state(existingAction?.command ?? '');
