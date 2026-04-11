@@ -144,6 +144,13 @@ type BirdImageCache struct {
 	wg           sync.WaitGroup                        // Tracks in-flight DB and background operations
 	Initializing sync.Map                              // Track which species are being initialized
 	registry     atomic.Pointer[ImageProviderRegistry] // Use atomic pointer
+	// exhaustedSpecies tracks species whose primary + fallback providers have
+	// all returned "not found" within the current TTL window. It maps a
+	// scientific name to the time.Time the exhaustion was recorded. This lets
+	// Get() short-circuit the fallback chain for species like "Siren" or
+	// "Human vocal" that no image provider will ever resolve, eliminating
+	// repeated SQLite reads on every detection cycle.
+	exhaustedSpecies sync.Map
 }
 
 // GetFileCache returns the file cache instance, or nil if not configured.
@@ -1178,6 +1185,23 @@ func (c *BirdImageCache) Get(scientificName string) (BirdImage, error) {
 	img, foundInCache, err := c.tryInitialize(scientificName)
 	if err != nil {
 		c.logInitializeError(err, scientificName, log)
+		// If every provider has already been exhausted for this species
+		// within the TTL window, short-circuit the fallback chain instead
+		// of re-querying each fallback's database and provider on every
+		// call. The exhausted entry was recorded inside tryFallbackProviders
+		// the last time the chain ran to completion. Metrics are deliberately
+		// unchanged here to mirror the pre-fix behavior for the primary
+		// negative-cache path (which also did not emit a hit/miss metric).
+		//
+		// IMPORTANT: only short-circuit when the primary itself returned
+		// ErrImageNotFound. Transient failures (network errors, DB errors,
+		// provider initialization errors) must NOT be silently converted
+		// into a 15-minute "not found" response — those should still try
+		// the fallback chain so a working provider can serve the request.
+		if errors.Is(err, ErrImageNotFound) && c.isSpeciesExhausted(scientificName) {
+			log.Debug("Species already exhausted by all providers, skipping fallback chain")
+			return c.synthesizeExhaustedResponse(scientificName)
+		}
 		if fallbackImg, found := c.tryFallbackOnGetError(err, scientificName, log); found {
 			return fallbackImg, nil
 		}
@@ -1475,6 +1499,67 @@ func (c *BirdImageCache) logSlowOperation(operation, scientificName string, dura
 	}
 }
 
+// exhaustedSpeciesTTL is the lifetime of an exhausted-species cache entry.
+// Reuses negativeCacheTTL so the two negative-cache layers stay in sync: an
+// entry remains short-circuited exactly as long as the underlying negative DB
+// entries remain valid. Using the existing constant avoids drift between
+// layers.
+const exhaustedSpeciesTTL = negativeCacheTTL
+
+// recordSpeciesExhausted marks a species as having exhausted every registered
+// image provider within the current TTL window. Subsequent Get() calls for
+// the same species will short-circuit the fallback chain until the entry
+// ages out.
+//
+// Concurrency: sync.Map.Store is safe for concurrent writes; racing callers
+// will simply overwrite each other's timestamp with near-identical values,
+// which is harmless because the TTL window is coarse (minutes).
+func (c *BirdImageCache) recordSpeciesExhausted(scientificName string) {
+	if scientificName == "" {
+		return
+	}
+	c.exhaustedSpecies.Store(scientificName, time.Now())
+}
+
+// isSpeciesExhausted reports whether the species has a live exhaustion entry.
+// It performs lazy expiration: if the stored timestamp is older than the TTL,
+// the entry is deleted and false is returned so the fallback chain can retry.
+//
+// Concurrency: sync.Map.Load/Delete are safe for concurrent access. A race
+// between "isSpeciesExhausted observed entry as fresh" and another goroutine
+// deleting it is fine — the caller just treats it as exhausted for this call,
+// and the next call will re-check. No double-fetch of providers can occur as
+// a result of this read, because recording only happens after all providers
+// have already been tried (see tryFallbackProviders).
+func (c *BirdImageCache) isSpeciesExhausted(scientificName string) bool {
+	if scientificName == "" {
+		return false
+	}
+	v, ok := c.exhaustedSpecies.Load(scientificName)
+	if !ok {
+		return false
+	}
+	stamp, ok := v.(time.Time)
+	if !ok {
+		// Defensive: unexpected type, drop the bogus entry.
+		c.exhaustedSpecies.Delete(scientificName)
+		return false
+	}
+	if time.Since(stamp) > exhaustedSpeciesTTL {
+		c.exhaustedSpecies.Delete(scientificName) // lazy expiration
+		return false
+	}
+	return true
+}
+
+// synthesizeExhaustedResponse returns the short-circuit response used when a
+// species is already known to be exhausted. It mirrors the value returned by
+// the primary-provider negative path so callers do not need to distinguish
+// the two.
+func (c *BirdImageCache) synthesizeExhaustedResponse(scientificName string) (BirdImage, error) {
+	return BirdImage{}, imageNotFoundFor(scientificName, c.providerName, "exhausted_species_cache")
+}
+
 // tryFallbackProviders attempts to get the image from other registered providers.
 func (c *BirdImageCache) tryFallbackProviders(scientificName string, triedProviders map[string]bool) (BirdImage, bool) {
 	log := GetLogger().With(logger.String("scientific_name", scientificName))
@@ -1487,6 +1572,16 @@ func (c *BirdImageCache) tryFallbackProviders(scientificName string, triedProvid
 
 	var foundImage BirdImage
 	found := false
+
+	// Track whether every fallback failure we observed was specifically
+	// ErrImageNotFound. Only when ALL fallbacks (and the primary, by virtue
+	// of having been tried before this function is called) report
+	// "not found" do we record the species as exhausted. Transient failures
+	// (network errors, DB errors, provider init failures) must not poison
+	// the exhausted-species cache for the TTL window — they should be
+	// retried on the next Get().
+	allFallbacksNotFound := true
+	anyFallbackTried := false
 
 	// Create a local copy of triedProviders to avoid modifying the caller's map
 	localTriedProviders := make(map[string]bool, len(triedProviders))
@@ -1502,11 +1597,16 @@ func (c *BirdImageCache) tryFallbackProviders(scientificName string, triedProvid
 
 		log.Debug("Attempting fallback fetch from provider", logger.String("provider", name))
 		localTriedProviders[name] = true // Mark as tried
+		anyFallbackTried = true
 
 		// Instead of calling Get (which would recursively try fallbacks), use fetchAndStore directly
 		// to avoid the fallback chain and potential infinite loop
 		img, err := cache.fetchAndStore(scientificName)
 		if err != nil {
+			if !errors.Is(err, ErrImageNotFound) {
+				// Transient/real error — do NOT mark species exhausted.
+				allFallbacksNotFound = false
+			}
 			// Log error but continue trying other fallbacks
 			log.Warn("Fallback provider failed to get image",
 				logger.String("provider", name),
@@ -1533,6 +1633,25 @@ func (c *BirdImageCache) tryFallbackProviders(scientificName string, triedProvid
 		log.Debug("Fallback successful", logger.String("found_provider", foundImage.SourceProvider))
 	} else {
 		log.Debug("Fallback unsuccessful, image not found in any provider")
+		// Record exhaustion on the primary cache so future Get() calls for
+		// this species short-circuit before re-running the fallback chain.
+		// The entry is keyed by species only and does not preserve which
+		// provider failed; by construction, every registered provider has
+		// been tried for this species in this invocation.
+		//
+		// CORRECTNESS GATE: only record exhaustion when at least one
+		// fallback was actually tried AND every failure was an
+		// ErrImageNotFound. The caller (Get -> tryFallbackOnGetError) only
+		// invokes this function after the primary returned
+		// ErrImageNotFound, so by construction every observed error in
+		// this run is "not found" when allFallbacksNotFound is true.
+		// Without this gate, a transient outage on a fallback (network
+		// timeout, DB error, provider init failure) would mask the
+		// species for the full TTL window, hiding real issues and
+		// suppressing legitimate retries.
+		if anyFallbackTried && allFallbacksNotFound {
+			c.recordSpeciesExhausted(scientificName)
+		}
 	}
 	return foundImage, found
 }
@@ -1595,7 +1714,9 @@ func (img *BirdImage) EstimateSize() int {
 	return size
 }
 
-// MemoryUsage estimates the total memory usage of the cache map.
+// MemoryUsage estimates the total memory usage of the cache maps.
+// Includes both the per-species image data map and the exhausted-species
+// short-circuit map so cache metrics reflect the full footprint.
 func (c *BirdImageCache) MemoryUsage() int {
 	totalSize := 0
 	c.dataMap.Range(func(key, value any) bool {
@@ -1605,6 +1726,16 @@ func (c *BirdImageCache) MemoryUsage() int {
 		if img, ok := value.(*BirdImage); ok && img != nil {
 			totalSize += img.EstimateSize() // Add value size
 		}
+		return true
+	})
+	c.exhaustedSpecies.Range(func(key, value any) bool {
+		if scientificName, ok := key.(string); ok {
+			totalSize += len(scientificName)
+		}
+		// Each entry stores a time.Time (24 bytes on 64-bit). Use a constant
+		// here to avoid an unsafe.Sizeof import for one constant value.
+		const timeStructBytes = 24
+		totalSize += timeStructBytes
 		return true
 	})
 	return totalSize
