@@ -24,6 +24,7 @@ import (
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/privacy"
+	"github.com/tphakala/birdnet-go/internal/sysinfo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,12 +49,6 @@ const (
 	// File permissions
 	defaultDirPermissions  = 0o755
 	defaultFilePermissions = 0o644
-
-	// Container and system detection
-	dockerEnvFile       = "/.dockerenv"
-	procCGroupFile      = "/proc/1/cgroup"
-	containerDocker     = "docker"
-	containerContainerd = "containerd"
 
 	// SystemD and journal constants
 	systemdServiceName = "birdnet-go.service"
@@ -100,31 +95,6 @@ const (
 	exitCodeGeneralFailure  = 1
 	exitCodeCommandNotFound = 127
 )
-
-// isRunningInDocker detects if the application is running inside a Docker container.
-// This is useful for adjusting log collection strategies, as Docker containers
-// often don't have systemd/journald available.
-//
-// Detection methods:
-//  1. Check for /.dockerenv file (standard Docker marker)
-//  2. Check /proc/1/cgroup for docker references
-//
-// Returns true if running in Docker, false otherwise.
-func isRunningInDocker() bool {
-	// Check for .dockerenv file
-	if _, err := os.Stat(dockerEnvFile); err == nil {
-		return true
-	}
-
-	// Check cgroup for docker references
-	if data, err := os.ReadFile(procCGroupFile); err == nil {
-		if strings.Contains(string(data), containerDocker) || strings.Contains(string(data), containerContainerd) {
-			return true
-		}
-	}
-
-	return false
-}
 
 // getLogger returns the support package logger.
 // Fetched dynamically to ensure it uses the current centralized logger.
@@ -816,13 +786,18 @@ func (c *Collector) collectLogs(ctx context.Context, duration time.Duration, max
 	var logs []LogEntry
 	var totalSize int64
 
-	// Try to collect from journald first (systemd systems)
-	// Skip journal collection if running in Docker as it's unlikely to be available
-	if isRunningInDocker() {
-		getLogger().Debug("support: running in Docker, skipping journal log collection")
+	// Try to collect from journald first (systemd systems).
+	// Skip journal collection in container runtimes (Docker, Podman, LXC,
+	// systemd-nspawn) where journald is typically unavailable. Uses
+	// sysinfo.IsContainer() so the check matches the same gate that
+	// addJournaldLogs uses on the archive path — keeping both journald
+	// collection paths consistent and removing the now-redundant local
+	// Docker-only helper.
+	if sysinfo.IsContainer() {
+		getLogger().Debug("support: running in a container runtime, skipping journal log collection")
 		diagnostics.JournalLogs.Attempted = false
 		diagnostics.JournalLogs.Details = map[string]any{
-			"skipped_reason": "running_in_docker",
+			"skipped_reason": "running_in_container",
 		}
 	} else {
 		getLogger().Debug("support: attempting to collect journal logs")
@@ -1362,13 +1337,23 @@ func (c *Collector) addLogFilesToArchive(ctx context.Context, w *zip.Writer, dur
 		}
 	}
 
-	// Add journald logs
-	getLogger().Debug("support: attempting to add journald logs to archive")
-	if err := lfc.addJournaldLogs(w, duration); err == nil {
-		lfc.logsAdded++
-		getLogger().Debug("support: journald logs added successfully")
+	// Add journald logs when running on a host where systemd-journald is
+	// actually available. In container runtimes (Docker, Podman, LXC,
+	// systemd-nspawn, generic) the journalctl binary either does not exist
+	// or returns an error, which previously surfaced as a recurring Sentry
+	// event every time a support dump was generated. Use the shared
+	// sysinfo.IsContainer() detector so we cover all container flavours,
+	// not just Docker.
+	if sysinfo.IsContainer() {
+		getLogger().Debug("support: skipping journald collection (container runtime)")
 	} else {
-		getLogger().Debug("support: could not add journald logs", logger.Error(err))
+		getLogger().Debug("support: attempting to add journald logs to archive")
+		if err := lfc.addJournaldLogs(w, duration); err == nil {
+			lfc.logsAdded++
+			getLogger().Debug("support: journald logs added successfully")
+		} else {
+			getLogger().Debug("support: could not add journald logs", logger.Error(err))
+		}
 	}
 
 	// Add README if no logs found
