@@ -2,15 +2,60 @@ import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { svelteTesting } from '@testing-library/svelte/vite'
-import { copyFileSync, mkdirSync, readdirSync, existsSync } from 'fs'
-import { join } from 'path'
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+
+// Single source of truth for the translation files directory. Both the i18n
+// cache version helper and the copy-messages plugin reference this path so
+// they cannot drift apart.
+const MESSAGES_SOURCE_DIR = './static/messages'
+
+/**
+ * Compute a stable i18n cache version from the content of
+ * `static/messages/*.json`. This replaces `Date.now()` so two builds from
+ * identical sources produce identical bundle content hashes (reproducible
+ * builds) and the i18n localStorage cache only evicts when translations
+ * actually change.
+ *
+ * Returns 'dev' if the messages directory is missing or empty so dev/test
+ * runs still get a well-defined value.
+ */
+function computeI18nCacheVersion() {
+  const sourceDir = MESSAGES_SOURCE_DIR
+  if (!existsSync(sourceDir)) return 'dev'
+  const files = readdirSync(sourceDir)
+    .filter(f => f.endsWith('.json'))
+    .sort()
+  if (files.length === 0) return 'dev'
+  const hash = createHash('sha256')
+  // NUL-byte delimiter prevents collisions between (filename, content) pairs:
+  // without it, `a.json` containing `bc` and `ab.json` containing `c` both
+  // hash the byte stream `abc` and produce the same digest.
+  const delimiter = Buffer.from([0])
+  for (const file of files) {
+    hash.update(file)
+    hash.update(delimiter)
+    try {
+      hash.update(readFileSync(join(sourceDir, file)))
+    } catch (/** @type {any} */ err) {
+      // Surface the failing file name then re-throw so the build fails loudly
+      // rather than silently producing a 'dev' cache version that masks the
+      // problem.
+      console.error(`[i18n-cache-version] Failed to read ${file}:`, err.message)
+      throw err
+    }
+    hash.update(delimiter)
+  }
+  return hash.digest('hex').slice(0, 8)
+}
 
 // https://vite.dev/config/
 export default defineConfig({
   base: '/ui/assets/',
   publicDir: 'static',
   define: {
-    __I18N_CACHE_VERSION__: JSON.stringify(Date.now().toString(36)),
+    __I18N_CACHE_VERSION__: JSON.stringify(computeI18nCacheVersion()),
   },
   plugins: [
     tailwindcss(),
@@ -29,9 +74,9 @@ export default defineConfig({
           // Create messages directory in dist
           const messagesDir = './dist/messages';
           mkdirSync(messagesDir, { recursive: true });
-          
+
           // Copy all message files
-          const sourceDir = './static/messages';
+          const sourceDir = MESSAGES_SOURCE_DIR;
           
           // Check if source directory exists
           if (!existsSync(sourceDir)) {
@@ -80,10 +125,6 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     emptyOutDir: true,
     manifest: true, // Generates .vite/manifest.json for cache busting
-    // Watch mode uses Rolldown's default watcher options under Vite 8.
-    // The previous chokidar polling config was removed because Rolldown's
-    // WatcherOptions type no longer accepts a nested `chokidar` key.
-    watch: process.argv.includes('--watch') ? {} : null,
     rollupOptions: {
       output: {
         // Content hashes enable proper cache busting with CDNs like Cloudflare
@@ -92,7 +133,22 @@ export default defineConfig({
         assetFileNames: '[name]-[hash].[ext]',
         manualChunks(id) {
           if (id.includes('node_modules/svelte/')) return 'vendor';
-          if (id.includes('node_modules/chart.js/')) return 'charts';
+          if (
+            id.includes('node_modules/chart.js/') ||
+            id.includes('node_modules/chartjs-adapter-date-fns/')
+          )
+            return 'charts';
+          // Catch the whole d3 family: bare `d3/` and the `d3-*` packages
+          // (d3-scale-chromatic, d3-time-format, d3-array, etc.). Requiring
+          // a `/` or `-` after `d3` avoids matching unrelated packages like
+          // `d3x` or stray `d3.js` filenames inside other packages.
+          if (
+            id.includes('node_modules/d3/') ||
+            id.includes('node_modules/d3-')
+          )
+            return 'd3';
+          if (id.includes('node_modules/@sentry/')) return 'sentry';
+          if (id.includes('node_modules/maplibre-gl/')) return 'maps';
           return undefined;
         },
       },
