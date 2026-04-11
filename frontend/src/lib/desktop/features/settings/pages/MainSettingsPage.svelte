@@ -23,6 +23,7 @@
   @component
 -->
 <script lang="ts">
+  import { tick } from 'svelte';
   import NumberField from '$lib/desktop/components/forms/NumberField.svelte';
   import Checkbox from '$lib/desktop/components/forms/Checkbox.svelte';
   import SelectDropdown from '$lib/desktop/components/forms/SelectDropdown.svelte';
@@ -396,6 +397,15 @@
   let modalMarker: import('maplibre-gl').Marker | null = null;
   let mapModalOpen = $state(false);
   let mapInitialized = $state(false);
+  // mapLoadError sticks during the current Location tab visit after a hard
+  // failure (dynamic import network error, MapLibre constructor throw) so the
+  // effect below does NOT infinite-retry on every reactive cycle. The flag is
+  // automatically reset when the user leaves the Location tab so the next
+  // visit gets a fresh attempt — making transient failures user-recoverable
+  // by toggling away and back, instead of permanently stuck until reload.
+  // Recoverable failures (container detached during import) intentionally do
+  // NOT set this and naturally retry on the next reactive cycle.
+  let mapLoadError = $state(false);
   let mapLibraryLoading = $state(false);
 
   // Load initial data
@@ -403,25 +413,65 @@
     loadInitialData();
   });
 
-  // LAZY LOADING: Initialize map only when Location tab becomes active
+  // LAZY LOADING: Initialize map only when Location tab becomes active.
+  // The Location tab panel is conditionally rendered via `{#if isActive}` in
+  // SettingsTabs.svelte, so the `bind:this={mapElement}` target may not be
+  // attached to the DOM in the same reactive round that flips `activeTab`.
+  // Await a tick so the DOM settles, then double-check the container is
+  // actually connected before handing it to MapLibre — otherwise MapLibre's
+  // internal `_resolveContainer` throws on a null/undefined element.
   $effect(() => {
     const isLocationTab = activeTab === 'location';
+
+    // Reset the sticky error flag when leaving the Location tab so the next
+    // visit gets a fresh init attempt. This makes a hard failure (e.g., a
+    // transient network error during the maplibre-gl import) recoverable
+    // by toggling away from the tab and back, rather than permanently
+    // blocking the map until full page reload.
+    if (!isLocationTab) {
+      if (mapLoadError) {
+        mapLoadError = false;
+      }
+      return;
+    }
+
     const hasActualCoordinates =
       $birdnetSettings &&
       $birdnetSettings.latitude !== undefined &&
       $birdnetSettings.longitude !== undefined;
 
+    // Include `mapLibraryLoading` in the guard so a reactive cycle that
+    // fires while the dynamic `import('maplibre-gl')` is in flight does NOT
+    // kick off a second concurrent `initializeMap()` call.
     if (
-      isLocationTab &&
-      !store.isLoading &&
-      mapElement &&
-      !mapInitialized &&
-      hasActualCoordinates
+      store.isLoading ||
+      mapInitialized ||
+      mapLoadError ||
+      mapLibraryLoading ||
+      !hasActualCoordinates
     ) {
-      logger.debug('Location tab active - initializing map lazily');
-      initializeMap();
-      mapInitialized = true;
+      return;
     }
+
+    // Synchronous read so Svelte tracks `mapElement` as a reactive dependency
+    // of this effect. Without this, the `mapElement` access inside the
+    // `tick().then(...)` microtask callback below is NOT tracked — effects
+    // only pick up dependencies read synchronously during the effect body —
+    // and the effect would never re-run when `bind:this` populates
+    // `mapElement` after the conditional `{#if isActive}` mounts the tab.
+    const el = mapElement;
+    if (!el) return;
+
+    void tick().then(() => {
+      if (!el.isConnected) return;
+      logger.debug('Location tab active - initializing map lazily');
+      // initializeMap() owns the `mapInitialized = true` flip after the
+      // MapLibre constructor returns successfully. Setting it here would
+      // mark the map as initialized even when initializeMap() aborts later
+      // (e.g., the tab unmounted during the dynamic import), permanently
+      // blocking future re-init attempts.
+      void initializeMap();
+    });
   });
 
   let initialLoadComplete = $state(false);
@@ -577,7 +627,15 @@
   const createMapStyle = createMapStyleFromConfig;
 
   async function initializeMap() {
-    if (!mapElement || mapInitialized) return;
+    // Belt-and-suspenders guard: the effect above already waits for a tick
+    // and checks `mapElement.isConnected`, but keep a local check so any
+    // future caller fails cleanly instead of crashing inside MapLibre's
+    // `_resolveContainer` when the container is null/undefined/detached.
+    if (!mapElement || !mapElement.isConnected) {
+      logger.warn('initializeMap called without a bound container');
+      return;
+    }
+    if (mapInitialized || mapLoadError) return;
 
     try {
       if (!maplibregl) {
@@ -593,7 +651,20 @@
           mapLibraryLoading = false;
           logger.error('Failed to load MapLibre GL JS:', importError);
           toastActions.error(t('settings.main.errors.mapLibraryLoadFailed'));
-          mapInitialized = false;
+          // Hard failure: stick the error flag so the effect does NOT retry
+          // on every reactive cycle (each retry would re-import and re-toast).
+          mapLoadError = true;
+          return;
+        }
+
+        // Re-verify the container is still connected after the dynamic
+        // import. The user may have switched away from the Location tab
+        // while MapLibre was being imported, which unmounts `mapElement`
+        // (the tab panel is conditionally rendered via `{#if isActive}`).
+        // Without this check we'd hand a detached node to MapLibre and
+        // `_resolveContainer` would throw or create a zombie map.
+        if (!mapElement || !mapElement.isConnected) {
+          logger.warn('initializeMap aborted: container detached during import');
           return;
         }
       }
@@ -613,6 +684,13 @@
         pitchWithRotate: MAP_CONFIG.PITCH_WITH_ROTATE,
         touchZoomRotate: MAP_CONFIG.TOUCH_ZOOM_ROTATE,
       });
+
+      // Map construction succeeded — flip the flag here, AFTER the
+      // constructor returns. The previous design set this from the effect
+      // before initializeMap() ran, so an abort partway through (e.g., the
+      // post-import isConnected check above) would leave map=null but
+      // mapInitialized=true, permanently blocking re-init.
+      mapInitialized = true;
 
       map.on('load', () => {
         if (map) {
@@ -658,7 +736,10 @@
     } catch (error) {
       logger.error('Failed to initialize map:', error);
       toastActions.error(t('settings.main.errors.mapLoadFailed'));
-      mapInitialized = false;
+      // Hard failure: stick the error flag so the effect does NOT retry on
+      // every reactive cycle. mapInitialized was not yet set so we don't
+      // need to reset it.
+      mapLoadError = true;
     }
   }
 
