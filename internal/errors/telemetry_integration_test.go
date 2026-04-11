@@ -116,6 +116,135 @@ func TestShouldReportToSentry_AllowsNetworkCategoryCodeBugs(t *testing.T) {
 	assert.True(t, shouldReportToSentry(ee))
 }
 
+// TestShouldReportToSentry_CategoryLimitNotificationOnly verifies that the
+// CategoryLimit suppression is scoped to the notification component only.
+// The notification circuit breaker produces high-volume [limit] state noise
+// that is already covered by the dedicated CircuitBreakerStateTransition
+// telemetry path. Other CategoryLimit producers (eBird API quota, analysis
+// job queue full, spectrogram pre-render memory limits) are legitimate
+// operational signals that ops needs to see and must still reach Sentry.
+func TestShouldReportToSentry_CategoryLimitNotificationOnly(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		component  string
+		err        error
+		wantReport bool
+	}{
+		{
+			name:       "notification circuit breaker open is suppressed",
+			component:  "notification",
+			err:        fmt.Errorf("circuit breaker is open"),
+			wantReport: false,
+		},
+		{
+			name:       "notification circuit breaker half-open too many requests is suppressed",
+			component:  "notification",
+			err:        fmt.Errorf("circuit breaker is half-open, too many requests"),
+			wantReport: false,
+		},
+		{
+			name:       "ebird API quota exhaustion is reported",
+			component:  "ebird",
+			err:        fmt.Errorf("ebird API quota exceeded"),
+			wantReport: true,
+		},
+		{
+			name:       "analysis job queue full is reported",
+			component:  "jobqueue",
+			err:        fmt.Errorf("job queue is full"),
+			wantReport: true,
+		},
+		{
+			name:       "spectrogram prerender queue full is reported",
+			component:  "spectrogram",
+			err:        fmt.Errorf("pre-render queue full"),
+			wantReport: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ee := New(tt.err).
+				Component(tt.component).
+				Category(CategoryLimit).
+				Build()
+			got := shouldReportToSentry(ee)
+			if tt.wantReport {
+				assert.Truef(t, got,
+					"%s: CategoryLimit from %q must still be forwarded to Sentry",
+					tt.name, tt.component)
+			} else {
+				assert.Falsef(t, got,
+					"%s: CategoryLimit from %q must not be forwarded to Sentry",
+					tt.name, tt.component)
+			}
+		})
+	}
+}
+
+// TestShouldReportToSentry_FiltersRTSPSilenceTimeout verifies that the RTSP
+// silence-timeout warning emitted by the ffmpeg stream layer is not
+// forwarded to Sentry. These are transient network glitches, not bugs.
+// The full, stable signature from stream.go must match; a loose substring
+// without "for 90 seconds" is intentionally NOT suppressed so that future
+// RTSP failures worded similarly still reach Sentry.
+func TestShouldReportToSentry_FiltersRTSPSilenceTimeout(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		errMsg     string
+		wantReport bool
+	}{
+		{
+			name:       "exact silence-timeout signature is suppressed",
+			errMsg:     "stream stopped producing data for 90 seconds",
+			wantReport: false,
+		},
+		{
+			name:       "silence-timeout signature with wrapping context is suppressed",
+			errMsg:     "[rtsp-connection] stream stopped producing data for 90 seconds, restarting",
+			wantReport: false,
+		},
+		{
+			name:       "loose substring without full signature is reported",
+			errMsg:     "[rtsp-connection] stream stopped producing data",
+			wantReport: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ee := New(fmt.Errorf("%s", tt.errMsg)).
+				Component("ffmpeg-stream").
+				Category(CategoryRTSP).
+				Context("operation", "silence_timeout").
+				Build()
+			got := shouldReportToSentry(ee)
+			assert.Equal(t, tt.wantReport, got,
+				"shouldReportToSentry(%q) = %v, want %v", tt.errMsg, got, tt.wantReport)
+		})
+	}
+}
+
+// TestShouldReportToSentry_AllowsRTSPCodeBugs is a positive control that
+// pins the behavior for RTSP category errors that do NOT match the
+// known-noisy patterns. These must still reach Sentry so real bugs in the
+// RTSP stack remain visible.
+func TestShouldReportToSentry_AllowsRTSPCodeBugs(t *testing.T) {
+	t.Parallel()
+	ee := New(fmt.Errorf("ffmpeg produced invalid frame header at offset 42")).
+		Component("ffmpeg-stream").
+		Category(CategoryRTSP).
+		Build()
+	assert.True(t, shouldReportToSentry(ee),
+		"non-noise RTSP errors must still be forwarded to Sentry")
+}
+
 func TestShouldReportToSentry_RateLimitsDiskFull(t *testing.T) {
 	// Not parallel — mutates package-level state
 	lastDiskFullReport.Store(0)
