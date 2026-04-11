@@ -43,7 +43,53 @@ updates:
     commit-message:
       prefix: "build(deps-frontend)"
     open-pull-requests-limit: 5
+    # Ecosystem groups below include ALL update-types (major, minor, patch) so
+    # tightly coupled toolchains upgrade in a single PR. This prevents the
+    # situation where a plugin calls an API removed in a host package's major
+    # release (e.g. eslint 9 -> 10 removing context.getSourceCode(), which
+    # eslint-plugin-security@3 still called). Order matters: earlier groups win
+    # when a package matches multiple patterns.
     groups:
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "eslint-plugin-*"
+          - "eslint-config-*"
+          - "@typescript-eslint/*"
+          - "typescript-eslint"
+          - "svelte-eslint-parser"
+          - "@vitest/eslint-plugin"
+      svelte:
+        patterns:
+          - "svelte"
+          - "svelte-*"
+          - "@sveltejs/*"
+          - "prettier-plugin-svelte"
+      vite:
+        patterns:
+          - "vite"
+          - "vite-*"
+      vitest:
+        patterns:
+          - "vitest"
+          - "vitest-*"
+          - "@vitest/*"
+      playwright:
+        patterns:
+          - "playwright"
+          - "@playwright/*"
+          - "@axe-core/playwright"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+      testing-library:
+        patterns:
+          - "@testing-library/*"
+      types:
+        patterns:
+          - "@types/*"
       npm-minor-patch:
         patterns:
           - "*"
