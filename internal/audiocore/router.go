@@ -4,10 +4,12 @@ package audiocore
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/tphakala/birdnet-go/internal/audiocore/convert"
 	"github.com/tphakala/birdnet-go/internal/audiocore/resample"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
@@ -45,6 +47,10 @@ type Route struct {
 
 	// sourceSampleRate is the sample rate of the source producing frames.
 	sourceSampleRate int
+
+	// gainLinear is the linear gain multiplier derived from the dB value.
+	// 1.0 means no gain (0 dB). Set at route creation time and immutable.
+	gainLinear float64
 
 	// resampler converts source-rate PCM to the consumer's expected rate.
 	// Nil when no rate conversion is required.
@@ -121,7 +127,7 @@ func NewAudioRouter(log logger.Logger) *AudioRouter {
 // the consumer ID for logging, metrics, and route lookup. Duplicate IDs on
 // different sources will not cause an error but may produce confusing log
 // output and make RemoveRoute ambiguous.
-func (r *AudioRouter) AddRoute(sourceID string, consumer AudioConsumer, sourceSampleRate int) error {
+func (r *AudioRouter) AddRoute(sourceID string, consumer AudioConsumer, sourceSampleRate int, gainDB float64) error {
 	// Reject routes after the router has been closed.
 	if r.ctx.Err() != nil {
 		return fmt.Errorf("router is closed: %w", r.ctx.Err())
@@ -138,10 +144,19 @@ func (r *AudioRouter) AddRoute(sourceID string, consumer AudioConsumer, sourceSa
 		return fmt.Errorf("%w: source=%s consumer=%s", ErrRouteExists, sourceID, consumer.ID())
 	}
 
+	// Reject NaN/Inf gain values before conversion.
+	if math.IsNaN(gainDB) || math.IsInf(gainDB, 0) {
+		return fmt.Errorf("invalid gain value for source=%s consumer=%s: %f", sourceID, consumer.ID(), gainDB)
+	}
+
+	// Convert dB to linear gain. 0 dB -> 1.0 (no change).
+	gainLinear := math.Pow(10, gainDB/20)
+
 	route := &Route{
 		SourceID:         sourceID,
 		Consumer:         consumer,
 		sourceSampleRate: sourceSampleRate,
+		gainLinear:       gainLinear,
 		inbox:            make(chan AudioFrame, routeInboxCapacity),
 		done:             make(chan struct{}),
 		stopped:          make(chan struct{}),
@@ -428,6 +443,15 @@ func (r *AudioRouter) drainRoute(route *Route) {
 					Timestamp:  frame.Timestamp,
 				}
 			}
+			// Apply per-route gain when not unity (0 dB).
+			// Gain application requires 16-bit PCM; skip for other formats.
+			if route.gainLinear != 1.0 && frame.BitDepth == 16 {
+				gained, err := r.applyGain(frame, route)
+				if err != nil {
+					continue
+				}
+				frame = gained
+			}
 			if err := route.Consumer.Write(frame); err != nil {
 				errCount := route.errors.Add(1)
 				if errCount%errorLogInterval == 1 {
@@ -444,4 +468,33 @@ func (r *AudioRouter) drainRoute(route *Route) {
 			return
 		}
 	}
+}
+
+// applyGain scales the PCM data in frame by the route's linear gain multiplier.
+// It converts S16 PCM bytes to float64, scales via SIMD, and converts back with
+// clamping. Returns the modified frame or an error if the back-conversion fails.
+func (r *AudioRouter) applyGain(frame AudioFrame, route *Route) (AudioFrame, error) { //nolint:gocritic // hugeParam: AudioFrame is large but copying is intentional
+	floats := convert.BytesToFloat64PCM16(frame.Data)
+	convert.ScaleFloat64Slice(floats, route.gainLinear)
+	out := make([]byte, len(floats)*2)
+	if err := convert.Float64ToBytesPCM16(floats, out); err != nil {
+		errCount := route.errors.Add(1)
+		if errCount%errorLogInterval == 1 {
+			r.log.Warn("gain conversion error",
+				logger.String("source_id", route.SourceID),
+				logger.String("consumer_id", route.Consumer.ID()),
+				logger.Int64("total_errors", errCount),
+				logger.Error(err))
+		}
+		return AudioFrame{}, err
+	}
+	return AudioFrame{
+		SourceID:   frame.SourceID,
+		SourceName: frame.SourceName,
+		Data:       out,
+		SampleRate: frame.SampleRate,
+		BitDepth:   frame.BitDepth,
+		Channels:   frame.Channels,
+		Timestamp:  frame.Timestamp,
+	}, nil
 }

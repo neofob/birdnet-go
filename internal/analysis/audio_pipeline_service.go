@@ -428,6 +428,9 @@ func (p *AudioPipelineService) registerSoundLevelConsumers(sourceIDs []string, o
 		slInterval = 10 // default 10-second aggregation window
 	}
 	for _, sid := range sourceIDs {
+		// Look up per-source gain from the registry.
+		gainDB, _ := p.engine.Registry().GetGain(sid)
+
 		slProc, slErr := soundlevel.NewProcessor(sid, sid, conf.SampleRate, slInterval)
 		if slErr != nil {
 			log.Warn("failed to create sound level processor",
@@ -444,7 +447,7 @@ func (p *AudioPipelineService) registerSoundLevelConsumers(sourceIDs []string, o
 				logger.String("operation", operation))
 			continue
 		}
-		if routeErr := p.engine.Router().AddRoute(sid, slc, conf.SampleRate); routeErr != nil {
+		if routeErr := p.engine.Router().AddRoute(sid, slc, conf.SampleRate, gainDB); routeErr != nil {
 			log.Warn("failed to add sound level route",
 				logger.String("source_id", sid),
 				logger.Error(routeErr),
@@ -497,6 +500,9 @@ func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, s
 	bufMgr := p.engine.BufferManager()
 
 	for _, sid := range sourceIDs {
+		// Look up per-source gain from the registry.
+		gainDB, _ := p.engine.Registry().GetGain(sid)
+
 		// Resolve per-source model targets. Fall back to primary if the
 		// source has no configured models or none could be resolved.
 		modelInfos := resolveModelTargets(sourceModelMap[sid], allModelInfos)
@@ -512,6 +518,12 @@ func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, s
 		allocatedModels[primaryInfo.ID] = true // pre-allocated by engine
 		for i := range modelInfos {
 			if modelInfos[i].ID == primaryInfo.ID {
+				continue
+			}
+			// If the analysis buffer already exists (e.g., gain-only reconfigure),
+			// skip allocation and mark the model as usable.
+			if bufMgr.HasAnalysis(sid, modelInfos[i].ID) {
+				allocatedModels[modelInfos[i].ID] = true
 				continue
 			}
 			spec := modelInfos[i].Spec
@@ -555,13 +567,13 @@ func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, s
 				logger.String("source_id", sid), logger.Error(bcErr), logger.String("operation", operation))
 			continue
 		}
-		if routeErr := p.engine.Router().AddRoute(sid, bc, conf.SampleRate); routeErr != nil {
+		if routeErr := p.engine.Router().AddRoute(sid, bc, conf.SampleRate, gainDB); routeErr != nil {
 			log.Warn("failed to add buffer route",
 				logger.String("source_id", sid), logger.Error(routeErr), logger.String("operation", operation))
 		}
 
 		alc, alcOutCh := NewAudioLevelConsumer("audio_level_"+sid, conf.SampleRate, conf.BitDepth, 1)
-		if routeErr := p.engine.Router().AddRoute(sid, alc, conf.SampleRate); routeErr != nil {
+		if routeErr := p.engine.Router().AddRoute(sid, alc, conf.SampleRate, gainDB); routeErr != nil {
 			log.Warn("failed to add audio level route",
 				logger.String("source_id", sid), logger.Error(routeErr), logger.String("operation", operation))
 			continue
@@ -607,6 +619,7 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 	alreadyRunning := make(map[string]string) // connStr → sourceID (for sources that stay)
 	sourceModelMap := make(map[string][]string)
 	var newSourceIDs []string
+	var gainChangedIDs []string
 	var keptCount int
 
 	for connStr, scm := range desired {
@@ -615,6 +628,17 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 			alreadyRunning[connStr] = src.ID
 			sourceModelMap[src.ID] = scm.modelIDs
 			keptCount++
+
+			// Detect gain-only changes on kept sources.
+			if src.Gain != scm.config.Gain {
+				log.Info("gain changed for kept source, rebuilding routes",
+					logger.String("source_id", src.ID),
+					logger.Float64("old_gain_db", src.Gain),
+					logger.Float64("new_gain_db", scm.config.Gain),
+					logger.String("operation", "reconfigure_diff"))
+				registry.UpdateGain(src.ID, scm.config.Gain)
+				gainChangedIDs = append(gainChangedIDs, src.ID)
+			}
 		} else {
 			// New source — add it.
 			log.Info("adding new stream from config",
@@ -664,6 +688,17 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 		p.registerSoundLevelConsumers(newSourceIDs, "reconfigure_diff")
 	}
 
+	// Rebuild routes for sources whose gain changed. The capture device
+	// stays running — only the routes are torn down and re-created so
+	// drainRoute picks up the new gainLinear value.
+	if len(gainChangedIDs) > 0 {
+		for _, sid := range gainChangedIDs {
+			p.engine.Router().RemoveAllRoutes(sid)
+		}
+		p.registerConsumersForSources(gainChangedIDs, sourceModelMap, audioLevelChan, "gain_change")
+		p.registerSoundLevelConsumers(gainChangedIDs, "gain_change")
+	}
+
 	// Sync monitors for ALL active sources (kept + new) so UpdateMonitors
 	// receives the full desired state and removes stale monitors correctly.
 	allActiveIDs := slices.Collect(maps.Values(alreadyRunning))
@@ -679,6 +714,7 @@ func (p *AudioPipelineService) reconfigureChangedSources(audioLevelChan chan aud
 		logger.Int("kept", keptCount),
 		logger.Int("added", len(newSourceIDs)),
 		logger.Int("removed", removedCount),
+		logger.Int("gain_changed", len(gainChangedIDs)),
 		logger.String("operation", "reconfigure_diff"))
 }
 
@@ -729,6 +765,7 @@ func (p *AudioPipelineService) buildSourceConfigsWithModels() []sourceConfigWith
 				SampleRate:       conf.SampleRate,
 				BitDepth:         conf.BitDepth,
 				Channels:         1,
+				Gain:             src.Gain,
 			},
 			modelIDs: src.Models,
 		})

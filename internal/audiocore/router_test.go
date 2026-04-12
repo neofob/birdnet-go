@@ -87,7 +87,7 @@ func TestRouter_AddAndRemoveRoute(t *testing.T) {
 
 	consumer := newMockConsumer("consumer-1")
 
-	err := router.AddRoute("src-1", consumer, 48000)
+	err := router.AddRoute("src-1", consumer, 48000, 0.0)
 	require.NoError(t, err)
 	assert.True(t, router.HasConsumers("src-1"))
 
@@ -104,7 +104,7 @@ func TestRouter_DispatchSingleConsumer(t *testing.T) {
 	t.Cleanup(func() { router.Close() })
 
 	consumer := newMockConsumer("consumer-1")
-	err := router.AddRoute("src-1", consumer, 48000)
+	err := router.AddRoute("src-1", consumer, 48000, 0.0)
 	require.NoError(t, err)
 
 	frame := testFrame("src-1")
@@ -129,8 +129,8 @@ func TestRouter_DispatchFanOut(t *testing.T) {
 	c1 := newMockConsumer("consumer-1")
 	c2 := newMockConsumer("consumer-2")
 
-	require.NoError(t, router.AddRoute("src-1", c1, 48000))
-	require.NoError(t, router.AddRoute("src-1", c2, 48000))
+	require.NoError(t, router.AddRoute("src-1", c1, 48000, 0.0))
+	require.NoError(t, router.AddRoute("src-1", c2, 48000, 0.0))
 
 	frame := testFrame("src-1")
 	router.Dispatch(frame)
@@ -166,7 +166,7 @@ func TestRouter_DropOnFullInbox(t *testing.T) {
 	t.Cleanup(func() { router.Close() })
 
 	consumer := newBlockingConsumer("slow-consumer")
-	require.NoError(t, router.AddRoute("src-1", consumer, 48000))
+	require.NoError(t, router.AddRoute("src-1", consumer, 48000, 0.0))
 
 	// Fill the inbox buffer (capacity 64) plus extra to guarantee drops.
 	const totalFrames = 128
@@ -190,8 +190,8 @@ func TestRouter_RemoveAllRoutes(t *testing.T) {
 	c1 := newMockConsumer("consumer-1")
 	c2 := newMockConsumer("consumer-2")
 
-	require.NoError(t, router.AddRoute("src-1", c1, 48000))
-	require.NoError(t, router.AddRoute("src-1", c2, 48000))
+	require.NoError(t, router.AddRoute("src-1", c1, 48000, 0.0))
+	require.NoError(t, router.AddRoute("src-1", c2, 48000, 0.0))
 	assert.True(t, router.HasConsumers("src-1"))
 
 	router.RemoveAllRoutes("src-1")
@@ -210,9 +210,9 @@ func TestRouter_DuplicateRouteError(t *testing.T) {
 	c1 := newMockConsumer("consumer-1")
 	c2 := newMockConsumer("consumer-1") // same ID
 
-	require.NoError(t, router.AddRoute("src-1", c1, 48000))
+	require.NoError(t, router.AddRoute("src-1", c1, 48000, 0.0))
 
-	err := router.AddRoute("src-1", c2, 48000)
+	err := router.AddRoute("src-1", c2, 48000, 0.0)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrRouteExists)
 }
@@ -231,7 +231,7 @@ func TestRouter_DispatchWithResampling(t *testing.T) {
 	consumer.sampleRate = 32000
 
 	// Add route with source at 48kHz.
-	err := router.AddRoute("src-resample", consumer, 48000)
+	err := router.AddRoute("src-resample", consumer, 48000, 0.0)
 	require.NoError(t, err)
 
 	// Build a 48kHz frame with 4800 samples (100 ms of 16-bit PCM, 9600 bytes).
@@ -285,8 +285,8 @@ func TestRouter_ConcurrentDispatch(t *testing.T) {
 
 	c1 := newMockConsumer("consumer-1")
 	c2 := newMockConsumer("consumer-2")
-	require.NoError(t, router.AddRoute("src-1", c1, 48000))
-	require.NoError(t, router.AddRoute("src-1", c2, 48000))
+	require.NoError(t, router.AddRoute("src-1", c1, 48000, 0.0))
+	require.NoError(t, router.AddRoute("src-1", c2, 48000, 0.0))
 
 	const goroutines = 8
 	const framesPerGoroutine = 100
@@ -326,7 +326,7 @@ func TestDrainRoutePanicRecovery(t *testing.T) {
 		sampleRate: 48000,
 	}
 
-	err := router.AddRoute("src1", panicConsumer, 48000)
+	err := router.AddRoute("src1", panicConsumer, 48000, 0.0)
 	require.NoError(t, err)
 
 	// Dispatch a frame — the consumer will panic on Write.
@@ -360,4 +360,161 @@ func (c *panicOnWriteConsumer) Channels() int   { return 1 }
 func (c *panicOnWriteConsumer) Close() error    { return nil }
 func (c *panicOnWriteConsumer) Write(_ AudioFrame) error { //nolint:gocritic // hugeParam: signature required by AudioConsumer interface
 	panic("consumer exploded")
+}
+
+// TestRouter_DrainRouteAppliesGain verifies that per-route gain amplifies,
+// attenuates, or leaves audio data unchanged depending on the dB value.
+func TestRouter_DrainRouteAppliesGain(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		gainDB     float64
+		inputPCM   []int16
+		wantScaled bool // true if output should differ from input
+	}{
+		{
+			name:       "positive_gain_amplifies",
+			gainDB:     6.0,
+			inputPCM:   []int16{1000, -1000, 500, -500},
+			wantScaled: true,
+		},
+		{
+			name:       "negative_gain_attenuates",
+			gainDB:     -6.0,
+			inputPCM:   []int16{1000, -1000, 500, -500},
+			wantScaled: true,
+		},
+		{
+			name:       "zero_gain_no_change",
+			gainDB:     0.0,
+			inputPCM:   []int16{1000, -1000, 500, -500},
+			wantScaled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			router := NewAudioRouter(GetLogger())
+			defer router.Close()
+
+			consumer := newMockConsumer("c1")
+			err := router.AddRoute("src-1", consumer, 48000, tt.gainDB)
+			require.NoError(t, err)
+
+			// Build PCM byte data from int16 samples.
+			inputBytes := make([]byte, len(tt.inputPCM)*2)
+			for i, s := range tt.inputPCM {
+				inputBytes[i*2] = byte(s)
+				inputBytes[i*2+1] = byte(s >> 8)
+			}
+
+			router.Dispatch(AudioFrame{
+				SourceID:   "src-1",
+				SourceName: "Test",
+				Data:       inputBytes,
+				SampleRate: 48000,
+				BitDepth:   16,
+				Channels:   1,
+			})
+
+			var received AudioFrame
+			select {
+			case received = <-consumer.frames:
+			case <-time.After(2 * time.Second):
+				t.Fatal("timed out waiting for frame")
+			}
+
+			if tt.wantScaled {
+				assert.NotEqual(t, inputBytes, received.Data,
+					"gain %.1f dB should change the audio data", tt.gainDB)
+			} else {
+				assert.Equal(t, inputBytes, received.Data,
+					"0 dB gain should leave audio data unchanged")
+			}
+		})
+	}
+}
+
+// TestRouter_GainClipping verifies that high gain correctly clips signals
+// to the int16 range rather than producing corrupted output.
+func TestRouter_GainClipping(t *testing.T) {
+	t.Parallel()
+
+	router := NewAudioRouter(GetLogger())
+	defer router.Close()
+
+	consumer := newMockConsumer("c1")
+	// +40 dB is 100x linear — will clip a signal near max.
+	err := router.AddRoute("src-1", consumer, 48000, 40.0)
+	require.NoError(t, err)
+
+	// Input: near-max signal (30000 out of 32767).
+	inputPCM := []int16{30000, -30000}
+	inputBytes := make([]byte, len(inputPCM)*2)
+	for i, s := range inputPCM {
+		inputBytes[i*2] = byte(s)
+		inputBytes[i*2+1] = byte(s >> 8)
+	}
+
+	router.Dispatch(AudioFrame{
+		SourceID:   "src-1",
+		SourceName: "Test",
+		Data:       inputBytes,
+		SampleRate: 48000,
+		BitDepth:   16,
+		Channels:   1,
+	})
+
+	var received AudioFrame
+	select {
+	case received = <-consumer.frames:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for frame")
+	}
+
+	// Verify output is clipped to max int16 range, not corrupted.
+	require.Len(t, received.Data, 4)
+	sample0 := int16(received.Data[0]) | int16(received.Data[1])<<8
+	sample1 := int16(received.Data[2]) | int16(received.Data[3])<<8
+
+	// Float64ToBytesPCM16 clamps to [-1.0, 1.0] before conversion,
+	// so output should be at or near ±32767.
+	assert.InDelta(t, 32767, int(sample0), 1, "positive sample should clip to max")
+	assert.InDelta(t, -32767, int(sample1), 1, "negative sample should clip to min")
+}
+
+// TestRouter_AddRouteWithGain verifies that AddRoute correctly converts
+// a dB gain value to the corresponding linear multiplier and stores it
+// on the Route.
+func TestRouter_AddRouteWithGain(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		gainDB     float64
+		wantLinear float64
+	}{
+		{"zero_dB_no_change", 0.0, 1.0},
+		{"positive_6dB", 6.0, 1.9953},
+		{"negative_6dB", -6.0, 0.5012},
+		{"max_40dB", 40.0, 100.0},
+		{"min_neg40dB", -40.0, 0.01},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			router := NewAudioRouter(GetLogger())
+			t.Cleanup(func() { router.Close() })
+			consumer := newMockConsumer("c1")
+			err := router.AddRoute("src-1", consumer, 48000, tt.gainDB)
+			require.NoError(t, err)
+			router.mu.RLock()
+			routes := router.routes["src-1"]
+			require.Len(t, routes, 1)
+			assert.InDelta(t, tt.wantLinear, routes[0].gainLinear, 0.01)
+			router.mu.RUnlock()
+		})
+	}
 }
