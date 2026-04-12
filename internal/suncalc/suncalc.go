@@ -26,7 +26,6 @@ type SunEventTimes struct {
 // cacheEntry holds the cached sun event times for a given date
 type cacheEntry struct {
 	times SunEventTimes // Sun event times in local time
-	date  time.Time     // Date for which the sun event times are cached
 }
 
 // SunCalc handles caching and calculation of sun event times
@@ -100,7 +99,7 @@ func (sc *SunCalc) GetSunEventTimes(date time.Time) (SunEventTimes, error) {
 
 	// Acquire a write lock and update the cache with the new times
 	sc.lock.Lock()
-	sc.cache[dateKey] = cacheEntry{times: times, date: localDate}
+	sc.cache[dateKey] = cacheEntry{times: times}
 	sc.lock.Unlock()
 
 	// Record successful operation and update sun time gauges
@@ -109,9 +108,7 @@ func (sc *SunCalc) GetSunEventTimes(date time.Time) (SunEventTimes, error) {
 		sc.metrics.RecordSunCalcDuration("get_sun_events", time.Since(start).Seconds())
 
 		// Update sun time gauges for current day
-		// Compare dates in the same location to handle time zone correctly
-		now := time.Now().In(sc.location)
-		if localDate.Year() == now.Year() && localDate.YearDay() == now.YearDay() {
+		if dateKey == time.Now().In(sc.location).Format(time.DateOnly) {
 			sc.metrics.UpdateSunTimes(
 				float64(times.Sunrise.Unix()),
 				float64(times.Sunset.Unix()),
@@ -125,6 +122,7 @@ func (sc *SunCalc) GetSunEventTimes(date time.Time) (SunEventTimes, error) {
 	return times, nil
 }
 
+// calculateSunEventTimes calculates the sun event times for a given date
 func (sc *SunCalc) calculateSunEventTimes(date time.Time) (SunEventTimes, error) {
 	// Calculate sunrise
 	sunrise, err := astral.Sunrise(sc.observer, date)
