@@ -117,11 +117,13 @@ func TestShouldReportToSentry_AllowsNetworkCategoryCodeBugs(t *testing.T) {
 }
 
 // TestShouldReportToSentry_CategoryLimitNotificationOnly verifies that the
-// CategoryLimit suppression is scoped to the notification component only.
-// The notification circuit breaker produces high-volume [limit] state noise
-// that is already covered by the dedicated CircuitBreakerStateTransition
-// telemetry path. Other CategoryLimit producers (eBird API quota, analysis
-// job queue full, spectrogram pre-render memory limits) are legitimate
+// CategoryLimit suppression is scoped to the notification component. The
+// notification.PushCircuitBreaker's ErrCircuitBreakerOpen sentinel is tagged
+// component="notification", and that single sentinel is what every caller
+// (notification push providers AND birdweather uploads, which reuse the
+// same breaker) receives — so the notification-only filter suppresses both
+// in practice. Other CategoryLimit producers (eBird API quota, analysis job
+// queue full, spectrogram pre-render memory limits) are legitimate
 // operational signals that ops needs to see and must still reach Sentry.
 func TestShouldReportToSentry_CategoryLimitNotificationOnly(t *testing.T) {
 	t.Parallel()
