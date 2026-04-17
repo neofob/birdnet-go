@@ -290,15 +290,33 @@ func (r *AudioRouter) UpdateFilterChain(sourceID string, build FilterChainBuilde
 // Note: because Dispatch takes a read lock while RemoveRoute takes a write
 // lock, a small number of in-flight frames may be lost during route removal.
 // This is expected behaviour and not a bug.
+//
+// Pool ownership: when frame.Ref is non-nil, Dispatch calls Retain once per
+// successful inbox enqueue. Each drainer calls Release after Consumer.Write
+// returns (via a defer in handleRouteFrame). The producer retains one
+// reference at frame creation and is responsible for calling Release once
+// after Dispatch returns, so the pool slice is released exactly when the
+// last holder is done.
+//
+// Ordering invariant: Retain MUST run before the non-blocking send. If it
+// ran after a successful enqueue, the drainer could dequeue, Write, and
+// Release before the retain lands, firing the release closure while the
+// frame is still in flight. Do not "optimise" by moving Retain inside the
+// success arm of the select.
 func (r *AudioRouter) Dispatch(frame AudioFrame) { //nolint:gocritic // hugeParam: signature required by AudioDispatcher interface
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	for _, rt := range r.routes[frame.SourceID] {
+		// Retain BEFORE attempting the send so the drainer cannot observe a
+		// stale zero count and release the slice prematurely. If the send
+		// fails (inbox full), undo the retain so the drop path is balanced.
+		frame.Ref.Retain()
 		select {
 		case rt.inbox <- frame:
-			// Frame enqueued successfully.
+			// Frame enqueued; drainer will Release after Write.
 		default:
+			frame.Ref.Release() // undo the retain we just performed
 			drops := rt.drops.Add(1)
 			if drops%dropLogInterval == 1 {
 				r.log.Warn("frames dropped for consumer",
@@ -350,12 +368,21 @@ func (r *AudioRouter) Routes(sourceID string) []RouteInfo {
 // and the map is atomically swapped under the lock so subsequent calls see an
 // empty map and close no done channels.
 func (r *AudioRouter) Close() {
-	r.cancel()
-
+	// Clear the routes map BEFORE cancelling the context. Any concurrent
+	// Dispatch holding the RLock completes its Retain+enqueue before Close
+	// can acquire the write lock (RLock blocks the Lock). Once Close owns
+	// the Lock and clears the map, any later Dispatch sees an empty map
+	// and performs no Retain. Only then do we cancel the context; drainers
+	// wake up, drain their inbox via drainInboxRefs, and exit with refs
+	// balanced. The previous cancel-then-lock order allowed a drainer to
+	// exit on ctx.Done while an in-flight Dispatch still held the old route
+	// slice and enqueued a retain onto the dead drainer's inbox.
 	r.mu.Lock()
 	allRoutes := r.routes
 	r.routes = make(map[string][]*Route)
 	r.mu.Unlock()
+
+	r.cancel()
 
 	for _, routes := range allRoutes {
 		for _, rt := range routes {
@@ -447,7 +474,13 @@ func (r *AudioRouter) drainRoute(route *Route) {
 				break
 			}
 			r.mu.Unlock()
-			// Goroutine returns here — the route is removed from the map.
+			// Release any pooled refs on frames buffered in the inbox so the
+			// Retains performed by Dispatch are balanced even when the drainer
+			// unwinds via panic. Without this, up to routeInboxCapacity refs
+			// per panicking route would stay outstanding (the slices still
+			// GC, so this is pool-efficiency rather than a hard leak).
+			drainInboxRefs(route.inbox)
+			// Goroutine returns here. The route is removed from the map.
 			// Note: consumer and resampler are intentionally NOT closed here
 			// to avoid potential secondary panics during cleanup. They will
 			// be reclaimed by GC. The stopped channel is closed by the outer
@@ -459,8 +492,29 @@ func (r *AudioRouter) drainRoute(route *Route) {
 		case frame := <-route.inbox:
 			r.handleRouteFrame(frame, route)
 		case <-route.done:
+			drainInboxRefs(route.inbox)
 			return
 		case <-r.ctx.Done():
+			drainInboxRefs(route.inbox)
+			return
+		}
+	}
+}
+
+// drainInboxRefs non-blockingly releases the pooled FrameRef on any frames
+// still queued on an inbox at drainer exit. Dispatch retains once per
+// successful enqueue; handleRouteFrame releases via defer. Frames that never
+// reach handleRouteFrame (because the drainer exited via route.done or the
+// router context was cancelled) would otherwise keep their retain outstanding
+// forever, preventing the pool slice from being returned. Called from the
+// drainer goroutine's exit paths so the balance of Retain calls from Dispatch
+// is preserved on shutdown and route removal.
+func drainInboxRefs(inbox <-chan AudioFrame) {
+	for {
+		select {
+		case f := <-inbox:
+			f.Ref.Release()
+		default:
 			return
 		}
 	}
@@ -483,6 +537,10 @@ func (r *AudioRouter) drainRoute(route *Route) {
 //   - procResult.OutPool and resamplePool cannot both be non-nil at the trailing
 //     guards by construction, so their Put calls are mutually exclusive.
 func (r *AudioRouter) handleRouteFrame(frame AudioFrame, route *Route) { //nolint:gocritic // hugeParam: AudioFrame is large but copying is intentional
+	// Balance the Retain performed by Dispatch for this route. Runs even if
+	// consumer.Write panics (drainRoute's recover catches the panic).
+	defer frame.Ref.Release()
+
 	var resamplePool *buffer.BytePool // nil when not pooled
 
 	// procResult holds the processing output and pool handles. Zero value is
