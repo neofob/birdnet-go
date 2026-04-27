@@ -1,15 +1,44 @@
-image: docker:29.4-dind
+---
 
-stages:
-  - build
+variables:
+  GITLAB_CI_ENV: 1
+  GITLAB_BUILD_IMAGE: "docker:29.4-dind"
+  DOCKER_HOST: "tcp://docker:2375"
+  DOCKER_TLS_CERTDIR: ""
 
-build:
+##### build ######
+############################
+package:build:
+  services:
+    - docker:dind
+  image:
+    name: ${GITLAB_BUILD_IMAGE}
+    docker:
+      user: root
+  tags:
+    - dind
   stage: build
   script:
-    - docker tag neofob/birdnet-go:latest .
+    - env | sort
+    - df -h
+    - free -h
+    - ls -la
+    - docker build -t neofob/birdnet-go:latest .
     - docker save neofob/birdnet-go:latest | xz -T0 -c9 - > neofob_birdnet-go_latest.tar.xz
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "*.md"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - "*.md"
+      when: never
+    - when: always
   artifacts:
     paths:
-      - neofob_birdnet-go_latest.tar.xz
+      - images
     expire_in: 1 week
-
+stages:
+  - build
