@@ -1,0 +1,15 @@
+image: docker:29.4-dind
+
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - docker tag neofob/birdnet-go:latest .
+    - docker save neofob/birdnet-go:latest | xz -T0 -c9 - > neofob_birdnet-go_latest.tar.xz
+  artifacts:
+    paths:
+      - neofob_birdnet-go_latest.tar.xz
+    expire_in: 1 week
+
