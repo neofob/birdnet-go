@@ -224,7 +224,7 @@ func New(cfg *Config) (*Datastore, error) {
 		speciesLabelTypeID = labelType.ID
 	}
 
-	// Get or verify default model ID (BirdNET)
+	// Get or verify default model ID (Language pipeline)
 	defaultModelID := cfg.DefaultModelID
 	if defaultModelID == 0 {
 		var model entities.AIModel
@@ -234,7 +234,7 @@ func New(cfg *Config) (*Datastore, error) {
 				Name:      detection.DefaultModelName,
 				Version:   detection.DefaultModelVersion,
 				Variant:   detection.DefaultModelVariant,
-				ModelType: entities.ModelTypeBird,
+				ModelType: entities.ModelTypeLanguage,
 			}).Error; err != nil {
 			return nil, fmt.Errorf("failed to get default model: %w", err)
 		}
@@ -566,6 +566,9 @@ func (ds *Datastore) Save(note *datastore.Note, results []datastore.Results) err
 	if note.ProcessingTime > 0 {
 		pt := note.ProcessingTime.Milliseconds()
 		det.ProcessingTimeMs = &pt
+	}
+	if note.Transcript != "" {
+		det.Transcript = note.Transcript
 	}
 
 	// Resolve audio source if provided (follows same pattern as conversion.go)

@@ -54,6 +54,9 @@ type BirdNET struct {
 	resultsBuffer    []datastore.Results // Pre-allocated buffer for results to reduce allocations
 	confidenceBuffer []float32           // Pre-allocated buffer for confidence values to reduce allocations
 
+	// Language pipeline transcript (set by classifier backend via type assertion)
+	lastTranscript string
+
 	// Species occurrence cache to avoid repeated GetProbableSpecies calls within same day
 	speciesCacheMu sync.RWMutex
 	speciesCache   map[string]*speciesCacheEntry
@@ -1138,6 +1141,10 @@ func (bn *BirdNET) Labels() []string {
 func (bn *BirdNET) Close() error {
 	bn.Delete()
 	return nil
+}
+
+func (bn *BirdNET) GetTranscript() string {
+	return bn.lastTranscript
 }
 
 // EnrichResultWithTaxonomy adds taxonomy information to a detection result

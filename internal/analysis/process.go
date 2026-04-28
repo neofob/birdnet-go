@@ -1,5 +1,5 @@
-// process.go provides the BirdNET analysis pipeline entry point.
-// ProcessData converts PCM audio to float32, runs BirdNET inference,
+// process.go provides the analysis pipeline entry point.
+// ProcessData converts PCM audio to float32, runs inference,
 // and enqueues results for downstream processing.
 package analysis
 
@@ -129,7 +129,7 @@ func reportBufferOverruns(count int64, maxElapsed, bufferLen, window time.Durati
 		"reporting_window_minutes": int(window.Minutes()),
 	}
 	telemetry.FastCaptureMessageWithExtras(
-		"sustained BirdNET processing buffer overruns detected",
+		"sustained processing buffer overruns detected",
 		sentry.LevelWarning,
 		"analysis",
 		extras,
@@ -147,8 +147,8 @@ func SetProcessMetrics(myAudioMetrics *metrics.MyAudioMetrics) {
 	})
 }
 
-// ProcessData processes the given audio data to detect bird species, logs the
-// detected species and optionally saves the audio clip if a bird species is
+// ProcessData processes the given audio data to detect species, logs the
+// detected species and optionally saves the audio clip if a species is
 // detected above the configured threshold.
 //
 // ctx is propagated to the model inference call for cancellation and deadlines.
@@ -164,6 +164,10 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 			Build()
 	}
 	log := GetLogger()
+	log.Info("ProcessData called",
+		logger.String("source", source),
+		logger.String("model_id", modelID),
+		logger.Int("data_bytes", len(data)))
 	// get current time to track processing time
 	predictStart := time.Now()
 
@@ -212,7 +216,7 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 		return errors.New(err).
 			Component("analysis").
 			Category(errors.CategoryAudioAnalysis).
-			Context("operation", "birdnet_predict").
+			Context("operation", "predict").
 			Build()
 	}
 
@@ -224,7 +228,7 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 		pm.RecordBirdNETResults(source, len(results))
 	}
 
-	// DEBUG print all BirdNET results
+	// DEBUG print all results
 	if conf.Setting().BirdNET.Debug {
 		debugThreshold := float32(0) // set to 0 for now, maybe add a config option later
 		hasHighConfidenceResults := false
@@ -236,11 +240,11 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 		}
 
 		if hasHighConfidenceResults {
-			log.Debug("birdnet results",
+			log.Debug("classifier results",
 				logger.String("source", source))
 			for _, result := range results {
 				if result.Confidence > debugThreshold {
-					log.Debug("birdnet result",
+					log.Debug("classifier result",
 						logger.Float64("confidence", float64(result.Confidence)),
 						logger.String("species", result.Species))
 				}
@@ -248,17 +252,14 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 		}
 	}
 
-	// Get the current settings
-	settings := conf.Setting()
-
-	// Calculate the effective buffer duration
-	bufferDuration := 3 * time.Second // base duration
-	overlapDuration := time.Duration(settings.BirdNET.Overlap * float64(time.Second))
-	effectiveBufferDuration := bufferDuration - overlapDuration
+	// Calculate the effective buffer duration from the model spec.
+	// Language model uses 3s clips at 48kHz.
+	bufferDuration := 3 * time.Second
+	effectiveBufferDuration := bufferDuration
 
 	// Check if processing time exceeds effective buffer duration
 	if elapsedTime > effectiveBufferDuration {
-		log.Warn("BirdNET processing time exceeded buffer length",
+		log.Warn("processing time exceeded buffer length",
 			logger.Duration("elapsed_time", elapsedTime),
 			logger.Duration("buffer_length", effectiveBufferDuration),
 			logger.String("source", source))
@@ -301,6 +302,7 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 		Results:         results,
 		Source:          audioSource,
 		ModelID:         modelID,
+		Transcript:      bn.GetTranscript(),
 	}
 
 	// Send the results to the queue. PCMdata is the independently owned copy

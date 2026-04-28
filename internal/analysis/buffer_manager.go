@@ -388,9 +388,12 @@ func (m *BufferManager) analysisBufferMonitor(quitChan chan struct{}, cfg monito
 	const detectionOffset = 10 * time.Second
 	const pollInterval = 100 * time.Millisecond
 
-	// Use the model-specific read size from the config instead of the
-	// hardcoded constant that assumed BirdNET v2.4 parameters.
 	analysisWindowBytes := cfg.readSize
+
+	m.logger.Info("analysis buffer monitor started",
+		logger.String("source_id", cfg.sourceID),
+		logger.String("model_id", cfg.modelID),
+		logger.Int("analysis_window_bytes", analysisWindowBytes))
 
 	// Track whether we ever successfully accessed the buffer to
 	// distinguish "never allocated" from "removed after use".
@@ -468,8 +471,20 @@ func (m *BufferManager) processMonitorTick(
 	// readSize bytes or nil. A partial read means the buffer has not yet
 	// accumulated enough data.
 	if len(data) != analysisWindowBytes {
+		if len(data) > 0 {
+			m.logger.Debug("monitor tick: insufficient data",
+				logger.String("source_id", cfg.sourceID),
+				logger.String("model_id", cfg.modelID),
+				logger.Int("available_bytes", len(data)),
+				logger.Int("required_bytes", analysisWindowBytes))
+		}
 		return true, hasReadBuffer
 	}
+
+	m.logger.Info("monitor tick: full window ready, calling ProcessData",
+		logger.String("source_id", cfg.sourceID),
+		logger.String("model_id", cfg.modelID),
+		logger.Int("window_bytes", len(data)))
 
 	audioCapturedAt := time.Now()
 	// Calculate the offset dynamically to pick up runtime configuration changes.

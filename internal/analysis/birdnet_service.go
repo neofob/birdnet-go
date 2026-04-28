@@ -40,56 +40,20 @@ func (a *ClassifierAnalyzer) Name() string {
 	return classifierAnalyzerName
 }
 
-// Start initializes the configured classifier and builds the species range
-// filter only when BirdNET is explicitly selected. The placeholder language
-// pipeline is the default primary classifier.
+// Start initializes the Language pipeline (Whisper + FastText) as the sole
+// classifier. BirdNET is no longer supported.
 func (a *ClassifierAnalyzer) Start(_ context.Context) error {
 	log := GetLogger()
 	log.Info("classifier starting",
-		logger.Bool("language_pipeline_enabled", a.settings.LanguagePipeline.Enabled),
-		logger.String("whisper_endpoint", a.settings.LanguagePipeline.Whisper.Endpoint))
+		logger.String("whisper_endpoint", a.settings.LanguagePipeline.Whisper.Endpoint),
+		logger.String("fasttext_endpoint", a.settings.LanguagePipeline.FastText.Endpoint))
 
-	if classifier.UseRealLanguagePipeline(a.settings) {
-		bn, err := classifier.NewRealLanguageOrchestrator(a.settings)
-		if err != nil {
-			return errors.New(err).
-				Component("analysis").
-				Category(errors.CategoryModelInit).
-				Context("operation", "initialize_real_language_pipeline").
-				Build()
-		}
-		a.bn = bn
-		return nil
-	}
-
-	if classifier.UseFakeLanguagePipeline(a.settings) {
-		bn, err := classifier.NewFakeLanguageOrchestrator(a.settings)
-		if err != nil {
-			return errors.New(err).
-				Component("analysis").
-				Category(errors.CategoryModelInit).
-				Context("operation", "initialize_language_pipeline").
-				Build()
-		}
-		a.bn = bn
-		return nil
-	}
-
-	bn, err := classifier.NewOrchestrator(a.settings)
+	bn, err := classifier.NewRealLanguageOrchestrator(a.settings)
 	if err != nil {
 		return errors.New(err).
 			Component("analysis").
 			Category(errors.CategoryModelInit).
-			Context("operation", "initialize_birdnet").
-			Build()
-	}
-
-	if err := classifier.BuildRangeFilter(bn); err != nil {
-		bn.Delete()
-		return errors.New(err).
-			Component("analysis").
-			Category(errors.CategoryModelInit).
-			Context("operation", "build_range_filter").
+			Context("operation", "initialize_language_pipeline").
 			Build()
 	}
 

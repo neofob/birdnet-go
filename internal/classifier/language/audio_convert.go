@@ -102,21 +102,21 @@ func encodeWAV(pcmData []byte, sampleRate, numSamples int) []byte {
 	buf.Grow(fileSize)
 
 	buf.WriteString("RIFF")
-	binary.Write(buf, binary.BigEndian, uint32(fileSize-8)) //nolint:errcheck // bytes.Buffer never fails
+	binary.Write(buf, binary.LittleEndian, uint32(fileSize-8)) //nolint:errcheck // bytes.Buffer never fails
 	buf.WriteString("WAVE")
 
 	buf.WriteString("fmt ")
-	binary.Write(buf, binary.BigEndian, uint32(16)) //nolint:errcheck // chunk size
-	binary.Write(buf, binary.BigEndian, uint16(1))  //nolint:errcheck // PCM format
-	binary.Write(buf, binary.BigEndian, uint16(1))  //nolint:errcheck // mono
-	binary.Write(buf, binary.BigEndian, uint32(sampleRate)) //nolint:errcheck
+	binary.Write(buf, binary.LittleEndian, uint32(16)) //nolint:errcheck // chunk size
+	binary.Write(buf, binary.LittleEndian, uint16(1))  //nolint:errcheck // PCM format
+	binary.Write(buf, binary.LittleEndian, uint16(1))  //nolint:errcheck // mono
+	binary.Write(buf, binary.LittleEndian, uint32(sampleRate)) //nolint:errcheck
 	byteRate := sampleRate * pcm16BytesPerSample
-	binary.Write(buf, binary.BigEndian, uint32(byteRate))  //nolint:errcheck
-	binary.Write(buf, binary.BigEndian, uint16(pcm16BytesPerSample)) //nolint:errcheck // block align
-	binary.Write(buf, binary.BigEndian, uint16(16))        //nolint:errcheck // bits per sample
+	binary.Write(buf, binary.LittleEndian, uint32(byteRate))  //nolint:errcheck
+	binary.Write(buf, binary.LittleEndian, uint16(pcm16BytesPerSample)) //nolint:errcheck // block align
+	binary.Write(buf, binary.LittleEndian, uint16(16))        //nolint:errcheck // bits per sample
 
 	buf.WriteString("data")
-	binary.Write(buf, binary.BigEndian, uint32(dataSize)) //nolint:errcheck
+	binary.Write(buf, binary.LittleEndian, uint32(dataSize)) //nolint:errcheck
 	buf.Write(pcmData)
 
 	if buf.Len() != fileSize {

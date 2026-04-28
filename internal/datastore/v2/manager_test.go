@@ -71,7 +71,7 @@ func TestSQLiteManager_Initialize_SeedsDefaultModel(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, detection.DefaultModelName, model.Name)
 	assert.Equal(t, detection.DefaultModelVersion, model.Version)
-	assert.Equal(t, entities.ModelTypeBird, model.ModelType)
+	assert.Equal(t, entities.ModelTypeLanguage, model.ModelType)
 }
 
 func TestSQLiteManager_Initialize_CreatesMigrationState(t *testing.T) {

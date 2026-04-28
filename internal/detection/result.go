@@ -47,6 +47,9 @@ type Result struct {
 	// Runtime-only data (not persisted)
 	Occurrence float64 // Probability 0-1 based on location/time/season
 
+	// Language pipeline output
+	Transcript string
+
 	// Review status (populated from DB relations when loaded)
 	Verified string
 	Locked   bool

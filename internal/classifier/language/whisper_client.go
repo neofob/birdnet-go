@@ -8,63 +8,68 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/tphakala/birdnet-go/internal/errors"
-	"github.com/tphakala/birdnet-go/internal/httpclient"
 	"github.com/tphakala/birdnet-go/internal/logger"
 )
 
-// whisperResponse models the verbose_json response from the whisper.cpp server.
 type whisperResponse struct {
-	Text     string                `json:"text"`
-	Language string                `json:"language"`
-	Segments []whisperSegment      `json:"segments,omitempty"`
+	Text     string           `json:"text"`
+	Language string           `json:"language"`
+	Segments []whisperSegment `json:"segments,omitempty"`
 }
 
-// whisperSegment is a single transcription segment from whisper.cpp.
 type whisperSegment struct {
-	ID        int     `json:"id"`
-	Start     float32 `json:"start"`
-	End       float32 `json:"end"`
-	Text      string  `json:"text"`
+	ID    int     `json:"id"`
+	Start float32 `json:"start"`
+	End   float32 `json:"end"`
+	Text  string  `json:"text"`
 }
 
-// WhisperClient implements Transcriber by calling a whisper.cpp HTTP server.
 type WhisperClient struct {
-	client   *httpclient.Client
 	endpoint string
 	timeout  time.Duration
 	language string
+	client   *http.Client
 }
 
-// NewWhisperClient creates a Whisper HTTP client.
 func NewWhisperClient(cfg WhisperConfig) *WhisperClient {
 	timeout := cfg.Timeout
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
 	if cfg.Endpoint == "" {
-		cfg.Endpoint = "http://localhost:8080"
+		cfg.Endpoint = "http://localhost:8010"
 	}
 	if cfg.Language == "" {
 		cfg.Language = "auto"
 	}
 
 	return &WhisperClient{
-		client:   httpclient.New(&httpclient.Config{DefaultTimeout: timeout}),
 		endpoint: cfg.Endpoint,
 		timeout:  timeout,
 		language: cfg.Language,
+		client: &http.Client{
+			Timeout: timeout,
+		},
 	}
 }
 
-// Transcribe sends audio PCM data to the whisper.cpp server and returns
-// the transcription result.
 func (w *WhisperClient) Transcribe(ctx context.Context, pcmData []byte, sampleRate int) (*TranscriptionResult, error) {
+	log := GetLogger()
+
 	wavData, err := PCM16ToWAVResampled(pcmData, sampleRate, 16000)
 	if err != nil {
 		return nil, err
+	}
+
+	tmpFile := fmt.Sprintf("/tmp/birdnet_debug_%d.wav", time.Now().UnixNano())
+	if err := os.WriteFile(tmpFile, wavData, 0644); err == nil {
+		log.Info("wrote debug WAV",
+			logger.String("path", tmpFile),
+			logger.Int("wav_bytes", len(wavData)))
 	}
 
 	var body bytes.Buffer
@@ -72,22 +77,23 @@ func (w *WhisperClient) Transcribe(ctx context.Context, pcmData []byte, sampleRa
 
 	part, err := writer.CreateFormFile("file", "audio.wav")
 	if err != nil {
-		return nil, errors.Newf("failed to create multipart form: %w", err).
+		return nil, errors.Newf("failed to create multipart file field: %w", err).
+			Component("classifier.language.whisper").
+			Category(errors.CategoryHTTP).
+			Build()
+	}
+	if _, err := part.Write(wavData); err != nil {
+		return nil, errors.Newf("failed to write WAV data to multipart: %w", err).
 			Component("classifier.language.whisper").
 			Category(errors.CategoryHTTP).
 			Build()
 	}
 
-	if _, err := io.Copy(part, bytes.NewReader(wavData)); err != nil {
-		return nil, errors.Newf("failed to write audio data to multipart form: %w", err).
+	if err := writer.WriteField("language", w.language); err != nil {
+		return nil, errors.Newf("failed to write language field: %w", err).
 			Component("classifier.language.whisper").
 			Category(errors.CategoryHTTP).
 			Build()
-	}
-
-	_ = writer.WriteField("response_format", "verbose_json")
-	if w.language != "auto" {
-		_ = writer.WriteField("language", w.language)
 	}
 
 	if err := writer.Close(); err != nil {
@@ -97,13 +103,25 @@ func (w *WhisperClient) Transcribe(ctx context.Context, pcmData []byte, sampleRa
 			Build()
 	}
 
-	url := fmt.Sprintf("%s/inference", w.endpoint)
-	resp, err := w.client.Post(ctx, url, writer.FormDataContentType(), body.Bytes())
+	reqURL := w.endpoint + "/inference"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, &body)
 	if err != nil {
-		return nil, errors.New(err).
+		return nil, errors.Newf("failed to create whisper request: %w", err).
+			Component("classifier.language.whisper").
+			Category(errors.CategoryHTTP).
+			Build()
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	log.Info("sending audio to whisper",
+		logger.Int("pcm_bytes", len(pcmData)),
+		logger.Int("original_samples", len(pcmData)/2))
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return nil, errors.Newf("whisper request failed: %w", err).
 			Component("classifier.language.whisper").
 			Category(errors.CategoryNetwork).
-			Context("url", url).
 			Build()
 	}
 	defer resp.Body.Close()
@@ -117,10 +135,12 @@ func (w *WhisperClient) Transcribe(ctx context.Context, pcmData []byte, sampleRa
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Error("whisper server returned error",
+			logger.Int("status", resp.StatusCode),
+			logger.String("body", string(respBody)))
 		return nil, errors.Newf("whisper server returned status %d: %s", resp.StatusCode, string(respBody)).
 			Component("classifier.language.whisper").
 			Category(errors.CategoryHTTP).
-			Context("status_code", resp.StatusCode).
 			Build()
 	}
 
@@ -133,12 +153,16 @@ func (w *WhisperClient) Transcribe(ctx context.Context, pcmData []byte, sampleRa
 			Build()
 	}
 
+	log.Info("whisper transcription complete",
+		logger.String("language", wResp.Language),
+		logger.Int("text_len", len(wResp.Text)))
+
 	segments := make([]TranscriptSegment, 0, len(wResp.Segments))
 	for _, s := range wResp.Segments {
 		segments = append(segments, TranscriptSegment{
 			ID:    s.ID,
 			Start: s.Start,
-			End:   s.End,
+			End:    s.End,
 			Text:  s.Text,
 		})
 	}
@@ -150,9 +174,7 @@ func (w *WhisperClient) Transcribe(ctx context.Context, pcmData []byte, sampleRa
 	}, nil
 }
 
-// Close releases the HTTP client resources.
 func (w *WhisperClient) Close() error {
-	w.client.Close()
 	GetLogger().Info("whisper client closed",
 		logger.String("endpoint", w.endpoint))
 	return nil

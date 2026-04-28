@@ -16,7 +16,7 @@ func TestClassificationTypeForModel(t *testing.T) {
 	}{
 		{"language model", ModelInfo{Name: "Language"}, ClassificationTypeLanguage},
 		{"language model case insensitive", ModelInfo{Name: "language"}, ClassificationTypeLanguage},
-		{"default birdnet model", DefaultModelInfo(), ClassificationTypeSpecies},
+		{"default language model", DefaultModelInfo(), ClassificationTypeLanguage},
 		{"custom named model defaults to species compatibility", ModelInfo{Name: "Custom"}, ClassificationTypeSpecies},
 		{"empty model", ModelInfo{}, ClassificationTypeUnknown},
 	}

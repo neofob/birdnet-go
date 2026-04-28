@@ -35,7 +35,9 @@ Props:
   let removalTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   function detectionKey(d: PendingDetection): string {
-    return d.source + d.scientificName;
+    // Use sourceID when available (stable identifier), and fall back to species
+    // for language detections where scientificName may be empty.
+    return `${d.sourceID}:${d.scientificName || d.species}`;
   }
 
   // Track terminal detections and schedule their removal.
@@ -153,8 +155,8 @@ Props:
   <!-- Card Content -->
   {#if hasDisplayDetections}
     <div class="flex flex-wrap gap-3 p-4">
-      {#each displayDetections as detection (`${detection.source}_${detection.scientificName}`)}
-        {@const key = detection.source + detection.scientificName}
+      {#each displayDetections as detection (detectionKey(detection))}
+        {@const key = detectionKey(detection)}
         {@const elapsedText = getElapsedForKey(key)}
         <div
           class="flex items-center gap-2 rounded-lg px-3 py-2 transition-colors duration-300

@@ -36,9 +36,10 @@ type Orchestrator struct {
 	// NOTE: models map is keyed by ModelInfo.ID at construction time. If ReloadModel
 	// changes the model ID, the key goes stale. Delete() iterates values so cleanup
 	// is unaffected. ReloadModel re-keys the map after reload.
-	mu      sync.RWMutex // protects the models map
-	models  map[string]*modelEntry
-	primary *BirdNET // direct access to the primary model
+	mu             sync.RWMutex // protects the models map
+	models         map[string]*modelEntry
+	primary        *BirdNET // direct access to the primary model
+	lastTranscript string   // transcript from last language pipeline prediction
 }
 
 // NewOrchestrator creates a new Orchestrator with BirdNET as the primary model
@@ -97,6 +98,11 @@ func (o *Orchestrator) Predict(ctx context.Context, sample [][]float32) ([]Class
 	return o.primary.Predict(ctx, sample)
 }
 
+// GetTranscript returns the transcript from the last language pipeline prediction.
+func (o *Orchestrator) GetTranscript() string {
+	return o.lastTranscript
+}
+
 // PredictModel runs inference on a specific model identified by modelID.
 // It uses a two-level locking protocol: a read lock on the models map to fetch
 // the entry (fast), then a per-model lock for inference (slow). The map lock is
@@ -126,7 +132,15 @@ func (o *Orchestrator) PredictModel(ctx context.Context, modelID string, sample 
 			Context("model_id", modelID).
 			Build()
 	}
-	return entry.instance.Predict(ctx, sample)
+	result, err := entry.instance.Predict(ctx, sample)
+
+	if tc, ok := entry.instance.(interface{ GetTranscript() string }); ok {
+		o.lastTranscript = tc.GetTranscript()
+	} else {
+		o.lastTranscript = ""
+	}
+
+	return result, err
 }
 
 // ResolveName walks the resolver chain and returns the first non-empty

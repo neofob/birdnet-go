@@ -25,6 +25,9 @@ type Detection struct {
 	// Audio clip reference
 	ClipName *string `gorm:"type:varchar(500)"`
 
+	// Language pipeline output
+	Transcript string `gorm:"type:text"`
+
 	// Processing metadata
 	ProcessingTimeMs *int64 // Milliseconds
 

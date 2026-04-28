@@ -45,6 +45,7 @@ type BufferConsumer struct {
 	resamplers     map[int]*resample.Resampler // keyed by target rate
 	groupedTargets map[int][]ModelTarget       // targets grouped by rate, pre-computed
 	bufWarnOnce    sync.Map                    // modelID → struct{}, logs missing buffer once per model
+	frameCount     atomic.Int64
 }
 
 // NewBufferConsumer creates a BufferConsumer that writes audio frames to the
@@ -165,7 +166,18 @@ func (c *BufferConsumer) Write(frame audiocore.AudioFrame) error { //nolint:gocr
 		return audiocore.ErrConsumerClosed
 	}
 
+	c.frameCount.Add(1)
+	count := c.frameCount.Load()
 	sourceID := frame.SourceID
+	if count%500 == 1 {
+		GetLogger().Info("buffer consumer receiving audio frames",
+			logger.String("consumer_id", c.id),
+			logger.String("source_id", sourceID),
+			logger.Int64("frame_count", count),
+			logger.Int("frame_bytes", len(frame.Data)),
+			logger.Int("sample_rate", frame.SampleRate),
+			logger.Int("targets", len(c.targets)))
+	}
 
 	// Write to capture buffer (always at source rate).
 	cb, err := c.bufferMgr.CaptureBuffer(sourceID)

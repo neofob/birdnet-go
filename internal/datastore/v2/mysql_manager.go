@@ -149,7 +149,7 @@ func (m *MySQLManager) Initialize() error {
 		return fmt.Errorf("failed to seed lookup tables: %w", err)
 	}
 
-	// Seed default AI model (BirdNET)
+	// Seed default AI model (Language pipeline)
 	if err := m.seedDefaultModel(); err != nil {
 		reportInitFailure("mysql", "seedDefaultModel", err, m.config.Host, m.config.Database, m.config.Username)
 		return err
@@ -215,7 +215,7 @@ func (m *MySQLManager) seedLookupTables() error {
 	return seedLookupTablesDB(m.db)
 }
 
-// seedDefaultModel ensures the default BirdNET model exists in the registry.
+// seedDefaultModel ensures the default Language model exists in the registry.
 func (m *MySQLManager) seedDefaultModel() error {
 	return seedDefaultModelDB(m.db)
 }

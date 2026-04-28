@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tphakala/birdnet-go/internal/conf"
+	"github.com/tphakala/birdnet-go/internal/detection"
 	v2 "github.com/tphakala/birdnet-go/internal/datastore/v2"
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/entities"
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/repository"
@@ -154,7 +155,7 @@ func InitializeFreshInstall(settings *conf.Settings, log logger.Logger, speciesC
 	avesClassID := avesClass.ID
 
 	// Get the default model (seeded by Initialize)
-	defaultModel, err := modelRepo.GetByNameVersionVariant(ctx, "BirdNET", "2.4", "default")
+	defaultModel, err := modelRepo.GetByNameVersionVariant(ctx, detection.DefaultModelName, detection.DefaultModelVersion, detection.DefaultModelVariant)
 	if err != nil {
 		_ = manager.Close()
 		return nil, errors.New(err).

@@ -32,10 +32,10 @@ type Classification struct {
 
 // ClassificationTypeForModel maps model metadata to a neutral classification type.
 func ClassificationTypeForModel(model ModelInfo) ClassificationType {
-	if strings.EqualFold(model.Name, "Language") {
+	if strings.EqualFold(model.Name, "Language") || strings.EqualFold(model.Name, DefaultModelName) {
 		return ClassificationTypeLanguage
 	}
-	if strings.EqualFold(model.Name, DefaultModelName) || model.Name != "" {
+	if model.Name != "" {
 		return ClassificationTypeSpecies
 	}
 	return ClassificationTypeUnknown

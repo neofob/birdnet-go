@@ -159,37 +159,55 @@ func newRealPipelineAdapter(pipeline *language.Pipeline) realPipelineAdapter {
 }
 
 func (a realPipelineAdapter) Classify(ctx context.Context, samples []float32) (PipelineClassification, error) {
+	GetLogger().Info("realPipelineAdapter.Classify called",
+		logger.Int("sample_count", len(samples)))
+
 	result, err := a.pipeline.Classify(ctx, samples)
 	if err != nil {
+		GetLogger().Error("realPipelineAdapter.Classify failed",
+			logger.Error(err))
 		return PipelineClassification{}, err
 	}
 	return PipelineClassification{
 		Label:      result.Label,
 		Confidence: result.Confidence,
+		Transcript: result.Transcript,
 	}, nil
 }
 
 type languagePipelineClassifier struct {
-	pipeline AudioPipeline
-	settings *conf.Settings
-	pipelineCloser *language.Pipeline
+	pipeline        AudioPipeline
+	settings        *conf.Settings
+	pipelineCloser  *language.Pipeline
+	lastTranscript  string
 }
 
-func newLanguagePipelineClassifier(pipeline AudioPipeline, settings *conf.Settings, pipelineCloser *language.Pipeline) languagePipelineClassifier {
-	return languagePipelineClassifier{pipeline: pipeline, settings: settings, pipelineCloser: pipelineCloser}
+func newLanguagePipelineClassifier(pipeline AudioPipeline, settings *conf.Settings, pipelineCloser *language.Pipeline) *languagePipelineClassifier {
+	return &languagePipelineClassifier{pipeline: pipeline, settings: settings, pipelineCloser: pipelineCloser}
 }
 
-func (c languagePipelineClassifier) Predict(samples []float32) ([]float32, error) {
+func (c *languagePipelineClassifier) Predict(samples []float32) ([]float32, error) {
+	GetLogger().Info("languagePipelineClassifier.Predict called",
+		logger.Int("sample_count", len(samples)))
+
 	classification, err := c.pipeline.Classify(context.Background(), samples)
 	if err != nil {
+		GetLogger().Error("languagePipelineClassifier.Predict failed",
+			logger.Error(err))
 		return nil, err
 	}
+
+	c.lastTranscript = classification.Transcript
 
 	if c.settings != nil && len(c.settings.BirdNET.Labels) > 0 {
 		c.settings.BirdNET.Labels[0] = classification.Label
 	}
 
 	return []float32{confidenceToLogit(classification.Confidence)}, nil
+}
+
+func (c *languagePipelineClassifier) GetTranscript() string {
+	return c.lastTranscript
 }
 
 func (languagePipelineClassifier) NumSpecies() int { return 1 }

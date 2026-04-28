@@ -24,7 +24,7 @@ const (
 )
 
 // defaultModelID is the model identity used when no explicit model ID is provided.
-const defaultModelID = "BirdNET"
+const defaultModelID = "Language"
 
 // dynamicThresholdKey creates a composite key for scoping thresholds per model.
 // The key format is "modelID:speciesLowercase".

@@ -2,6 +2,7 @@ package language
 
 import (
 	"context"
+	"strings"
 
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
@@ -11,6 +12,7 @@ import (
 type Result struct {
 	Label      string
 	Confidence float32
+	Transcript string
 }
 
 // Pipeline orchestrates Whisper transcription and FastText language
@@ -34,10 +36,19 @@ func NewPipeline(transcriber Transcriber, languageClassifier LanguageClassifier)
 func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, error) {
 	log := GetLogger()
 
+	log.Info("language pipeline Classify called",
+		logger.Int("sample_count", len(samples)))
+
 	pcmData := Float32ToPCM16(samples)
+
+	log.Info("sending audio to whisper",
+		logger.Int("pcm_bytes", len(pcmData)),
+		logger.Int("original_samples", len(samples)))
 
 	transcription, err := p.transcriber.Transcribe(ctx, pcmData, 48000)
 	if err != nil {
+		log.Error("whisper transcription failed",
+			logger.Error(err))
 		return Result{}, errors.New(err).
 			Component("classifier.language").
 			Category(errors.CategoryNetwork).
@@ -45,19 +56,21 @@ func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, err
 			Build()
 	}
 
-	log.Debug("whisper transcription complete",
+	log.Info("whisper transcription complete",
 		logger.String("text", truncate(transcription.Text, 100)),
 		logger.String("language", transcription.Language),
 		logger.Int("segment_count", len(transcription.Segments)))
 
-	if transcription.Text == "" {
+	cleanText := strings.Join(strings.Fields(transcription.Text), " ")
+
+	if cleanText == "" {
 		return Result{}, errors.Newf("whisper returned empty transcription").
 			Component("classifier.language").
 			Category(errors.CategoryProcessing).
 			Build()
 	}
 
-	langResult, err := p.languageClassifier.Classify(ctx, transcription.Text)
+	langResult, err := p.languageClassifier.Classify(ctx, cleanText)
 	if err != nil {
 		log.Warn("fasttext classification failed, falling back to whisper language",
 			logger.Error(err),
@@ -77,17 +90,27 @@ func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, err
 		return Result{
 			Label:      transcription.Language,
 			Confidence: 0.5,
+			Transcript: cleanText,
 		}, nil
 	}
 
 	log.Info("language pipeline result",
 		logger.String("language", langResult.Label),
 		logger.Float64("confidence", float64(langResult.Confidence)),
-		logger.String("transcription", truncate(transcription.Text, 200)))
+		logger.String("transcription", truncate(transcription.Text, 200)),
+		logger.Int("top_n_count", len(langResult.TopN)))
+
+	for i, tn := range langResult.TopN {
+		log.Info("fasttext top_n",
+			logger.Int("rank", i+1),
+			logger.String("label", tn.Label),
+			logger.Float64("confidence", float64(tn.Confidence)))
+	}
 
 	return Result{
 		Label:      langResult.Label,
 		Confidence: langResult.Confidence,
+		Transcript: cleanText,
 	}, nil
 }
 

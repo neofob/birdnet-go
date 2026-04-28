@@ -282,7 +282,7 @@ func (m *SQLiteManager) Initialize() error {
 		return fmt.Errorf("failed to seed lookup tables: %w", err)
 	}
 
-	// Seed default AI model (BirdNET)
+	// Seed default AI model (Language pipeline)
 	if err := m.seedDefaultModel(); err != nil {
 		reportInitFailure("sqlite", "seedDefaultModel", err, m.dbPath)
 		return err
@@ -487,7 +487,7 @@ func (m *SQLiteManager) seedLookupTables() error {
 	return seedLookupTablesDB(m.db)
 }
 
-// seedDefaultModel ensures the default BirdNET model exists in the registry.
+// seedDefaultModel ensures the default Language model exists in the registry.
 func (m *SQLiteManager) seedDefaultModel() error {
 	return seedDefaultModelDB(m.db)
 }
@@ -510,14 +510,14 @@ func seedLookupTablesDB(db *gorm.DB) error {
 	return nil
 }
 
-// seedDefaultModelDB ensures the default BirdNET model exists in the registry.
+// seedDefaultModelDB ensures the default Language model exists in the registry.
 // Shared implementation used by both SQLiteManager and MySQLManager.
 func seedDefaultModelDB(db *gorm.DB) error {
 	model := entities.AIModel{
 		Name:      detection.DefaultModelName,
 		Version:   detection.DefaultModelVersion,
 		Variant:   detection.DefaultModelVariant,
-		ModelType: entities.ModelTypeBird,
+		ModelType: entities.ModelTypeLanguage,
 	}
 	result := db.Where("name = ? AND version = ? AND variant = ?", model.Name, model.Version, model.Variant).FirstOrCreate(&model)
 	if result.Error != nil {

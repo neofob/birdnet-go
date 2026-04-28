@@ -17,6 +17,7 @@ type Results struct {
 	ClipName        string                // Name of the audio clip
 	Source          datastore.AudioSource // Audio source with ID, SafeString, and DisplayName
 	ModelID         string                // identifies which model produced these results
+	Transcript      string                // Whisper transcription text (language pipeline only)
 }
 
 // Default buffer size for the results queue

@@ -352,6 +352,7 @@ func NoteFromResult(result *detection.Result) Note {
 		Sensitivity:    result.Sensitivity,
 		ClipName:       result.ClipName,
 		ProcessingTime: result.ProcessingTime,
+		Transcript:     result.Transcript,
 		Source: AudioSource{
 			ID:          result.AudioSource.ID,
 			SafeString:  result.AudioSource.SafeString,
@@ -420,6 +421,7 @@ func (r *detectionRepository) noteToResult(note *Note) (*detection.Result, error
 		Sensitivity:    note.Sensitivity,
 		ClipName:       note.ClipName,
 		ProcessingTime: note.ProcessingTime,
+		Transcript:     note.Transcript,
 		Occurrence:     note.Occurrence,
 		Verified:       note.Verified,
 		Locked:         note.Locked,

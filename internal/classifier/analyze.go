@@ -26,6 +26,8 @@ func (bn *BirdNET) Predict(ctx context.Context, sample [][]float32) ([]Classific
 	span, _ := StartSpan(ctx, "birdnet.predict", "Species prediction")
 	defer span.Finish()
 
+	bn.Debug("Predict called: model=%s sample_count=%d", bn.ModelInfo.ID, len(sample))
+
 	start := time.Now()
 	span.SetTag("model", bn.ModelInfo.ID)
 	span.SetData("sample_count", len(sample))
@@ -82,6 +84,12 @@ func (bn *BirdNET) Predict(ctx context.Context, sample [][]float32) ([]Classific
 
 	invokeDuration := time.Since(invokeStart)
 	span.SetData("invoke_duration_ms", invokeDuration.Milliseconds())
+
+	if tc, ok := bn.classifier.(interface{ GetTranscript() string }); ok {
+		bn.lastTranscript = tc.GetTranscript()
+	} else {
+		bn.lastTranscript = ""
+	}
 
 	// Record model invoke timing separately
 	if globalMetrics != nil {

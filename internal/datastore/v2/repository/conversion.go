@@ -150,6 +150,7 @@ func ConvertToV2Detection(ctx context.Context, result *detection.Result, deps *C
 		Latitude:         lat,
 		Longitude:        lon,
 		ClipName:         clipName,
+		Transcript:       result.Transcript,
 		ProcessingTimeMs: processingTimeMs,
 		LegacyID:         &legacyID,
 	}
@@ -246,6 +247,9 @@ func ConvertFromV2Detection(det *entities.Detection) *detection.Result {
 	if det.ProcessingTimeMs != nil {
 		result.ProcessingTime = time.Duration(*det.ProcessingTimeMs) * time.Millisecond
 	}
+
+	// Convert transcript
+	result.Transcript = det.Transcript
 
 	return result
 }

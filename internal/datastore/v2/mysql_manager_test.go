@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/entities"
+	"github.com/tphakala/birdnet-go/internal/detection"
 )
 
 // getMySQLConfig returns MySQL config from environment variables.
@@ -93,7 +94,7 @@ func TestMySQLManager_Initialize(t *testing.T) {
 	assert.True(t, mgr.db.Migrator().HasTable(V2TableName("migration_states")))
 }
 
-func TestMySQLManager_Initialize_SeedsBirdNETModel(t *testing.T) {
+func TestMySQLManager_Initialize_SeedsLanguageModel(t *testing.T) {
 	cfg := skipIfNoMySQL(t)
 
 	mgr, err := NewMySQLManager(cfg)
@@ -106,12 +107,12 @@ func TestMySQLManager_Initialize_SeedsBirdNETModel(t *testing.T) {
 	err = mgr.Initialize()
 	require.NoError(t, err)
 
-	// Verify BirdNET model was seeded
+	// Verify Language model was seeded
 	var model entities.AIModel
-	err = mgr.DB().Where("name = ? AND version = ?", "BirdNET", "2.4").First(&model).Error
+	err = mgr.DB().Where("name = ? AND version = ?", detection.DefaultModelName, detection.DefaultModelVersion).First(&model).Error
 	require.NoError(t, err)
-	assert.Equal(t, "BirdNET", model.Name)
-	assert.Equal(t, entities.ModelTypeBird, model.ModelType)
+	assert.Equal(t, detection.DefaultModelName, model.Name)
+	assert.Equal(t, entities.ModelTypeLanguage, model.ModelType)
 }
 
 func TestMySQLManager_Exists(t *testing.T) {

@@ -6,6 +6,7 @@ import "context"
 type PipelineClassification struct {
 	Label      string
 	Confidence float32
+	Transcript string
 }
 
 // AudioPipeline classifies audio samples without exposing model-runtime details.

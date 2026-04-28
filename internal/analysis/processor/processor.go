@@ -499,8 +499,7 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *classifier.Orchest
 	// are memoized on first dispatch in getActionsForItem.
 	p.validateCustomCommandActions(settings)
 
-	if !classifier.UseFakeLanguagePipeline(settings) {
-		// Initialize species tracker only for BirdNET compatibility mode.
+	if !IsLanguagePipelineMode() {
 		p.NewSpeciesTracker = initSpeciesTracker(settings, ds)
 	}
 
@@ -508,8 +507,7 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *classifier.Orchest
 	// are NOT started here. Call Start() after wiring BufferMgr and Registry
 	// to avoid a race where detections arrive before the buffer manager is set.
 
-	if !classifier.UseFakeLanguagePipeline(settings) {
-		// Initialize BirdWeather only for BirdNET compatibility mode.
+	if !IsLanguagePipelineMode() {
 		p.initBirdWeatherClient(settings)
 	}
 
@@ -764,15 +762,22 @@ func (p *Processor) processResults(item classifier.Results) []Detections {
 	return detections
 }
 
-// parseAndValidateSpecies parses species information and validates it
+// parseAndValidateSpecies parses species information and validates it.
+// For the Language pipeline (non-taxonomy labels like "en", "fr"), it treats
+// the raw label directly as the common/scientific name without requiring
+// BirdNET taxonomy enrichment.
 //
 //nolint:gocritic // hugeParam: Pass by value is intentional - avoids pointer dereferencing in hot path
 func (p *Processor) parseAndValidateSpecies(result datastore.Results, item classifier.Results) (scientificName, commonName, speciesCode, speciesLowercase string) {
-	// Use BirdNET's EnrichResultWithTaxonomy to get species information
+	if p.isLanguagePipelineMode() {
+		commonName = result.Species
+		scientificName = result.Species
+		speciesLowercase = strings.ToLower(result.Species)
+		return
+	}
+
 	scientificName, commonName, speciesCode = p.Bn.EnrichResultWithTaxonomy(result.Species)
 
-	// Skip processing if scientific name is missing. Common name may be empty
-	// for models like Perch v2 that return scientific-name-only labels.
 	if scientificName == "" {
 		if p.Settings.Debug {
 			GetLogger().Debug("Skipping species with invalid format",
@@ -783,23 +788,10 @@ func (p *Processor) parseAndValidateSpecies(result datastore.Results, item class
 		return "", "", "", ""
 	}
 
-	// Use scientific name as fallback when common name is not available.
 	if commonName == "" {
 		commonName = scientificName
 	}
 
-	// Log placeholder taxonomy codes if using custom model
-	if p.Settings.BirdNET.ModelPath != "" && p.Settings.Debug && speciesCode != "" {
-		if len(speciesCode) == 8 && (speciesCode[:2] == "XX" || (speciesCode[0] >= 'A' && speciesCode[0] <= 'Z' && speciesCode[1] >= 'A' && speciesCode[1] <= 'Z')) {
-			GetLogger().Debug("using placeholder taxonomy code",
-				logger.String("taxonomy_code", speciesCode),
-				logger.String("scientific_name", scientificName),
-				logger.String("common_name", commonName),
-				logger.String("operation", "taxonomy_code_assignment"))
-		}
-	}
-
-	// Convert species to lowercase for case-insensitive comparison
 	speciesLowercase = strings.ToLower(commonName)
 	if speciesLowercase == "" && scientificName != "" {
 		speciesLowercase = strings.ToLower(scientificName)
@@ -922,7 +914,9 @@ func (p *Processor) createDetection(item classifier.Results, result datastore.Re
 		float64(result.Confidence),
 		item.Source, clipName,
 		item.ElapsedTime, occurrence,
-		item.ModelID)
+		item.ModelID,
+		item.Transcript,
+	)
 
 	// Convert additional results from datastore.Results to detection.AdditionalResult.
 	// Exclude the primary species since it's already stored as Detection.LabelID.
@@ -956,7 +950,9 @@ func (p *Processor) createDetectionResult(
 	confidence float64,
 	source datastore.AudioSource, clipName string,
 	elapsedTime time.Duration, occurrence float64,
-	modelID string) detection.Result {
+	modelID string,
+	transcript string,
+) detection.Result {
 
 	// Resolve audio source info from registry
 	audioSource := p.resolveAudioSource(source)
@@ -979,6 +975,7 @@ func (p *Processor) createDetectionResult(
 		Sensitivity:    p.Settings.BirdNET.Sensitivity,
 		ClipName:       clipName,
 		ProcessingTime: elapsedTime,
+		Transcript:     transcript,
 		Occurrence:     math.Max(0.0, math.Min(1.0, occurrence)),
 		Model:          classifier.DetectionModelInfoForID(modelID),
 	}
@@ -1898,28 +1895,13 @@ func (p *Processor) getDefaultActions(det *Detections) []Action {
 }
 
 func (p *Processor) isLanguagePipelineMode() bool {
-	if p == nil {
-		return false
-	}
-	if p.Bn != nil {
-		switch p.Bn.ModelInfo.ID {
-		case "Language_Fake", "Language":
-			return true
-		}
-	}
-	if p.Settings == nil {
-		return false
-	}
-	if p.Settings.LanguagePipeline.Enabled {
-		return true
-	}
-	for _, configID := range p.Settings.Models.Enabled {
-		registryID, ok := classifier.ResolveConfigModelID(configID)
-		if ok && registryID == "Language_Fake" {
-			return true
-		}
-	}
-	return false
+	return true
+}
+
+// IsLanguagePipelineMode is a package-level helper for code outside the Processor
+// that needs to check whether BirdNET-specific features should be skipped.
+func IsLanguagePipelineMode() bool {
+	return true
 }
 
 // buildSaveAudioAction creates a SaveAudioAction for the given detection.

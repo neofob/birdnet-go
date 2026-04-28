@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tphakala/birdnet-go/internal/datastore"
+	"github.com/tphakala/birdnet-go/internal/detection"
 	v2 "github.com/tphakala/birdnet-go/internal/datastore/v2"
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/entities"
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/repository"
@@ -55,7 +56,7 @@ func buildTestConfig(t *testing.T, labels []string) (cfg *Config, cleanup func()
 	require.NoError(t, err, "Failed to create Aves taxonomic class")
 
 	// Get the default model (seeded by Initialize)
-	defaultModel, err := modelRepo.GetByNameVersionVariant(ctx, "BirdNET", "2.4", "default")
+	defaultModel, err := modelRepo.GetByNameVersionVariant(ctx, detection.DefaultModelName, detection.DefaultModelVersion, detection.DefaultModelVariant)
 	require.NoError(t, err, "Failed to get default model")
 
 	avesClassID := avesClass.ID
@@ -1032,13 +1033,15 @@ func TestV2OnlyDatastore_ConcatenatedLabelExtraction(t *testing.T) {
 	})
 
 	t.Run("Save with concatenated ScientificName extracts properly", func(t *testing.T) {
-		// Simulate saving a detection where ScientificName is accidentally concatenated
+		// Simulate saving a detection where ScientificName is accidentally concatenated.
+		// Set a species model explicitly since the default model is now Language.
 		note := &datastore.Note{
 			Date:           now.Format(time.DateOnly),
 			Time:           now.Format(time.TimeOnly),
 			ScientificName: "Picus viridis_vihertikka",
 			CommonName:     "vihertikka",
 			Confidence:     0.88,
+			Model:          detection.ModelInfo{Name: "CustomBird", Version: "1.0", Variant: "default"},
 		}
 		err := ds.Save(note, nil)
 		require.NoError(t, err)

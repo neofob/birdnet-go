@@ -1135,11 +1135,11 @@ type PerchConfig struct {
 }
 
 // DefaultPrimaryModelID is the default classifier selected for fresh configs.
-const DefaultPrimaryModelID = "language_fake"
+const DefaultPrimaryModelID = "language"
 
 // ModelsConfig holds global model enablement settings.
 type ModelsConfig struct {
-	Enabled []string `yaml:"enabled" json:"enabled"` // list of model IDs to load (e.g., "language_fake", "birdnet")
+	Enabled []string `yaml:"enabled" json:"enabled"` // list of model IDs to load (e.g., "language", "birdnet")
 }
 
 // LanguagePipelineConfig holds settings for the language classification pipeline.

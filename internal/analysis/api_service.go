@@ -10,7 +10,6 @@ import (
 	"github.com/tphakala/birdnet-go/internal/audiocore"
 	"github.com/tphakala/birdnet-go/internal/audiocore/engine"
 	"github.com/tphakala/birdnet-go/internal/backup"
-	"github.com/tphakala/birdnet-go/internal/classifier"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
@@ -112,8 +111,7 @@ func (s *APIServerService) Start(_ context.Context) error {
 	// Update BirdNET model loaded metric.
 	UpdateBirdNETModelLoadedMetric(s.metrics.BirdNET, bn)
 
-	// Initialize bird image cache only for BirdNET compatibility mode.
-	if !classifier.UseFakeLanguagePipeline(s.settings) {
+	if !processor.IsLanguagePipelineMode() {
 		s.birdImageCache = initBirdImageCache(s.settings, dataStore, s.metrics)
 	}
 

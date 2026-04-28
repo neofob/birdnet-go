@@ -63,6 +63,11 @@ func NewFastTextClient(cfg FastTextConfig) *FastTextClient {
 // Classify sends text to the FastText server and returns the language
 // identification result.
 func (f *FastTextClient) Classify(ctx context.Context, text string) (*LanguageResult, error) {
+	log := GetLogger()
+	log.Info("fasttext Classify called",
+		logger.String("endpoint", f.endpoint),
+		logger.Int("text_length", len(text)))
+
 	if text == "" {
 		return nil, errors.Newf("empty text provided for language classification").
 			Component("classifier.language.fasttext").
