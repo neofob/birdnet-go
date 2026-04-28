@@ -70,11 +70,20 @@ func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, err
 				Build()
 		}
 
+		log.Info("language pipeline result (whisper fallback)",
+			logger.String("language", transcription.Language),
+			logger.String("transcription", truncate(transcription.Text, 200)))
+
 		return Result{
 			Label:      transcription.Language,
 			Confidence: 0.5,
 		}, nil
 	}
+
+	log.Info("language pipeline result",
+		logger.String("language", langResult.Label),
+		logger.Float64("confidence", float64(langResult.Confidence)),
+		logger.String("transcription", truncate(transcription.Text, 200)))
 
 	return Result{
 		Label:      langResult.Label,

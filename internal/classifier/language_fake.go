@@ -45,8 +45,12 @@ func UseFakeLanguagePipeline(settings *conf.Settings) bool {
 // classification pipeline (Whisper + FastText).
 func UseRealLanguagePipeline(settings *conf.Settings) bool {
 	if settings == nil {
+		GetLogger().Info("UseRealLanguagePipeline: settings is nil")
 		return false
 	}
+	GetLogger().Info("UseRealLanguagePipeline check",
+		logger.Bool("enabled", settings.LanguagePipeline.Enabled),
+		logger.String("whisper_endpoint", settings.LanguagePipeline.Whisper.Endpoint))
 	return settings.LanguagePipeline.Enabled
 }
 
@@ -65,7 +69,7 @@ func NewFakeLanguageOrchestrator(settings *conf.Settings) (*Orchestrator, error)
 	settings.BirdNET.Labels = []string{fakeLanguageLabel}
 
 	bn := &BirdNET{
-		classifier:       newLanguagePipelineClassifier(fakeLanguagePipeline{}),
+		classifier:       newLanguagePipelineClassifier(fakeLanguagePipeline{}, nil, nil),
 		Settings:         settings,
 		ModelInfo:        info,
 		modelVersion:     fakeLanguageModelVersion,
@@ -112,11 +116,10 @@ func NewRealLanguageOrchestrator(settings *conf.Settings) (*Orchestrator, error)
 	pipeline := language.NewPipeline(whisperClient, fastTextClient)
 	adapter := newRealPipelineAdapter(pipeline)
 
-	label := "language_language"
-	settings.BirdNET.Labels = []string{label}
+	settings.BirdNET.Labels = []string{"language"}
 
 	bn := &BirdNET{
-		classifier:       newLanguagePipelineClassifier(adapter),
+		classifier:       newLanguagePipelineClassifier(adapter, settings, pipeline),
 		Settings:         settings,
 		ModelInfo:        info,
 		modelVersion:     realLanguageModelVersion,
@@ -168,10 +171,12 @@ func (a realPipelineAdapter) Classify(ctx context.Context, samples []float32) (P
 
 type languagePipelineClassifier struct {
 	pipeline AudioPipeline
+	settings *conf.Settings
+	pipelineCloser *language.Pipeline
 }
 
-func newLanguagePipelineClassifier(pipeline AudioPipeline) languagePipelineClassifier {
-	return languagePipelineClassifier{pipeline: pipeline}
+func newLanguagePipelineClassifier(pipeline AudioPipeline, settings *conf.Settings, pipelineCloser *language.Pipeline) languagePipelineClassifier {
+	return languagePipelineClassifier{pipeline: pipeline, settings: settings, pipelineCloser: pipelineCloser}
 }
 
 func (c languagePipelineClassifier) Predict(samples []float32) ([]float32, error) {
@@ -180,12 +185,23 @@ func (c languagePipelineClassifier) Predict(samples []float32) ([]float32, error
 		return nil, err
 	}
 
+	if c.settings != nil && len(c.settings.BirdNET.Labels) > 0 {
+		c.settings.BirdNET.Labels[0] = classification.Label
+	}
+
 	return []float32{confidenceToLogit(classification.Confidence)}, nil
 }
 
 func (languagePipelineClassifier) NumSpecies() int { return 1 }
 
-func (languagePipelineClassifier) Close() {}
+func (c languagePipelineClassifier) Close() {
+	if c.pipelineCloser != nil {
+		if err := c.pipelineCloser.Close(); err != nil {
+			GetLogger().Warn("failed to close language pipeline",
+				logger.Error(err))
+		}
+	}
+}
 
 func confidenceToLogit(confidence float32) float32 {
 	confidence = min(max(confidence, minPipelineConfidence), maxPipelineConfidence)

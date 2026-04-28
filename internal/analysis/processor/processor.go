@@ -1901,11 +1901,17 @@ func (p *Processor) isLanguagePipelineMode() bool {
 	if p == nil {
 		return false
 	}
-	if p.Bn != nil && p.Bn.ModelInfo.ID == "Language_Fake" {
-		return true
+	if p.Bn != nil {
+		switch p.Bn.ModelInfo.ID {
+		case "Language_Fake", "Language":
+			return true
+		}
 	}
 	if p.Settings == nil {
 		return false
+	}
+	if p.Settings.LanguagePipeline.Enabled {
+		return true
 	}
 	for _, configID := range p.Settings.Models.Enabled {
 		registryID, ok := classifier.ResolveConfigModelID(configID)
