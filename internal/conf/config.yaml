@@ -1,6 +1,17 @@
 # BirdNET-Go configuration
 
-debug: false              # print debug messages, can help with problem solving
+debug: true              # print debug messages, can help with problem solving
+
+language_pipeline:
+  enabled: true
+  whisper:
+    endpoint: "http://localhost:8010"
+    timeout: 30s
+    language: "auto"
+  fasttext:
+    endpoint: "http://localhost:8000"
+    timeout: 25s
+    max_top_n: 5
 
 # Centralized logging configuration
 logging:

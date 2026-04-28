@@ -1142,6 +1142,28 @@ type ModelsConfig struct {
 	Enabled []string `yaml:"enabled" json:"enabled"` // list of model IDs to load (e.g., "language_fake", "birdnet")
 }
 
+// LanguagePipelineConfig holds settings for the language classification pipeline.
+type LanguagePipelineConfig struct {
+	Enabled  bool            `yaml:"enabled" json:"enabled"`           // true to enable the language classification pipeline
+	Whisper  WhisperSettings `yaml:"whisper" json:"whisper"`           // Whisper transcription service settings
+	FastText FastTextSettings `yaml:"fasttext" json:"fasttext"`       // FastText language identification service settings
+}
+
+// WhisperSettings holds configuration for the Whisper HTTP transcription service.
+type WhisperSettings struct {
+	Endpoint string        `yaml:"endpoint" json:"endpoint"`         // whisper.cpp server URL (e.g., "http://localhost:8080")
+	Timeout  time.Duration `yaml:"timeout" json:"timeout"`           // HTTP request timeout (default: 30s)
+	Model    string        `yaml:"model" json:"model,omitempty"`     // model name hint for logging
+	Language string        `yaml:"language" json:"language"`         // "auto" for auto-detect or specific ISO code
+}
+
+// FastTextSettings holds configuration for the FastText HTTP language identification service.
+type FastTextSettings struct {
+	Endpoint string        `yaml:"endpoint" json:"endpoint"`         // FastText server URL (e.g., "http://localhost:8000")
+	Timeout  time.Duration `yaml:"timeout" json:"timeout"`           // HTTP request timeout (default: 5s)
+	MaxTopN  int           `yaml:"max_top_n" json:"maxTopN"`         // number of top language predictions (default: 5)
+}
+
 // BasicAuth holds settings for the password authentication
 type BasicAuth struct {
 	Enabled        bool          `yaml:"enabled" json:"enabled"`               // true to enable password authentication
@@ -1456,9 +1478,10 @@ type Settings struct {
 		TimeAs24h bool   `yaml:"timeas24h" json:"timeAs24h"` // true 24-hour time format, false 12-hour time format
 	} `yaml:"main" json:"main"`
 
-	BirdNET BirdNETConfig `yaml:"birdnet" json:"birdnet"` // BirdNET configuration
-	Perch   PerchConfig   `yaml:"perch" json:"perch"`     // Perch v2 model configuration
-	Models  ModelsConfig  `yaml:"models" json:"models"`   // Global model enablement
+	BirdNET        BirdNETConfig        `yaml:"birdnet" json:"birdnet"`                 // BirdNET configuration
+	Perch          PerchConfig          `yaml:"perch" json:"perch"`                     // Perch v2 model configuration
+	Models         ModelsConfig         `yaml:"models" json:"models"`                   // Global model enablement
+	LanguagePipeline LanguagePipelineConfig `yaml:"language_pipeline" json:"languagePipeline"` // Language classification pipeline
 
 	TaxonomySynonyms map[string]string `yaml:"taxonomySynonyms" json:"taxonomySynonyms" mapstructure:"taxonomySynonyms"` // Optional scientific-name synonym overrides merged with built-ins
 

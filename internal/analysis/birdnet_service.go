@@ -44,6 +44,19 @@ func (a *ClassifierAnalyzer) Name() string {
 // filter only when BirdNET is explicitly selected. The placeholder language
 // pipeline is the default primary classifier.
 func (a *ClassifierAnalyzer) Start(_ context.Context) error {
+	if classifier.UseRealLanguagePipeline(a.settings) {
+		bn, err := classifier.NewRealLanguageOrchestrator(a.settings)
+		if err != nil {
+			return errors.New(err).
+				Component("analysis").
+				Category(errors.CategoryModelInit).
+				Context("operation", "initialize_real_language_pipeline").
+				Build()
+		}
+		a.bn = bn
+		return nil
+	}
+
 	if classifier.UseFakeLanguagePipeline(a.settings) {
 		bn, err := classifier.NewFakeLanguageOrchestrator(a.settings)
 		if err != nil {

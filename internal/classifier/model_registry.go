@@ -24,9 +24,10 @@ const (
 
 // Inference backend identifiers.
 const (
-	BackendTFLite = "TFLite"
-	BackendONNX   = "ONNX"
-	BackendFake   = "Fake"
+	BackendTFLite  = "TFLite"
+	BackendONNX    = "ONNX"
+	BackendFake    = "Fake"
+	BackendExternal = "External"
 )
 
 // ModelInfo represents metadata about a classifier model.
@@ -106,6 +107,17 @@ var ModelRegistry = map[string]ModelInfo{
 		Spec:             ModelSpec{SampleRate: 48000, ClipLength: 3 * time.Second},
 		ConfigAliases:    []string{"language_fake"},
 		NumSpecies:       1,
+	},
+	"Language": {
+		ID:               "Language",
+		Name:             ModelNameLanguage,
+		Backend:          BackendExternal,
+		DetectionName:    "Language",
+		DetectionVersion: "1.0",
+		Description:      "Language classification pipeline (Whisper + FastText lid.176)",
+		Spec:             ModelSpec{SampleRate: 48000, ClipLength: 3 * time.Second},
+		ConfigAliases:    []string{"language"},
+		NumSpecies:       176,
 	},
 }
 

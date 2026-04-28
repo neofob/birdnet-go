@@ -2,8 +2,6 @@ module github.com/tphakala/birdnet-go
 
 go 1.26.1
 
-toolchain go1.25.3
-
 require (
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/antonholmquist/jason v1.0.0
@@ -109,7 +107,6 @@ require (
 	github.com/tidwall/geojson v1.4.6 // indirect
 	github.com/tidwall/rtree v1.10.0 // indirect
 	github.com/twpayne/go-polyline v1.1.1 // indirect
-	go.mongodb.org/mongo-driver v1.17.9 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.68.0 // indirect

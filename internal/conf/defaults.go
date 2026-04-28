@@ -85,6 +85,15 @@ func setDefaultConfig() {
 	viper.SetDefault("perch.labelpath", "")
 	viper.SetDefault("perch.threshold", 0.5)
 
+	// Language pipeline configuration (disabled by default)
+	viper.SetDefault("language_pipeline.enabled", false)
+	viper.SetDefault("language_pipeline.whisper.endpoint", "http://localhost:8080")
+	viper.SetDefault("language_pipeline.whisper.timeout", "30s")
+	viper.SetDefault("language_pipeline.whisper.language", "auto")
+	viper.SetDefault("language_pipeline.fasttext.endpoint", "http://localhost:8000")
+	viper.SetDefault("language_pipeline.fasttext.timeout", "5s")
+	viper.SetDefault("language_pipeline.fasttext.max_top_n", 5)
+
 	// Global model enablement (language pipeline by default; BirdNET is opt-in)
 	viper.SetDefault("models.enabled", []string{DefaultPrimaryModelID})
 

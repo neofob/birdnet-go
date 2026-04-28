@@ -29,7 +29,7 @@ func TestLanguagePipelineClassifier_PredictUsesPipelineConfidence(t *testing.T) 
 	assert.InDelta(t, 1.0986, float64(logits[0]), 0.001)
 }
 
-func TestLanguagePipelineClassifier_UnknownLabelReturnsLowConfidence(t *testing.T) {
+func TestLanguagePipelineClassifier_AnyLabelUsesConfidence(t *testing.T) {
 	t.Parallel()
 
 	classifier := newLanguagePipelineClassifier(testAudioPipeline{
@@ -39,7 +39,7 @@ func TestLanguagePipelineClassifier_UnknownLabelReturnsLowConfidence(t *testing.
 	logits, err := classifier.Predict([]float32{0.1, 0.2, 0.3})
 	require.NoError(t, err)
 	require.Len(t, logits, 1)
-	assert.Less(t, logits[0], float32(0))
+	assert.InDelta(t, confidenceToLogit(0.99), float64(logits[0]), 0.001)
 }
 
 func TestFakeLanguagePipeline_Classify(t *testing.T) {
