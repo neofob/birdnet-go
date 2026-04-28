@@ -9,6 +9,8 @@ export interface PendingDetection {
   scientificName: string;
   /** Bird image URL */
   thumbnail: string;
+  /** Optional transcript (language pipeline) */
+  transcript?: string;
   /** Lifecycle status */
   status: PendingDetectionStatus;
   /** Unix timestamp (seconds) when species was first detected */
@@ -21,6 +23,8 @@ export interface PendingDetection {
   source: string;
   /** Raw source ID for filtering detections by active stream */
   sourceID: string;
+  /** Classifier model that produced this detection */
+  modelID?: string;
   /** Number of inference hits accumulated for this pending detection */
   hitCount?: number;
 }

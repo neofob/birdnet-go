@@ -29,6 +29,7 @@ type SSEPendingDetection struct {
 	Species         string                 `json:"species"`                   // Common name
 	ScientificName  string                 `json:"scientificName"`            // Scientific name
 	Thumbnail       string                 `json:"thumbnail"`                 // Bird image URL
+	Transcript      string                 `json:"transcript,omitempty"`       // Optional transcript (language pipeline)
 	Status          PendingDetectionStatus `json:"status"`                    // "active", "approved", "rejected"
 	FirstDetected   int64                  `json:"firstDetected"`             // Unix timestamp (seconds)
 	AudioCapturedAt int64                  `json:"audioCapturedAt,omitempty"` // Unix seconds when audio was captured (omitted if unavailable)
@@ -37,6 +38,15 @@ type SSEPendingDetection struct {
 	SourceID        string                 `json:"sourceID"`                  // Raw source ID for client-side filtering
 	ModelID         string                 `json:"modelID,omitempty"`         // Classifier model that produced this detection
 	HitCount        int                    `json:"hitCount"`                  // Number of inference hits accumulated
+}
+
+const maxPendingTranscriptLen = 240
+
+func truncatePendingTranscript(s string) string {
+	if len(s) <= maxPendingTranscriptLen {
+		return s
+	}
+	return s[:maxPendingTranscriptLen]
 }
 
 // unixOrZero returns t.Unix() if t is non-zero, or 0 otherwise.
@@ -100,6 +110,7 @@ func CalculateVisibilityThreshold(minDetections int) int {
 // The caller must NOT hold pendingMutex.
 func (p *Processor) SnapshotVisiblePending(minDetections int) []SSEPendingDetection {
 	threshold := CalculateVisibilityThreshold(minDetections)
+	languageMode := p.isLanguagePipelineMode()
 
 	p.pendingMutex.RLock()
 	result := make([]SSEPendingDetection, 0, len(p.pendingDetections))
@@ -108,10 +119,24 @@ func (p *Processor) SnapshotVisiblePending(minDetections int) []SSEPendingDetect
 		if item.Count < threshold {
 			continue
 		}
+
+		scientificName := item.Detection.Result.Species.ScientificName
+		thumbnail := p.getThumbnailURL(scientificName)
+		transcript := ""
+		if languageMode {
+			// In language pipeline mode, we treat the label as a non-taxonomy identifier.
+			// Keep scientificName empty so the frontend can render language-specific UI
+			// and avoid attempting bird taxonomy/image lookups.
+			scientificName = ""
+			thumbnail = ""
+			transcript = truncatePendingTranscript(item.Detection.Result.Transcript)
+		}
+
 		result = append(result, SSEPendingDetection{
 			Species:         item.Detection.Result.Species.CommonName,
-			ScientificName:  item.Detection.Result.Species.ScientificName,
-			Thumbnail:       p.getThumbnailURL(item.Detection.Result.Species.ScientificName),
+			ScientificName:  scientificName,
+			Thumbnail:       thumbnail,
+			Transcript:      transcript,
 			Status:          PendingStatusActive,
 			FirstDetected:   item.CreatedAt.Unix(),
 			AudioCapturedAt: unixOrZero(item.AudioCapturedAt),
@@ -174,10 +199,20 @@ func (p *Processor) broadcastPendingSnapshot(snapshot []SSEPendingDetection) {
 // buildFlushNotification creates an SSEPendingDetection with terminal status
 // for a detection that has been flushed (approved or rejected).
 func (p *Processor) buildFlushNotification(item *PendingDetection, status PendingDetectionStatus) SSEPendingDetection {
+	languageMode := p.isLanguagePipelineMode()
+	scientificName := item.Detection.Result.Species.ScientificName
+	thumbnail := p.getThumbnailURL(scientificName)
+	transcript := ""
+	if languageMode {
+		scientificName = ""
+		thumbnail = ""
+		transcript = truncatePendingTranscript(item.Detection.Result.Transcript)
+	}
 	return SSEPendingDetection{
 		Species:         item.Detection.Result.Species.CommonName,
-		ScientificName:  item.Detection.Result.Species.ScientificName,
-		Thumbnail:       p.getThumbnailURL(item.Detection.Result.Species.ScientificName),
+		ScientificName:  scientificName,
+		Thumbnail:       thumbnail,
+		Transcript:      transcript,
 		Status:          status,
 		FirstDetected:   item.CreatedAt.Unix(),
 		AudioCapturedAt: unixOrZero(item.AudioCapturedAt),

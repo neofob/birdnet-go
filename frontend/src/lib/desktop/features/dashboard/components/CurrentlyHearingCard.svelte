@@ -128,6 +128,9 @@ Props:
   // Show source column only when multiple sources are present
   let hasMultipleSources = $derived(new Set(displayDetections.map(d => d.source)).size > 1);
 
+  // Show transcript line only when at least one item has it
+  let hasAnyTranscript = $derived(displayDetections.some(d => (d.transcript ?? '').length > 0));
+
   // Clean up pending timers on component destroy
   $effect(() => {
     return () => {
@@ -199,6 +202,12 @@ Props:
                 · {detection.source}
               {/if}
             </span>
+
+            {#if hasAnyTranscript && (detection.transcript ?? '').length > 0}
+              <span class="text-xs text-[var(--color-base-content)]/60 truncate max-w-[42ch]">
+                {detection.transcript}
+              </span>
+            {/if}
           </div>
 
           <!-- Status indicator -->
