@@ -7,6 +7,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26-trixie AS buildenv
 # Pass BUILD_VERSION through to the build stage
 ARG BUILD_VERSION
 ENV BUILD_VERSION=${BUILD_VERSION:-unknown}
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Task and other dependencies
 RUN apt-get update -q && apt-get install -q -y \
@@ -54,6 +55,7 @@ ARG ONNXRUNTIME_VERSION
 
 # Skip puppeteer download during build (not needed for production)
 ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Download ONNX Runtime for the target platform
 RUN ONNX_ARCH=$(case "${TARGETPLATFORM}" in \
@@ -81,6 +83,8 @@ RUN --mount=type=cache,target=/go/pkg/mod,uid=10001,gid=10001 \
 
 # Create final image using a multi-platform base image
 FROM --platform=$TARGETPLATFORM debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Copy model files to /models directory as separate cacheable layer
 # This layer will be reused if model files haven't changed between builds

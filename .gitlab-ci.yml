@@ -38,7 +38,7 @@ package:build:
     - when: always
   artifacts:
     paths:
-      - images
+      - neofob_birdnet-go_latest.tar.xz
     expire_in: 1 week
 stages:
   - build
