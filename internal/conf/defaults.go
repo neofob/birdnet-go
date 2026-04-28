@@ -85,8 +85,8 @@ func setDefaultConfig() {
 	viper.SetDefault("perch.labelpath", "")
 	viper.SetDefault("perch.threshold", 0.5)
 
-	// Global model enablement (BirdNET only by default)
-	viper.SetDefault("models.enabled", []string{"birdnet"})
+	// Global model enablement (language pipeline by default; BirdNET is opt-in)
+	viper.SetDefault("models.enabled", []string{DefaultPrimaryModelID})
 
 	// Realtime configuration
 	viper.SetDefault("realtime.interval", 15)

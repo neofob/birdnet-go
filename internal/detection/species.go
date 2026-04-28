@@ -4,7 +4,9 @@ import (
 	"strings"
 )
 
-// Species holds parsed species identification.
+// Species holds the legacy species-shaped label representation.
+// New classifier code should prefer Label/Classification and use this type only
+// at persistence or compatibility boundaries.
 type Species struct {
 	ScientificName string // e.g., "Turdus merula"
 	CommonName     string // e.g., "Common Blackbird"

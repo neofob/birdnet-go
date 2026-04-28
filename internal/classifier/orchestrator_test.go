@@ -129,6 +129,52 @@ func TestOrchestrator_PredictModel_Success(t *testing.T) {
 	assert.InDelta(t, 0.88, float64(results[0].Confidence), 0.001)
 }
 
+func TestNewFakeLanguageOrchestrator_PredictsHardcodedLanguage(t *testing.T) {
+	t.Parallel()
+
+	settings := conf.GetTestSettings()
+	settings.BirdNET.Sensitivity = 1
+	orchestrator, err := NewFakeLanguageOrchestrator(settings)
+	require.NoError(t, err)
+	t.Cleanup(func() { orchestrator.Delete() })
+
+	results, err := orchestrator.PredictModel(t.Context(), fakeLanguageModelID, [][]float32{{0.1, 0.2, 0.3}})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, fakeLanguageLabel, results[0].Species)
+	assert.InDelta(t, 0.99, float64(results[0].Confidence), 0.001)
+}
+
+func TestUseFakeLanguagePipeline(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		enabled []string
+		want    bool
+	}{
+		{"nil settings", nil, false},
+		{"empty settings defaults to language", []string{}, true},
+		{"explicit birdnet", []string{"birdnet"}, false},
+		{"language fake", []string{"language_fake"}, true},
+		{"case insensitive", []string{"LANGUAGE_FAKE"}, true},
+		{"unknown model", []string{"unknown"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if tt.enabled == nil && tt.name == "nil settings" {
+				assert.False(t, UseFakeLanguagePipeline(nil))
+				return
+			}
+			settings := &conf.Settings{}
+			settings.Models.Enabled = tt.enabled
+			assert.Equal(t, tt.want, UseFakeLanguagePipeline(settings))
+		})
+	}
+}
+
 func TestOrchestrator_PredictModel_UnknownModel(t *testing.T) {
 	t.Parallel()
 

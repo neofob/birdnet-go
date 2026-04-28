@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/tphakala/birdnet-go/internal/conf"
-	"github.com/tphakala/birdnet-go/internal/datastore"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
 )
@@ -94,7 +93,7 @@ func NewOrchestrator(settings *conf.Settings) (*Orchestrator, error) {
 
 // Predict runs inference using the primary model.
 // Relies on BirdNET's internal locking.
-func (o *Orchestrator) Predict(ctx context.Context, sample [][]float32) ([]datastore.Results, error) {
+func (o *Orchestrator) Predict(ctx context.Context, sample [][]float32) ([]Classification, error) {
 	return o.primary.Predict(ctx, sample)
 }
 
@@ -102,7 +101,7 @@ func (o *Orchestrator) Predict(ctx context.Context, sample [][]float32) ([]datas
 // It uses a two-level locking protocol: a read lock on the models map to fetch
 // the entry (fast), then a per-model lock for inference (slow). The map lock is
 // released before acquiring the model lock to prevent deadlocks with ReloadModel.
-func (o *Orchestrator) PredictModel(ctx context.Context, modelID string, sample [][]float32) ([]datastore.Results, error) {
+func (o *Orchestrator) PredictModel(ctx context.Context, modelID string, sample [][]float32) ([]Classification, error) {
 	// Step 1: fetch entry under read lock (fast)
 	o.mu.RLock()
 	entry, ok := o.models[modelID]

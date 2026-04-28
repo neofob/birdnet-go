@@ -42,11 +42,11 @@ const policyNone = "none"
 // initialization, sound level monitoring, quiet hours scheduling, clip cleanup,
 // weather polling, and the restart loop for audio capture.
 type AudioPipelineService struct {
-	settings   *conf.Settings
-	bnAnalyzer *BirdNETAnalyzer
-	dbService  *DatabaseService
-	apiService *APIServerService
-	engine     *engine.AudioEngine
+	settings           *conf.Settings
+	classifierAnalyzer *ClassifierAnalyzer
+	dbService          *DatabaseService
+	apiService         *APIServerService
+	engine             *engine.AudioEngine
 
 	bufferMgr           *BufferManager
 	ctrlMonitor         *ControlMonitor
@@ -71,13 +71,13 @@ type AudioPipelineService struct {
 
 // NewAudioPipelineService creates a new AudioPipelineService with the given dependencies.
 // The service is not started; call Start() to initialize the audio pipeline.
-func NewAudioPipelineService(settings *conf.Settings, bnAnalyzer *BirdNETAnalyzer, dbService *DatabaseService, apiService *APIServerService, audioEngine *engine.AudioEngine) *AudioPipelineService {
+func NewAudioPipelineService(settings *conf.Settings, classifierAnalyzer *ClassifierAnalyzer, dbService *DatabaseService, apiService *APIServerService, audioEngine *engine.AudioEngine) *AudioPipelineService {
 	return &AudioPipelineService{
-		settings:   settings,
-		bnAnalyzer: bnAnalyzer,
-		dbService:  dbService,
-		apiService: apiService,
-		engine:     audioEngine,
+		settings:           settings,
+		classifierAnalyzer: classifierAnalyzer,
+		dbService:          dbService,
+		apiService:         apiService,
+		engine:             audioEngine,
 	}
 }
 
@@ -111,8 +111,8 @@ func (p *AudioPipelineService) Start(_ context.Context) error {
 			Context("operation", "start_precondition_check").
 			Build()
 	}
-	if p.bnAnalyzer == nil || p.bnAnalyzer.BirdNET() == nil {
-		return errors.Newf("audio-pipeline requires an initialized birdnet model; birdnet-analyzer service must be started first").
+	if p.classifierAnalyzer == nil || p.classifierAnalyzer.Classifier() == nil {
+		return errors.Newf("audio-pipeline requires an initialized classifier; classifier-analyzer service must be started first").
 			Component("analysis.audio_pipeline").
 			Category(errors.CategorySystem).
 			Context("operation", "start_precondition_check").
@@ -127,7 +127,7 @@ func (p *AudioPipelineService) Start(_ context.Context) error {
 	}
 
 	settings := p.settings
-	bn := p.bnAnalyzer.BirdNET()
+	bn := p.classifierAnalyzer.Classifier()
 	dataStore := p.dbService.DataStore()
 	metrics := p.apiService.Metrics()
 
@@ -637,14 +637,14 @@ func (p *AudioPipelineService) registerConsumersForSources(sourceIDs []string, s
 	log := GetLogger()
 
 	// Build a lookup of all loaded model infos keyed by registry ID.
-	modelInfoSlice := p.bnAnalyzer.BirdNET().ModelInfos()
+	modelInfoSlice := p.classifierAnalyzer.Classifier().ModelInfos()
 	allModelInfos := make(map[string]classifier.ModelInfo, len(modelInfoSlice))
 	for i := range modelInfoSlice {
 		allModelInfos[modelInfoSlice[i].ID] = modelInfoSlice[i]
 	}
 
 	// Primary model fallback targets for sources with no model config.
-	primaryInfo := &p.bnAnalyzer.BirdNET().ModelInfo
+	primaryInfo := &p.classifierAnalyzer.Classifier().ModelInfo
 	primaryTargets := []classifier.ModelInfo{*primaryInfo}
 
 	bufMgr := p.engine.BufferManager()
@@ -948,13 +948,13 @@ func (p *AudioPipelineService) buildSourceConfigsWithModels() []sourceConfigWith
 // monitorConfig gets the correct spec (sample rate + clip length).
 func (p *AudioPipelineService) buildMonitorConfigs(sourceModelMap map[string][]string, sourceIDs []string) map[string][]monitorConfig {
 	// Build lookup of loaded models by registry ID.
-	modelInfoSlice := p.bnAnalyzer.BirdNET().ModelInfos()
+	modelInfoSlice := p.classifierAnalyzer.Classifier().ModelInfos()
 	loadedModels := make(map[string]classifier.ModelInfo, len(modelInfoSlice))
 	for i := range modelInfoSlice {
 		loadedModels[modelInfoSlice[i].ID] = modelInfoSlice[i]
 	}
 
-	primaryInfo := p.bnAnalyzer.BirdNET().ModelInfo
+	primaryInfo := p.classifierAnalyzer.Classifier().ModelInfo
 	result := make(map[string][]monitorConfig, len(sourceIDs))
 
 	for _, sid := range sourceIDs {

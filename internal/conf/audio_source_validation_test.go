@@ -26,7 +26,7 @@ func TestAudioSourceConfig_Validate_DefaultModel(t *testing.T) {
 	src := &AudioSourceConfig{
 		Name:   "Mic",
 		Device: "sysdefault",
-		Model:  "", // Empty = default (birdnet)
+		Model:  "", // Empty = default language pipeline
 	}
 	assert.NoError(t, src.Validate())
 }
@@ -34,7 +34,7 @@ func TestAudioSourceConfig_Validate_DefaultModel(t *testing.T) {
 func TestAudioSourceConfig_Validate_FutureModels(t *testing.T) {
 	t.Parallel()
 
-	for _, model := range []string{"perch_v2", "bat"} {
+	for _, model := range []string{"language_fake", "perch_v2", "bat"} {
 		src := &AudioSourceConfig{
 			Name:   "Mic",
 			Device: "sysdefault",

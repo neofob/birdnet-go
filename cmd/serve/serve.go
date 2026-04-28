@@ -50,14 +50,14 @@ The "realtime" command is an alias for backward compatibility.`,
 
 			// Create services. Registration order determines start order;
 			// shutdown happens in reverse within each tier.
-			bnAnalyzer := analysis.NewBirdNETAnalyzer(settings)
+			classifierAnalyzer := analysis.NewClassifierAnalyzer(settings)
 			dbService := analysis.NewDatabaseService(settings, metrics)
-			apiService := analysis.NewAPIServerService(settings, bnAnalyzer, dbService, metrics, audioEngine)
-			audioService := analysis.NewAudioPipelineService(settings, bnAnalyzer, dbService, apiService, audioEngine)
+			apiService := analysis.NewAPIServerService(settings, classifierAnalyzer, dbService, metrics, audioEngine)
+			audioService := analysis.NewAudioPipelineService(settings, classifierAnalyzer, dbService, apiService, audioEngine)
 
 			application := app.New()
 			app.SetGlobal(application)
-			application.Register(bnAnalyzer, dbService, apiService, audioService)
+			application.Register(classifierAnalyzer, dbService, apiService, audioService)
 
 			if err := application.Start(cmd.Context()); err != nil {
 				return err

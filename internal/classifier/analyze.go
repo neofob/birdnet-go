@@ -22,7 +22,7 @@ type DetectionsMap map[string][]datastore.Results
 
 // Predict performs inference on a given sample using the classifier backend.
 // Implements ModelInstance.
-func (bn *BirdNET) Predict(ctx context.Context, sample [][]float32) ([]datastore.Results, error) {
+func (bn *BirdNET) Predict(ctx context.Context, sample [][]float32) ([]Classification, error) {
 	span, _ := StartSpan(ctx, "birdnet.predict", "Species prediction")
 	defer span.Finish()
 

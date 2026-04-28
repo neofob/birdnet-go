@@ -4,8 +4,6 @@ package classifier
 import (
 	"context"
 	"time"
-
-	"github.com/tphakala/birdnet-go/internal/datastore"
 )
 
 // ModelSpec describes a model's fixed audio requirements.
@@ -21,7 +19,7 @@ type ModelSpec struct {
 type ModelInstance interface {
 	// Predict runs inference on the given audio samples.
 	// Each inner slice is one clip of float32 PCM at the model's native sample rate.
-	Predict(ctx context.Context, samples [][]float32) ([]datastore.Results, error)
+	Predict(ctx context.Context, samples [][]float32) ([]Classification, error)
 
 	// Spec returns the model's fixed audio requirements.
 	Spec() ModelSpec

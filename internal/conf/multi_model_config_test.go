@@ -8,7 +8,7 @@ import (
 )
 
 // testKnownIDs mirrors classifier.KnownConfigIDs() for testing without circular imports.
-var testKnownIDs = map[string]bool{"birdnet": true, "perch_v2": true}
+var testKnownIDs = map[string]bool{"birdnet": true, "perch_v2": true, "language_fake": true}
 
 func TestPerchConfig_Defaults(t *testing.T) {
 	t.Parallel()
@@ -57,9 +57,21 @@ func TestMigrateSourceModels_SingularToPlural(t *testing.T) {
 	assert.Empty(t, settings.Realtime.Audio.Sources[0].Model, "legacy field should be cleared")
 }
 
-func TestMigrateSourceModels_DefaultToBirdNET(t *testing.T) {
+func TestMigrateSourceModels_DefaultToLanguagePipeline(t *testing.T) {
 	t.Parallel()
 	settings := &Settings{}
+	settings.Realtime.Audio.Sources = []AudioSourceConfig{
+		{Name: "Mic1", Device: "hw:0,0"},
+	}
+	migrated := settings.MigrateSourceModels()
+	require.True(t, migrated)
+	assert.Equal(t, []string{DefaultPrimaryModelID}, settings.Realtime.Audio.Sources[0].Models)
+}
+
+func TestMigrateSourceModels_DefaultToExplicitPrimaryModel(t *testing.T) {
+	t.Parallel()
+	settings := &Settings{}
+	settings.Models.Enabled = []string{"birdnet"}
 	settings.Realtime.Audio.Sources = []AudioSourceConfig{
 		{Name: "Mic1", Device: "hw:0,0"},
 	}
@@ -87,7 +99,7 @@ func TestMigrateSourceModels_StreamConfigMigration(t *testing.T) {
 	}
 	migrated := settings.MigrateSourceModels()
 	require.True(t, migrated)
-	assert.Equal(t, []string{"birdnet"}, settings.Realtime.RTSP.Streams[0].Models)
+	assert.Equal(t, []string{DefaultPrimaryModelID}, settings.Realtime.RTSP.Streams[0].Models)
 }
 
 func TestValidateModelConfig_PerchEnabledRequiresPaths(t *testing.T) {
@@ -122,6 +134,22 @@ func TestValidateModelConfig_UnknownModelWarning(t *testing.T) {
 	settings.Models.Enabled = []string{"birdnet", "unknown_model"}
 	warnings := settings.ValidateModelConfig(testKnownIDs)
 	assert.NotEmpty(t, warnings, "unknown model ID should produce a warning")
+}
+
+func TestValidateModelConfig_LanguageFakeCannotBeCombined(t *testing.T) {
+	t.Parallel()
+	settings := &Settings{}
+	settings.Models.Enabled = []string{"birdnet", "language_fake"}
+	issues := settings.ValidateModelConfig(testKnownIDs)
+	assert.NotEmpty(t, issues, "language_fake should be exclusive while it replaces the primary pipeline")
+}
+
+func TestValidateModelConfig_LanguageFakeOnlyAllowed(t *testing.T) {
+	t.Parallel()
+	settings := &Settings{}
+	settings.Models.Enabled = []string{"language_fake"}
+	issues := settings.ValidateModelConfig(testKnownIDs)
+	assert.Empty(t, issues, "language_fake should be accepted as the primary classifier switch")
 }
 
 func TestValidateModelConfig_SourceReferencesUnavailableModel(t *testing.T) {

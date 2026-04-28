@@ -171,8 +171,8 @@ type Processor struct {
 type Detections struct {
 	CorrelationID string                       // Unique detection identifier for log correlation
 	pcmData3s     []byte                       // 3s PCM data containing the detection
-	Result        detection.Result             // Detection result containing highest match
-	Results       []detection.AdditionalResult // Additional BirdNET prediction results
+	Result        detection.Result             // Classification result containing highest match
+	Results       []detection.AdditionalResult // Additional classifier prediction results
 }
 
 // PendingDetection struct represents a single detection held in memory,
@@ -499,15 +499,19 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *classifier.Orchest
 	// are memoized on first dispatch in getActionsForItem.
 	p.validateCustomCommandActions(settings)
 
-	// Initialize species tracker if enabled
-	p.NewSpeciesTracker = initSpeciesTracker(settings, ds)
+	if !classifier.UseFakeLanguagePipeline(settings) {
+		// Initialize species tracker only for BirdNET compatibility mode.
+		p.NewSpeciesTracker = initSpeciesTracker(settings, ds)
+	}
 
 	// NOTE: Background goroutines (detection processor, worker pool, flusher)
 	// are NOT started here. Call Start() after wiring BufferMgr and Registry
 	// to avoid a race where detections arrive before the buffer manager is set.
 
-	// Initialize BirdWeather client if enabled
-	p.initBirdWeatherClient(settings)
+	if !classifier.UseFakeLanguagePipeline(settings) {
+		// Initialize BirdWeather only for BirdNET compatibility mode.
+		p.initBirdWeatherClient(settings)
+	}
 
 	// Initialize MQTT client if enabled in settings
 	p.initializeMQTT(settings)
@@ -544,8 +548,10 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *classifier.Orchest
 		}
 	}
 
-	// Initialize extended capture species filter if enabled
-	p.initExtendedCapture()
+	if !p.isLanguagePipelineMode() {
+		// Initialize extended capture species filter only for BirdNET compatibility mode.
+		p.initExtendedCapture()
+	}
 
 	// Initialize spectrogram pre-renderer if mode is "prerender"
 	if settings.Realtime.Dashboard.Spectrogram.IsPreRenderEnabled() {
@@ -625,6 +631,7 @@ func (p *Processor) processDetections(item classifier.Results) {
 		det := detectionResults[i]
 		commonName := strings.ToLower(det.Result.Species.CommonName)
 		confidence := det.Result.Confidence
+		languageMode := p.isLanguagePipelineMode()
 
 		// Lock the mutex to ensure thread-safe access to shared resources
 		p.pendingMutex.Lock()
@@ -678,12 +685,14 @@ func (p *Processor) processDetections(item classifier.Results) {
 		}
 
 		// Apply extended capture if species qualifies
-		if p.isExtendedCaptureSpecies(det.Result.Species.ScientificName) {
+		if !languageMode && p.isExtendedCaptureSpecies(det.Result.Species.ScientificName) {
 			p.applyExtendedCapture(mapKey, now, detectionWindow)
 		}
 
-		// Update the dynamic threshold for this species if enabled
-		p.updateDynamicThreshold(item.ModelID, commonName, confidence)
+		if !languageMode {
+			// Update the dynamic threshold for this species if enabled.
+			p.updateDynamicThreshold(item.ModelID, commonName, confidence)
+		}
 
 		// Unlock the mutex to allow other goroutines to access shared resources
 		p.pendingMutex.Unlock()
@@ -708,8 +717,10 @@ func (p *Processor) processResults(item classifier.Results) []Detections {
 		p.Metrics.BirdNET.SetProcessTime(float64(item.ElapsedTime.Milliseconds()))
 	}
 
-	// Sync species tracker if needed
-	p.syncSpeciesTrackerIfNeeded()
+	if !p.isLanguagePipelineMode() {
+		// Sync species tracker only for BirdNET compatibility mode.
+		p.syncSpeciesTrackerIfNeeded()
+	}
 
 	// Process each result in item.Results
 	for _, result := range item.Results {
@@ -730,10 +741,11 @@ func (p *Processor) processResults(item classifier.Results) []Detections {
 			continue // Skip invalid or partially parsed species
 		}
 
-		// Handle dog and human detection, this sets LastDogDetection and LastHumanDetection which is
-		// later used to discard detection if privacy filter or dog bark filters are enabled in settings.
-		p.handleDogDetection(item, speciesLowercase, result)
-		p.handleHumanDetection(item, speciesLowercase, result)
+		if !p.isLanguagePipelineMode() {
+			// Dog/human filters suppress bird detections and are disabled for language classifications.
+			p.handleDogDetection(item, speciesLowercase, result)
+			p.handleHumanDetection(item, speciesLowercase, result)
+		}
 
 		// Determine confidence threshold and check filters
 		baseThreshold := p.getBaseConfidenceThreshold(commonName, scientificName)
@@ -798,6 +810,13 @@ func (p *Processor) parseAndValidateSpecies(result datastore.Results, item class
 
 // shouldFilterDetection checks if a detection should be filtered out
 func (p *Processor) shouldFilterDetection(result datastore.Results, commonName, scientificName, speciesLowercase string, baseThreshold float32, source, modelID string) (shouldFilter bool, confidenceThreshold float32) {
+	if p.isLanguagePipelineMode() {
+		if result.Confidence <= baseThreshold {
+			return true, baseThreshold
+		}
+		return false, baseThreshold
+	}
+
 	// Check human detection privacy filter
 	if strings.Contains(strings.ToLower(commonName), speciesHuman) && result.Confidence > baseThreshold {
 		return true, 0 // Filter out human detections for privacy
@@ -885,8 +904,11 @@ func (p *Processor) createDetection(item classifier.Results, result datastore.Re
 	beginTime := item.StartTime
 	endTime := item.StartTime.Add(captureLength - preCaptureLength)
 
-	// Get occurrence probability for this species at detection time
-	occurrence := p.Bn.GetSpeciesOccurrenceAtTime(result.Species, item.StartTime)
+	var occurrence float64
+	if !p.isLanguagePipelineMode() {
+		// Get occurrence probability for this species at detection time.
+		occurrence = p.Bn.GetSpeciesOccurrenceAtTime(result.Species, item.StartTime)
+	}
 
 	// Compute detection time once to ensure Result has consistent timestamp
 	// This prevents date mismatch around midnight when time.Now() would be called separately
@@ -1093,6 +1115,10 @@ func (p *Processor) handleHumanDetection(item classifier.Results, speciesLowerca
 // getBaseConfidenceThreshold retrieves the confidence threshold for a species, using custom or global thresholds.
 // It supports lookup by both common name and scientific name for consistency with include/exclude matching.
 func (p *Processor) getBaseConfidenceThreshold(commonName, scientificName string) float32 {
+	if p.isLanguagePipelineMode() {
+		return float32(p.Settings.BirdNET.Threshold)
+	}
+
 	// Check if species has a custom threshold using both common and scientific name lookup
 	if config, exists := lookupSpeciesConfig(p.Settings.Realtime.Species.Config, commonName, scientificName); exists {
 		if p.Settings.Debug {
@@ -1152,6 +1178,10 @@ func (p *Processor) shouldDiscardDetection(item *PendingDetection, minDetections
 			logger.String("source", p.getDisplayNameForSource(item.Source)),
 			logger.String("operation", "minimum_count_filter"))
 		return true, fmt.Sprintf("false positive, matched %d/%d times", item.Count, minDetections)
+	}
+
+	if p.isLanguagePipelineMode() {
+		return false, ""
 	}
 
 	// Check privacy filter
@@ -1510,7 +1540,9 @@ func (p *Processor) pendingDetectionsFlusher() {
 						logger.String("operation", "pending_flusher_cycle"))
 				}
 
-				p.cleanUpDynamicThresholds()
+				if !p.isLanguagePipelineMode() {
+					p.cleanUpDynamicThresholds()
+				}
 			case <-p.flusherCtx.Done():
 				GetLogger().Info("Pending detections flusher stopped",
 					logger.String("operation", "pending_flusher_shutdown"))
@@ -1522,6 +1554,10 @@ func (p *Processor) pendingDetectionsFlusher() {
 
 // getActionsForItem determines the actions to be taken for a given detection.
 func (p *Processor) getActionsForItem(det *Detections) []Action {
+	if p.isLanguagePipelineMode() {
+		return p.getDefaultActions(det)
+	}
+
 	// Check if species has custom configuration using both common and scientific name lookup
 	if speciesConfig, exists := lookupSpeciesConfig(p.Settings.Realtime.Species.Config, det.Result.Species.CommonName, det.Result.Species.ScientificName); exists {
 		if p.Settings.Debug {
@@ -1819,7 +1855,7 @@ func (p *Processor) getDefaultActions(det *Detections) []Action {
 
 	// Add BirdWeatherAction if enabled and client is initialized
 	// NOTE: BirdWeather runs independently (doesn't need detection ID from database)
-	if p.Settings.Realtime.Birdweather.Enabled {
+	if !p.isLanguagePipelineMode() && p.Settings.Realtime.Birdweather.Enabled {
 		bwClient := p.GetBwClient() // Use getter for thread safety
 		if bwClient != nil {
 			// Create BirdWeather retry config from settings
@@ -1847,7 +1883,7 @@ func (p *Processor) getDefaultActions(det *Detections) []Action {
 	// Use atomic check-and-set to prevent race conditions (see GitHub issue #1357)
 	// This ensures only ONE goroutine will trigger the daily range filter update,
 	// preventing concurrent updates that could cause species list inconsistencies
-	if p.Settings.ShouldUpdateRangeFilterToday() {
+	if !p.isLanguagePipelineMode() && p.Settings.ShouldUpdateRangeFilterToday() {
 		GetLogger().Info("Scheduling daily range filter update",
 			logger.Time("last_updated", p.Settings.GetLastRangeFilterUpdate()),
 			logger.String("operation", "update_range_filter"))
@@ -1859,6 +1895,25 @@ func (p *Processor) getDefaultActions(det *Detections) []Action {
 	}
 
 	return actions
+}
+
+func (p *Processor) isLanguagePipelineMode() bool {
+	if p == nil {
+		return false
+	}
+	if p.Bn != nil && p.Bn.ModelInfo.ID == "Language_Fake" {
+		return true
+	}
+	if p.Settings == nil {
+		return false
+	}
+	for _, configID := range p.Settings.Models.Enabled {
+		registryID, ok := classifier.ResolveConfigModelID(configID)
+		if ok && registryID == "Language_Fake" {
+			return true
+		}
+	}
+	return false
 }
 
 // buildSaveAudioAction creates a SaveAudioAction for the given detection.

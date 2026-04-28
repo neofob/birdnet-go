@@ -2,13 +2,14 @@ package entities
 
 import "time"
 
-// ModelType represents the type of species a model detects.
+// ModelType represents the type of classification a model performs.
 type ModelType string
 
 const (
-	ModelTypeBird  ModelType = "bird"
-	ModelTypeBat   ModelType = "bat"
-	ModelTypeMulti ModelType = "multi"
+	ModelTypeBird    ModelType = "bird"
+	ModelTypeBat     ModelType = "bat"
+	ModelTypeMulti   ModelType = "multi"
+	ModelTypeLanguage ModelType = "language"
 )
 
 // AIModel represents an AI detection model (BirdNET, Perch, BatNET, etc.).

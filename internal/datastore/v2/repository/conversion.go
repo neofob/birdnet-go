@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tphakala/birdnet-go/internal/datastore/v2/entities"
@@ -19,16 +20,32 @@ type ConversionDeps struct {
 	Logger     logger.Logger
 
 	// Cached lookup table IDs (must be initialized before use)
-	SpeciesLabelTypeID uint // ID for "species" label type
-	AvesClassID        uint // ID for "Aves" taxonomic class
-	ChiropteraClassID  uint // ID for "Chiroptera" taxonomic class
+	SpeciesLabelTypeID  uint // ID for "species" label type
+	LanguageLabelTypeID uint // ID for "language" label type
+	AvesClassID         uint // ID for "Aves" taxonomic class
+	ChiropteraClassID   uint // ID for "Chiroptera" taxonomic class
+}
+
+// modelTypeFromDetection resolves the v2 entity ModelType from a detection ModelInfo.
+func modelTypeFromDetection(info detection.ModelInfo) entities.ModelType {
+	if strings.EqualFold(info.Name, "Language") {
+		return entities.ModelTypeLanguage
+	}
+	return entities.ModelTypeBird
+}
+
+// labelTypeIDForModel returns the appropriate label type ID for a given entity ModelType.
+func labelTypeIDForModel(modelType entities.ModelType, deps *ConversionDeps) uint {
+	if modelType == entities.ModelTypeLanguage {
+		return deps.LanguageLabelTypeID
+	}
+	return deps.SpeciesLabelTypeID
 }
 
 // ConvertToV2Detection converts a domain Result to a v2 Detection entity.
 // This is shared between DualWriteRepository and migration Worker.
 // deps.SpeciesLabelTypeID, deps.AvesClassID, and deps.ChiropteraClassID must be initialized.
 func ConvertToV2Detection(ctx context.Context, result *detection.Result, deps *ConversionDeps) (*entities.Detection, error) {
-	// Get or create model first (needed for label creation)
 	modelName := result.Model.Name
 	if modelName == "" {
 		modelName = detection.DefaultModelName
@@ -42,12 +59,12 @@ func ConvertToV2Detection(ctx context.Context, result *detection.Result, deps *C
 		modelVariant = detection.DefaultModelVariant
 	}
 
-	model, err := deps.ModelRepo.GetOrCreate(ctx, modelName, modelVersion, modelVariant, entities.ModelTypeBird, result.Model.ClassifierPath)
+	modelType := modelTypeFromDetection(result.Model)
+	model, err := deps.ModelRepo.GetOrCreate(ctx, modelName, modelVersion, modelVariant, modelType, result.Model.ClassifierPath)
 	if err != nil {
 		return nil, fmt.Errorf("model resolution failed: %w", err)
 	}
 
-	// Determine taxonomic class ID based on model type
 	var taxonomicClassID *uint
 	switch model.ModelType {
 	case entities.ModelTypeBird:
@@ -59,11 +76,11 @@ func ConvertToV2Detection(ctx context.Context, result *detection.Result, deps *C
 			taxonomicClassID = &deps.ChiropteraClassID
 		}
 	case entities.ModelTypeMulti:
-		// Multi-type models can detect multiple taxonomic classes; no default
+	case entities.ModelTypeLanguage:
 	}
 
-	// Resolve or create label (with model ID for model-specific labels)
-	label, err := deps.LabelRepo.GetOrCreate(ctx, result.Species.ScientificName, model.ID, deps.SpeciesLabelTypeID, taxonomicClassID)
+	labelTypeID := labelTypeIDForModel(model.ModelType, deps)
+	label, err := deps.LabelRepo.GetOrCreate(ctx, result.Species.ScientificName, model.ID, labelTypeID, taxonomicClassID)
 	if err != nil {
 		return nil, fmt.Errorf("label resolution failed: %w", err)
 	}
@@ -142,12 +159,12 @@ func ConvertToV2Detection(ctx context.Context, result *detection.Result, deps *C
 
 // ConvertToPredictions converts additional results to v2 prediction entities.
 // This is shared between DualWriteRepository and migration Worker.
-// modelID and speciesLabelTypeID must be provided for label creation.
-func ConvertToPredictions(ctx context.Context, detectionID, modelID, speciesLabelTypeID uint, taxonomicClassID *uint, additional []detection.AdditionalResult, labelRepo LabelRepository) ([]*entities.DetectionPrediction, error) {
+// modelID and labelTypeID must be provided for label creation.
+func ConvertToPredictions(ctx context.Context, detectionID, modelID, labelTypeID uint, taxonomicClassID *uint, additional []detection.AdditionalResult, labelRepo LabelRepository) ([]*entities.DetectionPrediction, error) {
 	preds := make([]*entities.DetectionPrediction, 0, len(additional))
 
 	for i, ar := range additional {
-		label, err := labelRepo.GetOrCreate(ctx, ar.Species.ScientificName, modelID, speciesLabelTypeID, taxonomicClassID)
+		label, err := labelRepo.GetOrCreate(ctx, ar.Species.ScientificName, modelID, labelTypeID, taxonomicClassID)
 		if err != nil {
 			return nil, fmt.Errorf("prediction label resolution failed: %w", err)
 		}

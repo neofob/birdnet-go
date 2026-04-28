@@ -9,19 +9,19 @@ import (
 )
 
 // Compile-time interface compliance check.
-var _ app.Analyzer = (*BirdNETAnalyzer)(nil)
+var _ app.Analyzer = (*ClassifierAnalyzer)(nil)
 
-func TestBirdNETAnalyzer_Name(t *testing.T) {
+func TestClassifierAnalyzer_Name(t *testing.T) {
 	t.Parallel()
 
-	a := NewBirdNETAnalyzer(&conf.Settings{})
-	assert.Equal(t, "birdnet-analyzer", a.Name())
+	a := NewClassifierAnalyzer(&conf.Settings{})
+	assert.Equal(t, "classifier-analyzer", a.Name())
 }
 
-func TestBirdNETAnalyzer_Compatible(t *testing.T) {
+func TestClassifierAnalyzer_Compatible(t *testing.T) {
 	t.Parallel()
 
-	a := NewBirdNETAnalyzer(&conf.Settings{})
+	a := NewClassifierAnalyzer(&conf.Settings{})
 
 	tests := []struct {
 		name       string
@@ -43,17 +43,32 @@ func TestBirdNETAnalyzer_Compatible(t *testing.T) {
 	}
 }
 
-func TestBirdNETAnalyzer_BirdNET_NilBeforeStart(t *testing.T) {
+func TestClassifierAnalyzer_Classifier_NilBeforeStart(t *testing.T) {
 	t.Parallel()
 
-	a := NewBirdNETAnalyzer(&conf.Settings{})
+	a := NewClassifierAnalyzer(&conf.Settings{})
 	assert.Nil(t, a.BirdNET(), "BirdNET() should return nil before Start()")
+	assert.Nil(t, a.Classifier(), "Classifier() should return nil before Start()")
 }
 
-func TestBirdNETAnalyzer_Stop_NilSafe(t *testing.T) {
+func TestClassifierAnalyzer_Start_UsesFakeLanguagePipeline(t *testing.T) {
 	t.Parallel()
 
-	a := NewBirdNETAnalyzer(&conf.Settings{})
+	a := NewClassifierAnalyzer(&conf.Settings{})
+	err := a.Start(t.Context())
+	assert.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, a.Stop(t.Context())) })
+
+	bn := a.Classifier()
+	assert.NotNil(t, bn)
+	assert.Equal(t, "Language_Fake", bn.ModelInfo.ID)
+	assert.Equal(t, bn, a.BirdNET(), "BirdNET() should remain a compatibility alias")
+}
+
+func TestClassifierAnalyzer_Stop_NilSafe(t *testing.T) {
+	t.Parallel()
+
+	a := NewClassifierAnalyzer(&conf.Settings{})
 	// Stop before Start should not panic and should return nil.
 	assert.NotPanics(t, func() {
 		err := a.Stop(t.Context())

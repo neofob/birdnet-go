@@ -2,6 +2,8 @@ module github.com/tphakala/birdnet-go
 
 go 1.26.1
 
+toolchain go1.25.3
+
 require (
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/antonholmquist/jason v1.0.0

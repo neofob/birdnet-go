@@ -137,9 +137,10 @@ type Datastore struct {
 	suncalc      *suncalc.SunCalc
 
 	// Cached lookup table IDs for label creation
-	defaultModelID     uint  // Model ID to use for new labels
-	speciesLabelTypeID uint  // "species" label type ID
-	avesClassID        *uint // "Aves" taxonomic class ID (optional)
+	defaultModelID      uint  // Model ID to use for new labels
+	speciesLabelTypeID  uint  // "species" label type ID
+	languageLabelTypeID uint  // "language" label type ID
+	avesClassID         *uint // "Aves" taxonomic class ID (optional)
 
 	// names holds the species name lookup maps behind an atomic.Pointer
 	// for lock-free reads and atomic swaps when locale changes.
@@ -250,6 +251,13 @@ func New(cfg *Config) (*Datastore, error) {
 		avesClassID = &avesClass.ID
 	}
 
+	// Get or create language label type ID
+	var langLabelType entities.LabelType
+	if err := db.Where("name = ?", "language").FirstOrCreate(&langLabelType, entities.LabelType{Name: "language"}).Error; err != nil {
+		return nil, fmt.Errorf("failed to get language label type: %w", err)
+	}
+	languageLabelTypeID := langLabelType.ID
+
 	tz := cfg.Timezone
 	if tz == nil {
 		tz = time.Local
@@ -277,9 +285,10 @@ func New(cfg *Config) (*Datastore, error) {
 		log:                cfg.Logger,
 		timezone:           tz,
 		suncalc:            cfg.SunCalc,
-		defaultModelID:     defaultModelID,
-		speciesLabelTypeID: speciesLabelTypeID,
-		avesClassID:        avesClassID,
+		defaultModelID:      defaultModelID,
+		speciesLabelTypeID:  speciesLabelTypeID,
+		languageLabelTypeID: languageLabelTypeID,
+		avesClassID:         avesClassID,
 		speciesCodeMap:     speciesCodeMap,
 		dbCounters:         dbCounters,
 	}
@@ -449,10 +458,19 @@ func (ds *Datastore) GetDatabaseStats() (*datastore.DatabaseStats, error) {
 	return stats, nil
 }
 
+// modelTypeFromNote resolves the v2 entity ModelType from the note's ModelInfo.
+func modelTypeFromNote(info detection.ModelInfo) entities.ModelType {
+	if strings.EqualFold(info.Name, "Language") {
+		return entities.ModelTypeLanguage
+	}
+	return entities.ModelTypeBird
+}
+
 // EnsureModelRegistered creates the model entry in ai_models if it doesn't exist.
 func (ds *Datastore) EnsureModelRegistered(info detection.ModelInfo) error {
 	ctx := context.Background()
-	_, err := ds.model.GetOrCreate(ctx, info.Name, info.Version, info.Variant, entities.ModelTypeBird, info.ClassifierPath)
+	modelType := modelTypeFromNote(info)
+	_, err := ds.model.GetOrCreate(ctx, info.Name, info.Version, info.Variant, modelType, info.ClassifierPath)
 	return err
 }
 
@@ -468,16 +486,25 @@ func (ds *Datastore) Save(note *datastore.Note, results []datastore.Results) err
 	if modelInfo.Name == "" {
 		modelInfo = detection.DefaultModelInfo()
 	}
-	model, err := ds.model.GetOrCreate(ctx, modelInfo.Name, modelInfo.Version, modelInfo.Variant, entities.ModelTypeBird, modelInfo.ClassifierPath)
+	model, err := ds.model.GetOrCreate(ctx, modelInfo.Name, modelInfo.Version, modelInfo.Variant, modelTypeFromNote(modelInfo), modelInfo.ClassifierPath)
 	if err != nil {
 		return fmt.Errorf("failed to get/create model: %w", err)
+	}
+
+	isLanguage := model.ModelType == entities.ModelTypeLanguage
+	labelTypeID := ds.speciesLabelTypeID
+	var taxonomicClassID *uint
+	if isLanguage {
+		labelTypeID = ds.languageLabelTypeID
+	} else {
+		taxonomicClassID = ds.avesClassID
 	}
 
 	// NOTE: Label GetOrCreate calls are outside the transaction.
 	// If the detection save fails, orphaned reference data may persist.
 	// This is acceptable as they will be reused on subsequent saves.
 	// Extract scientific name in case it contains concatenated "ScientificName_CommonName" format.
-	label, err := ds.label.GetOrCreate(ctx, extractScientificName(note.ScientificName), model.ID, ds.speciesLabelTypeID, ds.avesClassID)
+	label, err := ds.label.GetOrCreate(ctx, extractScientificName(note.ScientificName), model.ID, labelTypeID, taxonomicClassID)
 	if err != nil {
 		return fmt.Errorf("failed to get/create label: %w", err)
 	}
@@ -486,17 +513,13 @@ func (ds *Datastore) Save(note *datastore.Note, results []datastore.Results) err
 	// Uses batch operation to avoid N+1 queries.
 	var predLabels []*entities.Label
 	if len(results) > 0 {
-		// Collect species names for batch resolution.
-		// Results.Species may contain concatenated "ScientificName_CommonName" format
-		// from legacy code (see AdditionalResultsToDatastoreResults). Extract only
-		// the scientific name portion for v2 label storage.
 		speciesNames := make([]string, len(results))
 		for i, r := range results {
 			speciesNames[i] = extractScientificName(r.Species)
 		}
 
 		// Batch resolve all labels (returns map[scientificName]*Label)
-		labelMap, err := ds.label.BatchGetOrCreate(ctx, speciesNames, model.ID, ds.speciesLabelTypeID, ds.avesClassID)
+		labelMap, err := ds.label.BatchGetOrCreate(ctx, speciesNames, model.ID, labelTypeID, taxonomicClassID)
 		if err != nil {
 			return fmt.Errorf("failed to batch get/create prediction labels: %w", err)
 		}

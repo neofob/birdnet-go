@@ -82,12 +82,13 @@ const (
 )
 
 // ValidAudioModels contains recognized AI model identifiers.
-// Empty string is also valid (defaults to birdnet).
+// Empty string is also valid (defaults to the language pipeline).
 var ValidAudioModels = map[string]bool{
-	"":         true, // default (birdnet)
-	"birdnet":  true,
-	"perch_v2": true,
-	"bat":      true,
+	"":              true, // default (language_fake)
+	"language_fake": true,
+	"birdnet":       true,
+	"perch_v2":      true,
+	"bat":           true,
 }
 
 // Quiet hours validation constants

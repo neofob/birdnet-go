@@ -17,6 +17,7 @@ const (
 	LabelTypeNoise       = "noise"
 	LabelTypeEnvironment = "environment"
 	LabelTypeDevice      = "device"
+	LabelTypeLanguage    = "language"
 	LabelTypeUnknown     = "unknown"
 )
 
@@ -80,7 +81,8 @@ func ParseRawLabel(rawLabel string, modelType entities.ModelType) ParsedLabel {
 	case entities.ModelTypeBat:
 		parsed.TaxonomicClass = "Chiroptera"
 	case entities.ModelTypeMulti:
-		// Multi-type models don't have a specific taxonomic class
+	case entities.ModelTypeLanguage:
+		parsed.LabelType = LabelTypeLanguage
 	}
 
 	// Split on underscore to separate scientific name from common name

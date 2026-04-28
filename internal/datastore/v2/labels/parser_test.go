@@ -126,8 +126,6 @@ func TestIsValidScientificName(t *testing.T) {
 }
 
 func TestNonSpeciesLabels_Coverage(t *testing.T) {
-	// Verify all known non-species labels are properly categorized
-	// Iterate directly over NonSpeciesLabels map to ensure test stays in sync
 	for label, expectedType := range NonSpeciesLabels {
 		t.Run(label, func(t *testing.T) {
 			result := ParseRawLabel(label, entities.ModelTypeBird)
@@ -135,4 +133,22 @@ func TestNonSpeciesLabels_Coverage(t *testing.T) {
 			assert.Equal(t, label, result.ScientificName)
 		})
 	}
+}
+
+func TestParseRawLabel_LanguageModel(t *testing.T) {
+	result := ParseRawLabel("English", entities.ModelTypeLanguage)
+
+	assert.Equal(t, "English", result.ScientificName)
+	assert.Empty(t, result.CommonName)
+	assert.Equal(t, LabelTypeLanguage, result.LabelType)
+	assert.Empty(t, result.TaxonomicClass)
+}
+
+func TestParseRawLabel_LanguageModel_WithCommonName(t *testing.T) {
+	result := ParseRawLabel("English_English", entities.ModelTypeLanguage)
+
+	assert.Equal(t, "English", result.ScientificName)
+	assert.Equal(t, "English", result.CommonName)
+	assert.Equal(t, LabelTypeLanguage, result.LabelType)
+	assert.Empty(t, result.TaxonomicClass)
 }

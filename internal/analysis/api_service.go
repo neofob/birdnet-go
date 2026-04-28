@@ -10,6 +10,7 @@ import (
 	"github.com/tphakala/birdnet-go/internal/audiocore"
 	"github.com/tphakala/birdnet-go/internal/audiocore/engine"
 	"github.com/tphakala/birdnet-go/internal/backup"
+	"github.com/tphakala/birdnet-go/internal/classifier"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
@@ -29,11 +30,11 @@ const apiServerServiceName = "api-server"
 // as an app.Service. It owns the lifecycle of the API server, processor, bird image
 // cache, SunCalc, OAuth2 server, system monitor, and the control/audio-level channels.
 type APIServerService struct {
-	settings   *conf.Settings
-	bnAnalyzer *BirdNETAnalyzer
-	dbService  *DatabaseService
-	metrics    *observability.Metrics
-	engine     *engine.AudioEngine
+	settings           *conf.Settings
+	classifierAnalyzer *ClassifierAnalyzer
+	dbService          *DatabaseService
+	metrics            *observability.Metrics
+	engine             *engine.AudioEngine
 
 	server         *api.Server
 	proc           *processor.Processor
@@ -47,13 +48,13 @@ type APIServerService struct {
 
 // NewAPIServerService creates a new APIServerService with the given dependencies.
 // The service is not started; call Start() to initialize all subsystems.
-func NewAPIServerService(settings *conf.Settings, bnAnalyzer *BirdNETAnalyzer, dbService *DatabaseService, metrics *observability.Metrics, audioEngine *engine.AudioEngine) *APIServerService {
+func NewAPIServerService(settings *conf.Settings, classifierAnalyzer *ClassifierAnalyzer, dbService *DatabaseService, metrics *observability.Metrics, audioEngine *engine.AudioEngine) *APIServerService {
 	return &APIServerService{
-		settings:   settings,
-		bnAnalyzer: bnAnalyzer,
-		dbService:  dbService,
-		metrics:    metrics,
-		engine:     audioEngine,
+		settings:           settings,
+		classifierAnalyzer: classifierAnalyzer,
+		dbService:          dbService,
+		metrics:            metrics,
+		engine:             audioEngine,
 	}
 }
 
@@ -97,8 +98,8 @@ func (s *APIServerService) Start(_ context.Context) error {
 			Context("operation", "start_precondition_check").
 			Build()
 	}
-	if s.bnAnalyzer == nil || s.bnAnalyzer.BirdNET() == nil {
-		return errors.Newf("api-server requires an initialized birdnet model; birdnet-analyzer service must be started first").
+	if s.classifierAnalyzer == nil || s.classifierAnalyzer.Classifier() == nil {
+		return errors.Newf("api-server requires an initialized classifier; classifier-analyzer service must be started first").
 			Component("analysis.api_service").
 			Category(errors.CategorySystem).
 			Context("operation", "start_precondition_check").
@@ -106,13 +107,15 @@ func (s *APIServerService) Start(_ context.Context) error {
 	}
 
 	dataStore := s.dbService.DataStore()
-	bn := s.bnAnalyzer.BirdNET()
+	bn := s.classifierAnalyzer.Classifier()
 
 	// Update BirdNET model loaded metric.
 	UpdateBirdNETModelLoadedMetric(s.metrics.BirdNET, bn)
 
-	// Initialize bird image cache.
-	s.birdImageCache = initBirdImageCache(s.settings, dataStore, s.metrics)
+	// Initialize bird image cache only for BirdNET compatibility mode.
+	if !classifier.UseFakeLanguagePipeline(s.settings) {
+		s.birdImageCache = initBirdImageCache(s.settings, dataStore, s.metrics)
+	}
 
 	// Create SunCalc for sunrise/sunset calculations.
 	s.sunCalc = suncalc.NewSunCalc(s.settings.BirdNET.Latitude, s.settings.BirdNET.Longitude)

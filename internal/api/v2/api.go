@@ -588,6 +588,7 @@ func (c *Controller) initRoutes() {
 		{"model routes", c.initModelRoutes},
 		{"insights routes", c.initInsightsRoutes},
 		{"tls routes", c.initTLSRoutes},
+		{"classifications routes", c.initClassificationRoutes},
 	}
 
 	for _, initializer := range routeInitializers {

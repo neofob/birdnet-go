@@ -92,6 +92,7 @@ func TestKnownConfigIDs(t *testing.T) {
 	assert.True(t, ids["birdnet"])
 	assert.True(t, ids["birdnet_v3.0"])
 	assert.True(t, ids["perch_v2"])
+	assert.True(t, ids["language_fake"])
 	assert.False(t, ids["unknown"])
 }
 
@@ -109,6 +110,10 @@ func TestGetModelSpec(t *testing.T) {
 	spec, ok = GetModelSpec("Perch_V2")
 	require.True(t, ok)
 	assert.Equal(t, 32000, spec.SampleRate)
+
+	spec, ok = GetModelSpec("Language_Fake")
+	require.True(t, ok)
+	assert.Equal(t, 48000, spec.SampleRate)
 
 	_, ok = GetModelSpec("nonexistent")
 	assert.False(t, ok)
@@ -184,10 +189,12 @@ func TestResolveConfigModelID(t *testing.T) {
 		{"birdnet maps to registry ID", "birdnet", "BirdNET_V2.4", true},
 		{"birdnet_v3.0 maps to registry ID", "birdnet_v3.0", "BirdNET_V3.0", true},
 		{"perch_v2 maps to registry ID", "perch_v2", "Perch_V2", true},
+		{"language_fake maps to registry ID", "language_fake", "Language_Fake", true},
 		{"unknown returns false", "unknown_model", "", false},
 		{"case insensitive", "BIRDNET", "BirdNET_V2.4", true},
 		{"case insensitive birdnet v3", "BIRDNET_V3.0", "BirdNET_V3.0", true},
 		{"case insensitive perch", "PERCH_V2", "Perch_V2", true},
+		{"case insensitive language fake", "LANGUAGE_FAKE", "Language_Fake", true},
 	}
 
 	for _, tt := range tests {

@@ -6,12 +6,13 @@ import (
 	"github.com/tphakala/birdnet-go/internal/datastore"
 )
 
-// Results represents the data structure for storing BirdNET inference results
+// Results represents a classifier output message queued for downstream
+// detection processing. The struct name is kept for API compatibility.
 type Results struct {
 	StartTime       time.Time             // Time when the analysis started (back-dated for clip export)
 	AudioCapturedAt time.Time             // Wall-clock time when the 3s audio chunk was ready for analysis
 	PCMdata         []byte                // Raw PCM audio data
-	Results         []datastore.Results   // Slice of analysis results
+	Results         []Classification      // Slice of classifier results
 	ElapsedTime     time.Duration         // Time taken for analysis
 	ClipName        string                // Name of the audio clip
 	Source          datastore.AudioSource // Audio source with ID, SafeString, and DisplayName
@@ -50,7 +51,7 @@ func (r Results) Copy() Results { //nolint:gocritic // This is a copy function, 
 
 	// Deep copy Results slice
 	if r.Results != nil {
-		newCopy.Results = make([]datastore.Results, len(r.Results))
+		newCopy.Results = make([]Classification, len(r.Results))
 		for i, result := range r.Results {
 			newCopy.Results[i] = result.Copy()
 		}

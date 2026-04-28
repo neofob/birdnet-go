@@ -10,30 +10,53 @@ import (
 	"github.com/tphakala/birdnet-go/internal/logger"
 )
 
-// birdNETAnalyzerName is the service name used for logging and diagnostics.
-const birdNETAnalyzerName = "birdnet-analyzer"
+// classifierAnalyzerName is the service name used for logging and diagnostics.
+const classifierAnalyzerName = "classifier-analyzer"
 
-// BirdNETAnalyzer wraps BirdNET model initialization as an app.Service
-// and implements app.Analyzer for source-to-analyzer routing.
-type BirdNETAnalyzer struct {
+// ClassifierAnalyzer wraps classifier initialization as an app.Service and
+// implements app.Analyzer for source-to-analyzer routing.
+type ClassifierAnalyzer struct {
 	settings *conf.Settings
 	bn       *classifier.Orchestrator
 }
 
-// NewBirdNETAnalyzer creates a new BirdNETAnalyzer with the given settings.
-// The analyzer is not started; call Start() to initialize the BirdNET model.
-func NewBirdNETAnalyzer(settings *conf.Settings) *BirdNETAnalyzer {
-	return &BirdNETAnalyzer{settings: settings}
+// BirdNETAnalyzer is a compatibility alias for callers not yet migrated to
+// ClassifierAnalyzer.
+type BirdNETAnalyzer = ClassifierAnalyzer
+
+// NewClassifierAnalyzer creates a new ClassifierAnalyzer with the given settings.
+// The analyzer is not started; call Start() to initialize the classifier.
+func NewClassifierAnalyzer(settings *conf.Settings) *ClassifierAnalyzer {
+	return &ClassifierAnalyzer{settings: settings}
+}
+
+// NewBirdNETAnalyzer creates a classifier analyzer for legacy callers.
+func NewBirdNETAnalyzer(settings *conf.Settings) *ClassifierAnalyzer {
+	return NewClassifierAnalyzer(settings)
 }
 
 // Name returns a human-readable identifier for logging and diagnostics.
-func (a *BirdNETAnalyzer) Name() string {
-	return birdNETAnalyzerName
+func (a *ClassifierAnalyzer) Name() string {
+	return classifierAnalyzerName
 }
 
-// Start initializes the BirdNET interpreter and builds the species range filter.
-// Model initialization failures are non-retryable (missing files, insufficient resources).
-func (a *BirdNETAnalyzer) Start(_ context.Context) error {
+// Start initializes the configured classifier and builds the species range
+// filter only when BirdNET is explicitly selected. The placeholder language
+// pipeline is the default primary classifier.
+func (a *ClassifierAnalyzer) Start(_ context.Context) error {
+	if classifier.UseFakeLanguagePipeline(a.settings) {
+		bn, err := classifier.NewFakeLanguageOrchestrator(a.settings)
+		if err != nil {
+			return errors.New(err).
+				Component("analysis").
+				Category(errors.CategoryModelInit).
+				Context("operation", "initialize_language_pipeline").
+				Build()
+		}
+		a.bn = bn
+		return nil
+	}
+
 	bn, err := classifier.NewOrchestrator(a.settings)
 	if err != nil {
 		return errors.New(err).
@@ -56,13 +79,13 @@ func (a *BirdNETAnalyzer) Start(_ context.Context) error {
 	return nil
 }
 
-// Stop releases BirdNET model resources. It is safe to call before Start()
-// or multiple times.
-func (a *BirdNETAnalyzer) Stop(_ context.Context) error {
+// Stop releases classifier resources. It is safe to call before Start() or
+// multiple times.
+func (a *ClassifierAnalyzer) Stop(_ context.Context) error {
 	if a.bn != nil {
 		log := GetLogger()
-		log.Info("stopping BirdNET model",
-			logger.String("service", birdNETAnalyzerName))
+		log.Info("stopping classifier",
+			logger.String("service", classifierAnalyzerName))
 		a.bn.Delete()
 		a.bn = nil
 	}
@@ -70,13 +93,20 @@ func (a *BirdNETAnalyzer) Stop(_ context.Context) error {
 }
 
 // Compatible returns true if this analyzer can process audio from the given source.
-// BirdNETAnalyzer handles all source types except ultrasonic (bat detection).
-func (a *BirdNETAnalyzer) Compatible(source app.AudioSource) bool {
+// ClassifierAnalyzer handles all source types except ultrasonic (bat detection).
+func (a *ClassifierAnalyzer) Compatible(source app.AudioSource) bool {
 	return source.Type != app.SourceTypeUltrasonic
+}
+
+// Classifier returns the underlying classifier orchestrator, or nil if the
+// analyzer has not been started. Callers must not use the returned pointer
+// after Stop().
+func (a *ClassifierAnalyzer) Classifier() *classifier.Orchestrator {
+	return a.bn
 }
 
 // BirdNET returns the underlying classifier orchestrator, or nil if the analyzer
 // has not been started. Callers must not use the returned pointer after Stop().
-func (a *BirdNETAnalyzer) BirdNET() *classifier.Orchestrator {
-	return a.bn
+func (a *ClassifierAnalyzer) BirdNET() *classifier.Orchestrator {
+	return a.Classifier()
 }

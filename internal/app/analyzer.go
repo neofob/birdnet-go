@@ -1,8 +1,8 @@
 package app
 
 // Analyzer processes audio frames from compatible sources.
-// This is a stub interface for multi-model support (BirdNET, Perch v2, bat models).
-// For now, only BirdNETAnalyzer will implement this.
+// This is a stub interface for multi-model support (language, BirdNET, Perch v2,
+// bat models). For now, ClassifierAnalyzer implements this.
 type Analyzer interface {
 	Service
 	// Compatible returns true if this analyzer can process audio from the given source.

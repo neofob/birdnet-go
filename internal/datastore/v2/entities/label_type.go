@@ -15,5 +15,6 @@ func DefaultLabelTypes() []LabelType {
 		{Name: "noise"},
 		{Name: "environment"},
 		{Name: "device"},
+		{Name: "language"},
 	}
 }

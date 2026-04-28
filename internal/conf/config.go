@@ -93,8 +93,8 @@ type AudioSourceConfig struct {
 	Name       string             `yaml:"name" json:"name" mapstructure:"name"`                                    // Required: descriptive name like "Front Yard Mic"
 	Device     string             `yaml:"device" json:"device" mapstructure:"device"`                              // Required: ALSA device ID (e.g., "sysdefault", "hw:0,0", "Loopback")
 	Gain       float64            `yaml:"gain" json:"gain" mapstructure:"gain"`                                    // Input gain in dB (0 = no adjustment)
-	Model      string             `yaml:"model,omitempty" json:"model,omitempty" mapstructure:"model"`             // AI model: "" or "birdnet" (default), "perch_v2", "bat" (future)
-	Models     []string           `yaml:"models,omitempty" json:"models,omitempty" mapstructure:"models"`          // Model IDs for this source (e.g., ["birdnet", "perch_v2"])
+	Model      string             `yaml:"model,omitempty" json:"model,omitempty" mapstructure:"model"`             // Legacy AI model: "language_fake" (default), "birdnet", "perch_v2"
+	Models     []string           `yaml:"models,omitempty" json:"models,omitempty" mapstructure:"models"`          // Model IDs for this source (e.g., ["language_fake"])
 	Equalizer  *EqualizerSettings `yaml:"equalizer,omitempty" json:"equalizer,omitempty" mapstructure:"equalizer"` // Per-source EQ (nil = use global)
 	QuietHours QuietHoursConfig   `yaml:"quietHours" json:"quietHours" mapstructure:"quietHours"`                  // Per-source quiet hours
 }
@@ -550,7 +550,7 @@ type StreamConfig struct {
 	Type       string           `yaml:"type" json:"type" mapstructure:"type"`                           // Stream type: rtsp, http, hls, rtmp, udp
 	Transport  string           `yaml:"transport" json:"transport" mapstructure:"transport"`            // Transport: tcp or udp (for RTSP/RTMP)
 	QuietHours QuietHoursConfig `yaml:"quietHours" json:"quietHours" mapstructure:"quietHours"`         // Quiet hours configuration
-	Models     []string         `yaml:"models,omitempty" json:"models,omitempty" mapstructure:"models"` // Model IDs for this stream (e.g., ["birdnet", "perch_v2"])
+	Models     []string         `yaml:"models,omitempty" json:"models,omitempty" mapstructure:"models"` // Model IDs for this stream (e.g., ["language_fake"])
 }
 
 // RTSPSettings contains settings for audio streaming (supports multiple protocols).
@@ -1134,9 +1134,12 @@ type PerchConfig struct {
 	Threshold float64 `yaml:"threshold" json:"threshold"`                     // confidence threshold for detections
 }
 
+// DefaultPrimaryModelID is the default classifier selected for fresh configs.
+const DefaultPrimaryModelID = "language_fake"
+
 // ModelsConfig holds global model enablement settings.
 type ModelsConfig struct {
-	Enabled []string `yaml:"enabled" json:"enabled"` // list of model IDs to load (e.g., "birdnet", "perch_v2")
+	Enabled []string `yaml:"enabled" json:"enabled"` // list of model IDs to load (e.g., "language_fake", "birdnet")
 }
 
 // BasicAuth holds settings for the password authentication
@@ -2104,10 +2107,11 @@ func (s *Settings) MigrateAudioSourceConfig() bool {
 
 // MigrateSourceModels migrates the legacy singular Model field to the new
 // Models list on AudioSourceConfig and StreamConfig. Sources with neither
-// Model nor Models set default to ["birdnet"]. Returns true if any migration
-// occurred.
+// Model nor Models set default to the first enabled model, falling back to the
+// language pipeline default. Returns true if any migration occurred.
 func (s *Settings) MigrateSourceModels() bool {
 	migrated := false
+	defaultModel := s.defaultSourceModelID()
 
 	for i := range s.Realtime.Audio.Sources {
 		src := &s.Realtime.Audio.Sources[i]
@@ -2118,7 +2122,7 @@ func (s *Settings) MigrateSourceModels() bool {
 			src.Models = []string{src.Model}
 			src.Model = ""
 		} else {
-			src.Models = []string{"birdnet"}
+			src.Models = []string{defaultModel}
 		}
 		migrated = true
 	}
@@ -2128,11 +2132,21 @@ func (s *Settings) MigrateSourceModels() bool {
 		if len(stream.Models) > 0 {
 			continue
 		}
-		stream.Models = []string{"birdnet"}
+		stream.Models = []string{defaultModel}
 		migrated = true
 	}
 
 	return migrated
+}
+
+func (s *Settings) defaultSourceModelID() string {
+	for _, modelID := range s.Models.Enabled {
+		modelID = strings.TrimSpace(modelID)
+		if modelID != "" {
+			return modelID
+		}
+	}
+	return DefaultPrimaryModelID
 }
 
 // ValidateModelConfig checks model-related configuration for errors and
@@ -2157,6 +2171,10 @@ func (s *Settings) ValidateModelConfig(knownIDs map[string]bool) []string {
 
 	if enabledSet["perch_v2"] && !s.Perch.Enabled {
 		issues = append(issues, "error: perch_v2 in models.enabled but perch.enabled is false")
+	}
+
+	if enabledSet["language_fake"] && len(s.Models.Enabled) > 1 {
+		issues = append(issues, "error: language_fake in models.enabled cannot be combined with other models")
 	}
 
 	if s.Perch.Enabled && !enabledSet["perch_v2"] {
@@ -2200,7 +2218,7 @@ func (s *Settings) applyModelValidation() error {
 	// Default known IDs — matches classifier.KnownConfigIDs() at compile time.
 	// This fallback is used during config loading before the classifier package
 	// is available. The orchestrator re-validates with the authoritative list.
-	knownIDs := map[string]bool{"birdnet": true, "perch_v2": true}
+	knownIDs := map[string]bool{"birdnet": true, "perch_v2": true, "language_fake": true}
 	modelIssues := s.ValidateModelConfig(knownIDs)
 	var fatalErrors []string
 	for _, issue := range modelIssues {

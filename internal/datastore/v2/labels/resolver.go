@@ -164,10 +164,18 @@ func (r *Resolver) ResolveBatch(ctx context.Context, model *entities.AIModel, ra
 		return result, nil
 	}
 
-	// Get default label type ID for species (most common case for batch)
-	speciesTypeID, ok := r.labelTypeIDs[LabelTypeSpecies]
+	// Determine default label type based on model type.
+	var defaultLabelType string
+	switch model.ModelType {
+	case entities.ModelTypeLanguage:
+		defaultLabelType = LabelTypeLanguage
+	default:
+		defaultLabelType = LabelTypeSpecies
+	}
+
+	labelTypeID, ok := r.labelTypeIDs[defaultLabelType]
 	if !ok {
-		return nil, errors.New("species label type not initialized")
+		return nil, errors.New("label type not initialized: " + defaultLabelType)
 	}
 
 	// Get default taxonomic class ID based on model type
@@ -182,7 +190,7 @@ func (r *Resolver) ResolveBatch(ctx context.Context, model *entities.AIModel, ra
 			defaultTaxClassID = &id
 		}
 	case entities.ModelTypeMulti:
-		// Multi-type models can detect multiple taxonomic classes; no default
+	case entities.ModelTypeLanguage:
 	}
 
 	// Collect scientific names for batch operation
@@ -192,7 +200,7 @@ func (r *Resolver) ResolveBatch(ctx context.Context, model *entities.AIModel, ra
 	}
 
 	// Batch get or create labels
-	labels, err := r.labelRepo.BatchGetOrCreate(ctx, scientificNames, model.ID, speciesTypeID, defaultTaxClassID)
+	labels, err := r.labelRepo.BatchGetOrCreate(ctx, scientificNames, model.ID, labelTypeID, defaultTaxClassID)
 	if err != nil {
 		return nil, fmt.Errorf("batch resolve labels: %w", err)
 	}

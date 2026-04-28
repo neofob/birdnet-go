@@ -14,12 +14,23 @@ import (
 // when the suncalc instance becomes available.
 func (p *Processor) SetSunCalc(sc *suncalc.SunCalc) {
 	p.sunCalc = sc
+	if p.isLanguagePipelineMode() {
+		return
+	}
 	p.initDaylightFilter()
 }
 
 // initDaylightFilter resolves the daylight filter species list at startup.
 // Follows the same pattern as initExtendedCapture(). Safe to re-call on settings refresh.
 func (p *Processor) initDaylightFilter() {
+	if p.isLanguagePipelineMode() {
+		p.daylightFilterMu.Lock()
+		p.daylightFilterAll = false
+		p.daylightFilterSpecies = nil
+		p.daylightFilterMu.Unlock()
+		return
+	}
+
 	if !p.Settings.Realtime.DaylightFilter.Enabled {
 		p.daylightFilterMu.Lock()
 		p.daylightFilterAll = false

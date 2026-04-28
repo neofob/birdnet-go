@@ -70,9 +70,10 @@ type DualWriteRepository struct {
 	lastDirtyIDTelemetry time.Time // Rate-limits dirty ID telemetry
 
 	// Cached lookup table IDs
-	speciesLabelTypeID uint
-	avesClassID        uint
-	chiropteraClassID  uint
+	speciesLabelTypeID  uint
+	languageLabelTypeID uint
+	avesClassID         uint
+	chiropteraClassID   uint
 }
 
 // DualWriteConfig configures the dual-write repository.
@@ -86,9 +87,10 @@ type DualWriteConfig struct {
 	Logger       logger.Logger
 
 	// Cached lookup table IDs (required)
-	SpeciesLabelTypeID uint
-	AvesClassID        uint
-	ChiropteraClassID  uint
+	SpeciesLabelTypeID  uint
+	LanguageLabelTypeID uint
+	AvesClassID         uint
+	ChiropteraClassID   uint
 }
 
 // NewDualWriteRepository creates a new dual-write repository.
@@ -106,7 +108,8 @@ func NewDualWriteRepository(cfg *DualWriteConfig) *DualWriteRepository {
 		semaphore:          make(chan struct{}, defaultMaxConcurrentWrites),
 		writeTimeout:       defaultWriteTimeout,
 		shutdownCh:         make(chan struct{}),
-		speciesLabelTypeID: cfg.SpeciesLabelTypeID,
+		speciesLabelTypeID:  cfg.SpeciesLabelTypeID,
+		languageLabelTypeID: cfg.LanguageLabelTypeID,
 		avesClassID:        cfg.AvesClassID,
 		chiropteraClassID:  cfg.ChiropteraClassID,
 	}
@@ -776,6 +779,7 @@ func (dw *DualWriteRepository) conversionDeps() *ConversionDeps {
 		SourceRepo:         dw.sourceRepo,
 		Logger:             dw.logger,
 		SpeciesLabelTypeID: dw.speciesLabelTypeID,
+		LanguageLabelTypeID: dw.languageLabelTypeID,
 		AvesClassID:        dw.avesClassID,
 		ChiropteraClassID:  dw.chiropteraClassID,
 	}
@@ -801,9 +805,15 @@ func (dw *DualWriteRepository) convertToPredictions(ctx context.Context, detecti
 			taxonomicClassID = &dw.chiropteraClassID
 		}
 	case entities.ModelTypeMulti:
-		// Multi-type models can detect multiple taxonomic classes; no default
+	case entities.ModelTypeLanguage:
 	}
-	return ConvertToPredictions(ctx, detectionID, modelID, dw.speciesLabelTypeID, taxonomicClassID, additional, dw.labelRepo)
+
+	labelTypeID := dw.speciesLabelTypeID
+	if modelType == entities.ModelTypeLanguage {
+		labelTypeID = dw.languageLabelTypeID
+	}
+
+	return ConvertToPredictions(ctx, detectionID, modelID, labelTypeID, taxonomicClassID, additional, dw.labelRepo)
 }
 
 // convertFromV2Detection converts a v2 Detection entity to a domain Result.

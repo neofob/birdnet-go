@@ -25,12 +25,12 @@ func TestAPIServerService_Start_FailsFastWithNilDataStore(t *testing.T) {
 	t.Parallel()
 
 	settings := &conf.Settings{}
-	bn := NewBirdNETAnalyzer(settings)
+	classifierAnalyzer := NewClassifierAnalyzer(settings)
 	db := NewDatabaseService(settings, nil)
 	// db.DataStore() returns nil since Start() was never called.
 	metrics, _ := observability.NewMetrics()
 
-	svc := NewAPIServerService(settings, bn, db, metrics, nil)
+	svc := NewAPIServerService(settings, classifierAnalyzer, db, metrics, nil)
 	err := svc.Start(t.Context())
 	require.Error(t, err, "Start() should fail when DataStore is nil")
 	assert.Contains(t, err.Error(), "datastore", "error should mention datastore")
@@ -40,8 +40,8 @@ func TestAPIServerService_Start_FailsFastWithNilBirdNET(t *testing.T) {
 	t.Parallel()
 
 	settings := &conf.Settings{}
-	bn := NewBirdNETAnalyzer(settings)
-	// bn.BirdNET() returns nil since Start() was never called.
+	classifierAnalyzer := NewClassifierAnalyzer(settings)
+	// classifierAnalyzer.Classifier() returns nil since Start() was never called.
 
 	db := NewDatabaseService(settings, nil)
 	// Set a non-nil dataStore so the first check passes.
@@ -49,10 +49,10 @@ func TestAPIServerService_Start_FailsFastWithNilBirdNET(t *testing.T) {
 
 	metrics, _ := observability.NewMetrics()
 
-	svc := NewAPIServerService(settings, bn, db, metrics, nil)
+	svc := NewAPIServerService(settings, classifierAnalyzer, db, metrics, nil)
 	err := svc.Start(t.Context())
-	require.Error(t, err, "Start() should fail when BirdNET is nil")
-	assert.Contains(t, err.Error(), "birdnet", "error should mention birdnet")
+	require.Error(t, err, "Start() should fail when classifier is nil")
+	assert.Contains(t, err.Error(), "classifier", "error should mention classifier")
 }
 
 func TestAPIServerService_Stop_NilSafe(t *testing.T) {

@@ -2,11 +2,15 @@ package processor
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tphakala/birdnet-go/internal/audiocore"
+	"github.com/tphakala/birdnet-go/internal/classifier"
+	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/datastore"
+	"github.com/tphakala/birdnet-go/internal/detection"
 )
 
 func TestConvertToAdditionalResults_DeduplicatesByScientificName(t *testing.T) {
@@ -128,6 +132,67 @@ func TestConvertToAdditionalResults_DeduplicatesByScientificName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProcessResults_LanguageModeIgnoresSpeciesIncludeExclude(t *testing.T) {
+	t.Parallel()
+
+	settings := conf.GetTestSettings()
+	settings.Models.Enabled = []string{"language_fake"}
+	settings.BirdNET.Threshold = 0.5
+	settings.Realtime.Species.Exclude = []string{"English"}
+	settings.Realtime.Species.Include = []string{"French"}
+
+	orchestrator, err := classifier.NewFakeLanguageOrchestrator(settings)
+	require.NoError(t, err)
+	t.Cleanup(func() { orchestrator.Delete() })
+
+	p := &Processor{Settings: settings, Bn: orchestrator}
+	item := classifier.Results{
+		StartTime: time.Now(),
+		Source:    datastore.AudioSource{ID: "source", SafeString: "source", DisplayName: "source"},
+		ModelID:   "Language_Fake",
+		Results: []classifier.Classification{
+			{Species: "English_English", Confidence: 0.99},
+		},
+	}
+
+	detections := p.processResults(item)
+	require.Len(t, detections, 1)
+	assert.Equal(t, "English", detections[0].Result.Species.CommonName)
+	assert.InDelta(t, 0, detections[0].Result.Occurrence, 0.001)
+}
+
+func TestShouldDiscardDetection_LanguageModeSkipsBirdOnlyFilters(t *testing.T) {
+	t.Parallel()
+
+	settings := conf.GetTestSettings()
+	settings.Models.Enabled = []string{"language_fake"}
+	settings.Realtime.PrivacyFilter.Enabled = true
+	settings.Realtime.DogBarkFilter.Enabled = true
+	settings.Realtime.DaylightFilter.Enabled = true
+
+	now := time.Now()
+	p := &Processor{
+		Settings:           settings,
+		LastHumanDetection: map[string]time.Time{"source": now.Add(time.Second)},
+		LastDogDetection:   map[string]time.Time{"source": now.Add(time.Second)},
+	}
+
+	item := &PendingDetection{
+		Detection: Detections{
+			Result: detection.Result{
+				Species: detection.Species{ScientificName: "English", CommonName: "English"},
+			},
+		},
+		Source:        "source",
+		FirstDetected: now,
+		Count:         1,
+	}
+
+	shouldDiscard, reason := p.shouldDiscardDetection(item, 1)
+	assert.False(t, shouldDiscard)
+	assert.Empty(t, reason)
 }
 
 // TestProcessor_resolveAudioSource_EnrichesFromRegistry guards the enrichment

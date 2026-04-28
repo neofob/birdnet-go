@@ -19,12 +19,14 @@ const (
 	ModelNameBirdNETv24 = "BirdNET v2.4"
 	ModelNameBirdNETv30 = "BirdNET v3.0"
 	ModelNamePerchV2    = "Google Perch v2"
+	ModelNameLanguage   = "Language Pipeline"
 )
 
 // Inference backend identifiers.
 const (
 	BackendTFLite = "TFLite"
 	BackendONNX   = "ONNX"
+	BackendFake   = "Fake"
 )
 
 // ModelInfo represents metadata about a classifier model.
@@ -93,6 +95,17 @@ var ModelRegistry = map[string]ModelInfo{
 		Spec:             ModelSpec{SampleRate: 32000, ClipLength: 5 * time.Second},
 		ConfigAliases:    []string{"perch_v2"},
 		NumSpecies:       14795,
+	},
+	"Language_Fake": {
+		ID:               "Language_Fake",
+		Name:             ModelNameLanguage,
+		Backend:          BackendFake,
+		DetectionName:    "Language",
+		DetectionVersion: "fake",
+		Description:      "Hardcoded language classification pipeline placeholder",
+		Spec:             ModelSpec{SampleRate: 48000, ClipLength: 3 * time.Second},
+		ConfigAliases:    []string{"language_fake"},
+		NumSpecies:       1,
 	},
 }
 

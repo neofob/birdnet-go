@@ -1,12 +1,12 @@
-// Package detection provides the core domain model for bird detection events.
-// This package defines Result as the single source of truth for detection data
-// used throughout the application. External serialization (API, MQTT, database)
-// is handled by boundary-specific DTOs and entities.
+// Package detection provides the core domain model for audio classification events.
+// This package defines Result as the single source of truth for persisted event
+// data used throughout the application. External serialization (API, MQTT,
+// database) is handled by boundary-specific DTOs and entities.
 package detection
 
 import "time"
 
-// Result represents a single bird detection event.
+// Result represents a single audio classification event.
 // This is the core domain model used throughout the application.
 // External serialization is handled by boundary-specific DTOs.
 type Result struct {
@@ -25,7 +25,7 @@ type Result struct {
 	BeginTime time.Time
 	EndTime   time.Time
 
-	// Species identification
+	// Classifier label. This remains species-shaped for persistence/UI compatibility.
 	Species    Species
 	Confidence float64
 
@@ -61,9 +61,9 @@ type Comment struct {
 	UpdatedAt time.Time
 }
 
-// AdditionalResult represents a secondary species prediction from the same audio chunk.
-// BirdNET may return multiple species predictions for a single 3-second analysis window.
-// The primary (highest confidence) result is in Result.Species/Confidence.
+// AdditionalResult represents a secondary classifier prediction from the same audio chunk.
+// The primary (highest confidence) result is in Result.Species/Confidence for
+// compatibility with the existing persistence schema.
 // Additional predictions are stored separately for reference.
 type AdditionalResult struct {
 	Species    Species
