@@ -8,6 +8,7 @@
   import { navigation } from '$lib/stores/navigation.svelte';
   import { settingsStore } from '$lib/stores/settings';
   import { getFriendlyAudioSourceName } from '$lib/utils/audioSourceLabel';
+  import { isLanguageDetection } from '$lib/utils/speciesUtils';
 
   interface Props {
     detection: Detection;
@@ -21,6 +22,8 @@
   }
 
   let { detection, onDetailsClick, onPlayMobileAudio, className = '' }: Props = $props();
+
+  let isLang = $derived(isLanguageDetection(detection.commonName, detection.scientificName));
 
   // Legacy dispatcher removed
 
@@ -68,11 +71,19 @@
     <div class="flex items-start gap-3">
       <div class="flex-1 min-w-0">
         <div class="text-base font-semibold leading-tight truncate">
+          {#if isLang}
+            <span
+              class="text-xs uppercase tracking-wider text-[var(--color-primary)] font-semibold mr-1"
+              >Language</span
+            >
+          {/if}
           {detection.commonName}
         </div>
-        <div class="text-xs opacity-70 truncate">
-          {detection.scientificName}
-        </div>
+        {#if detection.scientificName}
+          <div class="text-xs opacity-70 truncate">
+            {detection.scientificName}
+          </div>
+        {/if}
         <div class="mt-1 text-xs opacity-70">
           {detection.date}
           {detection.time}

@@ -77,6 +77,7 @@ Responsive Breakpoints:
   import { untrack } from 'svelte';
   import AnimatedCounter from './AnimatedCounter.svelte';
   import BirdThumbnailPopup from './BirdThumbnailPopup.svelte';
+  import { isLanguageDetection } from '$lib/utils/speciesUtils';
 
   const logger = loggers.ui;
 
@@ -1046,6 +1047,12 @@ Responsive Breakpoints:
                     class="text-sm hover:text-[var(--color-primary)] cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
+                    {#if isLanguageDetection(item.common_name, item.scientific_name)}
+                      <span
+                        class="text-xs uppercase tracking-wider text-[var(--color-primary)] font-semibold shrink-0 mr-1"
+                        >Lang</span
+                      >
+                    {/if}
                     <span class="truncate flex-1">{item.common_name}</span>
                     {#if item.is_new_species}
                       <span

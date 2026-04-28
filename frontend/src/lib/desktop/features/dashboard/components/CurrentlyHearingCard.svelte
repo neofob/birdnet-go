@@ -17,6 +17,7 @@ Props:
   import { untrack } from 'svelte';
   import { t } from '$lib/i18n';
   import type { PendingDetection } from '$lib/types/pending.types';
+  import { isLanguageDetection } from '$lib/utils/speciesUtils';
 
   interface Props {
     detections: PendingDetection[];
@@ -182,6 +183,12 @@ Props:
           <!-- Species info -->
           <div class="flex flex-col">
             <span class="text-sm font-medium leading-tight text-[var(--color-base-content)]">
+              {#if isLanguageDetection(detection.species, detection.scientificName)}
+                <span
+                  class="text-xs uppercase tracking-wider text-[var(--color-primary)] font-semibold mr-1"
+                  >Language</span
+                >
+              {/if}
               {detection.species}
             </span>
             <span class="text-xs text-[var(--color-base-content)]/60">

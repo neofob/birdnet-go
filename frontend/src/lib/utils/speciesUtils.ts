@@ -1,6 +1,17 @@
+const LANGUAGE_CODE_RE = /^[a-z]{2,3}$/;
+
 /**
- * Parsed species name components
+ * Check if a detection is from the language pipeline (Whisper + FastText)
+ * rather than the BirdNET bird classification model.
+ *
+ * Heuristic: language codes are 2-3 lowercase letters (e.g. "en", "fr", "de")
+ * and have no scientific name.
  */
+export function isLanguageDetection(commonName: string, scientificName: string): boolean {
+  if (!commonName) return false;
+  if (scientificName) return false;
+  return LANGUAGE_CODE_RE.test(commonName);
+}
 export interface ParsedSpeciesName {
   scientific: string;
   common: string;

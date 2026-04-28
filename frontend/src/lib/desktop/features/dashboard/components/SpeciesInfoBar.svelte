@@ -15,6 +15,7 @@
   import { Check } from '@lucide/svelte';
   import { cn } from '$lib/utils/cn';
   import { t } from '$lib/i18n';
+  import { isLanguageDetection } from '$lib/utils/speciesUtils';
 
   interface Props {
     detection: Detection;
@@ -22,6 +23,8 @@
   }
 
   let { detection, className = '' }: Props = $props();
+
+  let isLang = $derived(isLanguageDetection(detection.commonName, detection.scientificName));
 
   // Use the server timestamp (RFC3339 with timezone) for accurate relative time.
   // Without a timezone-aware timestamp, relative time cannot be computed correctly
@@ -46,21 +49,29 @@
 </script>
 
 <div class={cn('species-info-bar', className)}>
-  <!-- Species Thumbnail -->
-  <div class="species-thumbnail">
-    <img
-      src={thumbnailUrl}
-      alt={detection.commonName}
-      class="thumbnail-image"
-      loading="lazy"
-      onerror={handleBirdImageError}
-    />
-  </div>
+  <!-- Species Thumbnail (hidden for language detections) -->
+  {#if !isLang}
+    <div class="species-thumbnail">
+      <img
+        src={thumbnailUrl}
+        alt={detection.commonName}
+        class="thumbnail-image"
+        loading="lazy"
+        onerror={handleBirdImageError}
+      />
+    </div>
+  {/if}
 
   <!-- Species Info (flex-1) -->
   <div class="species-details">
     <!-- Name row with verification badge -->
     <div class="species-name-row">
+      {#if isLang}
+        <span
+          class="text-xs uppercase tracking-wider text-[var(--color-primary)] font-semibold mr-1"
+          >Language</span
+        >
+      {/if}
       <span class="species-name">{detection.commonName}</span>
       {#if isVerified}
         <span
@@ -87,8 +98,10 @@
       {/if}
     </div>
 
-    <!-- Scientific name -->
-    <div class="scientific-name">{detection.scientificName}</div>
+    <!-- Scientific name (hidden for language detections) -->
+    {#if detection.scientificName}
+      <div class="scientific-name">{detection.scientificName}</div>
+    {/if}
   </div>
 
   <!-- Time Info (right-aligned) -->

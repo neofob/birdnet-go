@@ -38,6 +38,7 @@
     Sunrise,
     Sunset,
   } from '@lucide/svelte';
+  import { isLanguageDetection } from '$lib/utils/speciesUtils';
 
   // Interface definitions for API responses
   interface SpeciesRarity {
@@ -110,6 +111,10 @@
   let isLoadingTaxonomy = $state(false);
   let detectionError = $state<string | null>(null);
   let imageAttribution = $state<ImageAttribution | null>(null);
+
+  let isLang = $derived(
+    detection ? isLanguageDetection(detection.commonName, detection.scientificName) : false
+  );
 
   // Derived state for subspecies with proper typing
   let subspeciesList = $derived<Subspecies[]>(
@@ -434,47 +439,60 @@
   <section class="detection-hero-grid" aria-labelledby="species-heading">
     <!-- Identity Card -->
     <div class="hero-card hero-identity-card">
-      <h3 class="section-heading">{t('detections.detail.species')}</h3>
+      <h3 class="section-heading">{isLang ? 'Language' : t('detections.detail.species')}</h3>
       <div class="hero-identity-row">
-        <!-- Species thumbnail with credit overlay -->
-        <div class="hero-thumbnail">
-          <img
-            src="/api/v2/media/species-image?name={encodeURIComponent(det.scientificName)}"
-            alt={det.commonName}
-            class="w-full h-full object-contain"
-            onerror={handleBirdImageError}
-            loading="eager"
-          />
-          {#if imageAttribution?.authorName}
-            <div class="thumbnail-credit" aria-label="Image credit: {imageAttribution.authorName}">
-              <Camera size={10} class="credit-icon" />
-              <span class="credit-text">{imageAttribution.authorName}</span>
-              {#if imageAttribution.licenseName}
-                <span class="credit-separator">·</span>
-                {#if imageAttribution.licenseURL}
-                  <a
-                    href={imageAttribution.licenseURL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="credit-license">{imageAttribution.licenseName}</a
-                  >
-                {:else}
-                  <span class="credit-license">{imageAttribution.licenseName}</span>
+        <!-- Species thumbnail with credit overlay (hidden for language detections) -->
+        {#if !isLang}
+          <div class="hero-thumbnail">
+            <img
+              src="/api/v2/media/species-image?name={encodeURIComponent(det.scientificName)}"
+              alt={det.commonName}
+              class="w-full h-full object-contain"
+              onerror={handleBirdImageError}
+              loading="eager"
+            />
+            {#if imageAttribution?.authorName}
+              <div
+                class="thumbnail-credit"
+                aria-label="Image credit: {imageAttribution.authorName}"
+              >
+                <Camera size={10} class="credit-icon" />
+                <span class="credit-text">{imageAttribution.authorName}</span>
+                {#if imageAttribution.licenseName}
+                  <span class="credit-separator">·</span>
+                  {#if imageAttribution.licenseURL}
+                    <a
+                      href={imageAttribution.licenseURL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="credit-license">{imageAttribution.licenseName}</a
+                    >
+                  {:else}
+                    <span class="credit-license">{imageAttribution.licenseName}</span>
+                  {/if}
                 {/if}
-              {/if}
-            </div>
-          {/if}
-        </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
 
         <!-- Species identity -->
         <div class="hero-species">
           <h1 id="species-heading" class="species-display-name">
+            {#if isLang}
+              <span
+                class="text-sm uppercase tracking-wider text-[var(--color-primary)] font-normal mr-2"
+                >Language</span
+              >
+            {/if}
             {det.commonName}
             <span class="sr-only">detection details</span>
           </h1>
-          <p class="species-scientific-name" aria-label="Scientific name">
-            {det.scientificName}
-          </p>
+          {#if det.scientificName}
+            <p class="species-scientific-name" aria-label="Scientific name">
+              {det.scientificName}
+            </p>
+          {/if}
           <div class="mt-3" aria-label="Species classification badges">
             <SpeciesBadges detection={det} size="sm" />
           </div>
@@ -487,8 +505,8 @@
       </div>
     </div>
 
-    <!-- Taxonomy Card -->
-    {#if isLoadingTaxonomy || taxonomyInfo?.taxonomy}
+    <!-- Taxonomy Card (hidden for language detections) -->
+    {#if !isLang && (isLoadingTaxonomy || taxonomyInfo?.taxonomy)}
       <div class="hero-card hero-taxonomy-card" aria-labelledby="hero-taxonomy-heading">
         <h3 id="hero-taxonomy-heading" class="section-heading">
           {t('species.taxonomy.hierarchy')}
@@ -604,8 +622,8 @@
 
 {#snippet overviewTab(det: Detection)}
   <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-    <!-- Species Rarity -->
-    {#if speciesInfo?.rarity}
+    <!-- Species Rarity (hidden for language detections) -->
+    {#if !isLang && speciesInfo?.rarity}
       <section aria-labelledby="rarity-heading">
         <h3 id="rarity-heading" class="section-heading">{t('species.rarity.title')}</h3>
         <div class="content-panel">
