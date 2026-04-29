@@ -76,11 +76,8 @@ Performance Optimizations:
   import { t } from '$lib/i18n';
   import { hasLiveAudioAccess } from '$lib/stores/appState.svelte';
   import { resetDateToToday } from '$lib/utils/datePersistence';
+  import { buildAppUrl } from '$lib/utils/urlHelpers';
   import LoginModal from '../components/modals/LoginModal.svelte';
-  import LogoBadge from '$lib/components/LogoBadge.svelte';
-  import { scheme } from '$lib/stores/scheme';
-  import { logoStyle } from '$lib/stores/logoStyle';
-  import { SCHEME_GRADIENT_MAP, type LogoVariant } from '$lib/stores/logoVariant';
 
   interface Props {
     securityEnabled?: boolean;
@@ -104,12 +101,6 @@ Performance Optimizations:
       enabledProviders: [],
     },
   }: Props = $props();
-
-  // Logo variant: solid uses flat color, gradient uses per-scheme handcrafted gradient
-  let logoVariant: LogoVariant = $derived(
-    // eslint-disable-next-line security/detect-object-injection -- $scheme is a controlled color scheme identifier
-    $logoStyle === 'solid' ? 'solid' : (SCHEME_GRADIENT_MAP[$scheme] ?? 'scheme')
-  );
 
   // State for login modal and collapsible sections
   let showLoginModal = $state(false);
@@ -357,12 +348,18 @@ Performance Optimizations:
         <button
           onclick={() => navigate(navigationUrls.dashboard)}
           class={cn('flex items-center gap-3 group', isCollapsed && 'justify-center')}
-          aria-label="BirdNET-Go Home"
+          aria-label="Dialectus Home"
         >
-          <LogoBadge size="md" variant={logoVariant} />
+          <img
+            src={buildAppUrl('/ui/assets/customicons/newlogo.png')}
+            alt="Dialectus"
+            class="h-9 w-9 shrink-0 rounded-xl object-contain"
+            loading="eager"
+            decoding="async"
+          />
           {#if !isCollapsed}
             <span class="text-xl font-bold tracking-tight text-[var(--color-base-content)]"
-              >BirdNET-Go</span
+              >Dialectus</span
             >
           {/if}
         </button>
@@ -1095,7 +1092,7 @@ Performance Optimizations:
             target="_blank"
             rel="noopener noreferrer"
             class="text-xs text-[var(--color-base-content)]/60 hover:text-[var(--color-base-content)]/80 transition-colors duration-150"
-            aria-label="View BirdNET-Go repository on GitHub (opens in new window)"
+            aria-label="View Dialectus repository on GitHub (opens in new window)"
           >
             {version}
           </a>

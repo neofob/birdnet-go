@@ -10,12 +10,12 @@
 -->
 <script lang="ts">
   import type { Detection } from '$lib/types/detection.types';
-  import { handleBirdImageError } from '$lib/desktop/components/ui/image-utils.js';
   import { formatRelativeTime } from '$lib/utils/formatters';
   import { Check } from '@lucide/svelte';
   import { cn } from '$lib/utils/cn';
   import { t } from '$lib/i18n';
   import { isLanguageDetection } from '$lib/utils/speciesUtils';
+  import { buildAppUrl } from '$lib/utils/urlHelpers';
 
   interface Props {
     detection: Detection;
@@ -42,25 +42,20 @@
   const isVerified = $derived(detection.verified === 'correct');
   const isFalsePositive = $derived(detection.verified === 'false_positive');
 
-  // Thumbnail URL
-  const thumbnailUrl = $derived(
-    `/api/v2/media/species-image?name=${encodeURIComponent(detection.scientificName)}`
-  );
+  const audioIconUrl = $derived(buildAppUrl('/ui/assets/customicons/betteraudiologo.png'));
 </script>
 
 <div class={cn('species-info-bar', className)}>
-  <!-- Species Thumbnail (hidden for language detections) -->
-  {#if !isLang}
-    <div class="species-thumbnail">
-      <img
-        src={thumbnailUrl}
-        alt={detection.commonName}
-        class="thumbnail-image"
-        loading="lazy"
-        onerror={handleBirdImageError}
-      />
-    </div>
-  {/if}
+  <!-- Icon -->
+  <div class="species-thumbnail">
+    <img
+      src={audioIconUrl}
+      alt="Audio"
+      class="thumbnail-image"
+      loading="lazy"
+      decoding="async"
+    />
+  </div>
 
   <!-- Species Info (flex-1) -->
   <div class="species-details">
@@ -128,9 +123,9 @@
   /* 4:3 aspect ratio to match avicommons 320×240 source images */
   .species-thumbnail {
     flex-shrink: 0;
-    width: 3.5rem;
-    height: 2.625rem;
-    border-radius: 0.5rem;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
     overflow: hidden;
     border: 2px solid rgb(51 65 85 / 0.8);
     background-color: rgb(30 41 59);
@@ -140,6 +135,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center;
   }
 
   /* Species details */

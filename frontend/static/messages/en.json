@@ -573,15 +573,15 @@
     "approved": "Approved",
     "currentlyHearing": {
       "title": "Currently Hearing",
-      "subtitle": "Real-time species being identified",
-      "empty": "All quiet — no birds detected right now"
+      "subtitle": "Real-time language being identified",
+      "empty": "All quiet — no language detected right now"
     },
     "rejected": "Rejected",
     "dailySummary": {
       "title": "Daily Activity",
-      "subtitle": "Species detections by hour",
+      "subtitle": "Language detections by hour",
       "columns": {
-        "species": "Species",
+        "species": "Language",
         "detections": "Detections"
       },
       "daylight": {
@@ -615,11 +615,11 @@
         "error": "Failed to load data",
         "complete": "Data loaded successfully"
       },
-      "noSpecies": "No species detected on this date"
+      "noSpecies": "No language detected on this date"
     },
     "recentDetections": {
       "title": "Recent Detections",
-      "subtitle": "Latest identified species",
+      "subtitle": "Latest identified language",
       "controls": {
         "show": "Show:",
         "refresh": "Refresh detections",
@@ -629,7 +629,7 @@
         "dateTime": "Date & Time",
         "time": "Time",
         "commonName": "Common Name",
-        "species": "Species",
+        "species": "Language",
         "weather": "Weather",
         "confidence": "Confidence",
         "thumbnail": "Thumbnail",
@@ -644,10 +644,10 @@
         "locked": "Locked"
       },
       "modals": {
-        "showSpecies": "Show Species {species}",
-        "ignoreSpecies": "Ignore Species {species}",
-        "showSpeciesConfirm": "Are you sure you want to show future detections of {species}?",
-        "ignoreSpeciesConfirm": "Are you sure you want to ignore future detections of {species}? This will only affect new detections - existing detections will remain in the database.",
+        "showSpecies": "Show Language {species}",
+        "ignoreSpecies": "Ignore Language {species}",
+        "showSpeciesConfirm": "Are you sure you want to show future detections of this language: {species}?",
+        "ignoreSpeciesConfirm": "Are you sure you want to ignore future detections of this language: {species}? This will only affect new detections - existing detections will remain in the database.",
         "unlockDetection": "Unlock Detection",
         "lockDetection": "Lock Detection",
         "unlockDetectionConfirm": "Are you sure you want to unlock this detection of {species}? This will allow it to be deleted during regular cleanup.",
@@ -660,15 +660,15 @@
         "markCorrect": "Correct",
         "markFalsePositive": "Incorrect",
         "review": "Review detection",
-        "showSpecies": "Show species",
-        "ignoreSpecies": "Ignore species",
+        "showSpecies": "Show language",
+        "ignoreSpecies": "Ignore language",
         "lockDetection": "Lock detection",
         "unlockDetection": "Unlock detection",
         "deleteDetection": "Delete detection"
       },
       "noDetections": "No recent detections",
       "errors": {
-        "toggleSpeciesFailed": "Failed to update species exclusion. Please try again.",
+        "toggleSpeciesFailed": "Failed to update language exclusion. Please try again.",
         "toggleLockFailed": "Failed to update lock status. Please try again.",
         "deleteFailed": "Failed to delete detection. Please try again."
       }
@@ -682,9 +682,9 @@
     },
     "banner": {
       "title": "Title",
-      "titlePlaceholder": "My Bird Station",
+      "titlePlaceholder": "My Language Station",
       "description": "Description",
-      "descriptionPlaceholder": "A brief description of your bird monitoring station...",
+      "descriptionPlaceholder": "A brief description of your language monitoring station...",
       "subElements": "Sub-elements",
       "showImage": "Show custom image",
       "imageUrl": "Image URL or path",
@@ -716,14 +716,14 @@
       "cancel": "Cancel",
       "disabled": "hidden",
       "noConfig": "No additional configuration options available yet.",
-      "currentlyHearingNote": "This element shows currently detected birds when viewing today's date. No additional configuration needed.",
+      "currentlyHearingNote": "This element shows currently detected languages when viewing today's date. No additional configuration needed.",
       "notAvailable": "Configuration for this element type is not yet available.",
       "configureElement": "Configure element",
       "closeModal": "Close",
       "configureTitle": "Configure {element}",
       "weatherPlaceholder": "Weather conditions will appear here when available",
       "stationBanner": "Station banner",
-      "liveBirdFeed": "Live bird feed",
+      "liveBirdFeed": "Live language feed",
       "hideElement": "Hide element",
       "unhideElement": "Show element",
       "deleteElement": "Remove element",

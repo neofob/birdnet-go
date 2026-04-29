@@ -18,8 +18,6 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Detection } from '$lib/types/detection.types';
   import ConfidenceBadge from './ConfidenceBadge.svelte';
-  import WeatherBadge from './WeatherBadge.svelte';
-  import MoonBadge from './MoonBadge.svelte';
   import PlayOverlay from './PlayOverlay.svelte';
   import SpeciesInfoBar from './SpeciesInfoBar.svelte';
   import ActionMenu from '$lib/desktop/components/ui/ActionMenu.svelte';
@@ -227,21 +225,9 @@
       {/if}
     </div>
 
-    <!-- Top-Left Badges: Confidence + Weather -->
+    <!-- Top-Left Badges: Confidence -->
     <div class="absolute top-3 left-3 flex items-center gap-2 z-10">
       <ConfidenceBadge confidence={detection.confidence} />
-      {#if detection.weather?.weatherIcon}
-        <WeatherBadge
-          weatherIcon={detection.weather.weatherIcon}
-          description={detection.weather.description}
-          temperature={detection.weather.temperature}
-          units={detection.weather.units}
-          timeOfDay={detection.timeOfDay}
-        />
-      {/if}
-      {#if detection.weather?.moonPhaseName && detection.timeOfDay === 'night'}
-        <MoonBadge moonPhaseName={detection.weather.moonPhaseName} />
-      {/if}
     </div>
 
     <!-- Center Play Button -->
