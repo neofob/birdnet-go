@@ -64,10 +64,11 @@ func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, err
 	cleanText := strings.Join(strings.Fields(transcription.Text), " ")
 
 	if cleanText == "" {
-		return Result{}, errors.Newf("whisper returned empty transcription").
-			Component("classifier.language").
-			Category(errors.CategoryProcessing).
-			Build()
+		// Avoid dropping the entire pipeline output when Whisper can't produce text.
+		// Emit an explicit "und" (undetermined) label so downstream SSE/UI stays alive.
+		log.Warn("whisper returned empty transcription; emitting undetermined language",
+			logger.String("whisper_language", transcription.Language))
+		return Result{Label: "und", Confidence: 0, Transcript: ""}, nil
 	}
 
 	langResult, err := p.languageClassifier.Classify(ctx, cleanText)

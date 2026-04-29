@@ -253,9 +253,11 @@ func ProcessData(ctx context.Context, bn *classifier.Orchestrator, bufMgr *buffe
 	}
 
 	// Calculate the effective buffer duration from the model spec.
-	// Language model uses 3s clips at 48kHz.
-	bufferDuration := 3 * time.Second
-	effectiveBufferDuration := bufferDuration
+	// Used for processing-overrun diagnostics.
+	effectiveBufferDuration := 3 * time.Second
+	if spec, ok := classifier.GetModelSpec(modelID); ok && spec.ClipLength > 0 {
+		effectiveBufferDuration = spec.ClipLength
+	}
 
 	// Check if processing time exceeds effective buffer duration
 	if elapsedTime > effectiveBufferDuration {

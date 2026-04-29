@@ -12,6 +12,7 @@ import (
 	"github.com/tphakala/birdnet-go/internal/audiocore/buffer"
 	"github.com/tphakala/birdnet-go/internal/audiocore/ffmpeg"
 	"github.com/tphakala/birdnet-go/internal/audiocore/schedule"
+	"github.com/tphakala/birdnet-go/internal/classifier"
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
@@ -34,21 +35,8 @@ func isStreamType(t audiocore.SourceType) bool {
 	}
 }
 
-// Default buffer parameters used when allocating analysis and capture buffers.
-// These match the values used by the existing BirdNET analysis pipeline.
+// Default parameters used when allocating buffers.
 const (
-	// defaultAnalysisCapacity is the ring buffer size in bytes.
-	// 288000 bytes = 3 seconds of 16-bit 48 kHz mono audio.
-	defaultAnalysisCapacity = 288000
-
-	// defaultAnalysisOverlap is the overlap in bytes between consecutive reads.
-	// 144000 bytes = 1.5 seconds of 16-bit 48 kHz mono audio.
-	defaultAnalysisOverlap = 144000
-
-	// defaultAnalysisReadSize is the number of fresh bytes per read.
-	// 144000 bytes = 1.5 seconds of 16-bit 48 kHz mono audio.
-	defaultAnalysisReadSize = 144000
-
 	// defaultCaptureBufferSeconds is the ring buffer capacity in seconds.
 	// This determines how much audio history is retained for clip export.
 	// Must be large enough to cover the export length + detection window
@@ -61,6 +49,36 @@ const (
 	// defaultSampleRate is used when a source config has no sample rate set.
 	defaultSampleRate = 48000
 )
+
+func analysisBufferParamsForPrimaryModel(primaryModelID string) (capacity, overlapSize, readSize int) {
+	// Default to the historical BirdNET v2.4 values (3s @ 48kHz, 16-bit mono, 50% overlap).
+	const fallbackCapacity = 288000
+	const fallbackOverlap = 144000
+	const fallbackReadSize = 144000
+
+	spec, ok := classifier.GetModelSpec(primaryModelID)
+	if !ok {
+		return fallbackCapacity, fallbackOverlap, fallbackReadSize
+	}
+	clipLenSec := int(spec.ClipLength.Seconds())
+	if clipLenSec <= 0 || spec.SampleRate <= 0 {
+		return fallbackCapacity, fallbackOverlap, fallbackReadSize
+	}
+	clipBytes := spec.SampleRate * clipLenSec * conf.NumChannels * (conf.BitDepth / 8)
+	if clipBytes <= 0 {
+		return fallbackCapacity, fallbackOverlap, fallbackReadSize
+	}
+
+	// For the language pipeline, prefer back-to-back windows (no gaps, no overlap)
+	// to keep the UX and transcript chunks aligned to the configured clip length.
+	if primaryModelID == "Language" || primaryModelID == "Language_Fake" {
+		return clipBytes, 0, clipBytes
+	}
+
+	// Default to 50% overlap for other models.
+	overlap := clipBytes / 2
+	return clipBytes, overlap, clipBytes - overlap
+}
 
 // Config holds the configuration needed to create an AudioEngine.
 type Config struct {
@@ -268,12 +286,13 @@ func (e *AudioEngine) AddSource(cfg *audiocore.SourceConfig) error {
 	sourceID := src.ID
 
 	// 2. Allocate analysis buffer.
+	capacity, overlapSize, readSize := analysisBufferParamsForPrimaryModel(e.primaryModelID)
 	if err := e.bufferMgr.AllocateAnalysis(
 		sourceID,
 		e.primaryModelID,
-		defaultAnalysisCapacity,
-		defaultAnalysisOverlap,
-		defaultAnalysisReadSize,
+		capacity,
+		overlapSize,
+		readSize,
 	); err != nil {
 		return errors.New(err).
 			Component("audiocore.engine").
@@ -429,12 +448,13 @@ func (e *AudioEngine) ReconfigureSource(sourceID string, newCfg *audiocore.Sourc
 	if sampleRate <= 0 {
 		sampleRate = defaultSampleRate
 	}
+	capacity, overlapSize, readSize := analysisBufferParamsForPrimaryModel(e.primaryModelID)
 	if err := e.bufferMgr.AllocateAnalysis(
 		sourceID,
 		e.primaryModelID,
-		defaultAnalysisCapacity,
-		defaultAnalysisOverlap,
-		defaultAnalysisReadSize,
+		capacity,
+		overlapSize,
+		readSize,
 	); err != nil {
 		return errors.New(err).
 			Component("audiocore.engine").

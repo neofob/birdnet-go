@@ -809,10 +809,9 @@ func (p *Processor) parseAndValidateSpecies(result datastore.Results, item class
 // shouldFilterDetection checks if a detection should be filtered out
 func (p *Processor) shouldFilterDetection(result datastore.Results, commonName, scientificName, speciesLowercase string, baseThreshold float32, source, modelID string) (shouldFilter bool, confidenceThreshold float32) {
 	if p.isLanguagePipelineMode() {
-		if result.Confidence <= baseThreshold {
-			return true, baseThreshold
-		}
-		return false, baseThreshold
+		// Language pipeline results are not bird detections and should not be
+		// suppressed by BirdNET confidence thresholds or bird-specific filters.
+		return false, 0
 	}
 
 	// Check human detection privacy filter
