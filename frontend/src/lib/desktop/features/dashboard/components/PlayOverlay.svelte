@@ -72,6 +72,10 @@
   let currentTime = $state(0);
   let isDragging = $state(false);
   let hasEverPlayed = $state(false);
+  // Avoid preloading audio for every visible card. We only set the audio src
+  // after explicit user interaction to prevent a flood of 404s when clips are
+  // missing (e.g. export disabled/retention) and to reduce network load.
+  let hasUserInitiatedLoad = $state(false);
   let playEndTimeout: ReturnType<typeof setTimeout> | undefined;
   let canplayTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let updateInterval: ReturnType<typeof setInterval> | undefined;
@@ -118,24 +122,29 @@
 
   // Sync audio source when URL changes (replaces template binding for iOS Safari compatibility)
   $effect(() => {
-    if (audioElement && audioUrl) {
-      // Compare resolved URLs to avoid unnecessary reloads
-      const absoluteUrl = new URL(audioUrl, window.location.origin).href;
-      if (audioElement.src !== absoluteUrl) {
-        audioElement.src = audioUrl;
-        // Reset playback state for new audio
-        isPlaying = false;
-        currentTime = 0;
-        progress = 0;
-        duration = 0;
-        error = null;
-        hasEverPlayed = false;
-        audioRetryCount = 0;
-        if (audioRetryTimer) {
-          clearTimeout(audioRetryTimer);
-          audioRetryTimer = undefined;
-        }
-      }
+    if (!audioElement || !audioUrl) return;
+
+    // Compare resolved URLs to avoid unnecessary reloads
+    const absoluteUrl = new URL(audioUrl, window.location.origin).href;
+    if (audioElement.src === absoluteUrl) return;
+
+    // Card components can be reused with different detection IDs.
+    // When that happens, reset to an unloaded state and wait for a new
+    // user interaction before fetching media.
+    audioElement.pause();
+    audioElement.src = '';
+    hasUserInitiatedLoad = false;
+
+    isPlaying = false;
+    currentTime = 0;
+    progress = 0;
+    duration = 0;
+    error = null;
+    hasEverPlayed = false;
+    audioRetryCount = 0;
+    if (audioRetryTimer) {
+      clearTimeout(audioRetryTimer);
+      audioRetryTimer = undefined;
     }
   });
 
@@ -156,6 +165,14 @@
       if (isPlaying) {
         audioElement.pause();
       } else {
+        // Lazily set audio src on first user interaction.
+        if (!hasUserInitiatedLoad) {
+          hasUserInitiatedLoad = true;
+          audioElement.preload = 'metadata';
+          audioElement.src = audioUrl;
+          audioElement.load();
+        }
+
         // Initialize audio context on first play (for gain/filter controls)
         // Guard against rapid clicks that could create multiple AudioContexts
         if (!audioContext && !isInitializingContext) {
@@ -398,8 +415,8 @@
     // Create audio element dynamically to avoid iOS Safari issues
     // where DOM-bound audio elements don't fire canplay events
     audioElement = new Audio();
-    audioElement.preload = 'metadata';
-    audioElement.src = audioUrl;
+    // Don't preload until user interaction (see hasUserInitiatedLoad).
+    audioElement.preload = 'none';
 
     // Attach all event listeners
     audioElement.addEventListener('play', handlePlay);
