@@ -131,6 +131,12 @@ Props:
   // Show transcript line only when at least one item has it
   let hasAnyTranscript = $derived(displayDetections.some(d => (d.transcript ?? '').length > 0));
 
+  function formatConfidence(conf?: number): string {
+    if (typeof conf !== 'number' || !Number.isFinite(conf)) return '';
+    const pct = Math.max(0, Math.min(1, conf)) * 100;
+    return `${pct.toFixed(1)}%`;
+  }
+
   // Clean up pending timers on component destroy
   $effect(() => {
     return () => {
@@ -200,6 +206,13 @@ Props:
               {elapsedText}
               {#if hasMultipleSources}
                 · {detection.source}
+              {/if}
+
+              {#if isLanguageDetection(detection.species, detection.scientificName)}
+                {@const confText = formatConfidence(detection.confidence)}
+                {#if confText}
+                  · {confText}
+                {/if}
               {/if}
             </span>
 

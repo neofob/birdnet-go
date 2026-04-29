@@ -29,6 +29,7 @@ type SSEPendingDetection struct {
 	Species         string                 `json:"species"`                   // Common name
 	ScientificName  string                 `json:"scientificName"`            // Scientific name
 	Thumbnail       string                 `json:"thumbnail"`                 // Bird image URL
+	Confidence      float64                `json:"confidence,omitempty"`       // Confidence (0..1)
 	Transcript      string                 `json:"transcript,omitempty"`       // Optional transcript (language pipeline)
 	Status          PendingDetectionStatus `json:"status"`                    // "active", "approved", "rejected"
 	FirstDetected   int64                  `json:"firstDetected"`             // Unix timestamp (seconds)
@@ -136,6 +137,7 @@ func (p *Processor) SnapshotVisiblePending(minDetections int) []SSEPendingDetect
 			Species:         item.Detection.Result.Species.CommonName,
 			ScientificName:  scientificName,
 			Thumbnail:       thumbnail,
+			Confidence:      item.Confidence,
 			Transcript:      transcript,
 			Status:          PendingStatusActive,
 			FirstDetected:   item.CreatedAt.Unix(),
@@ -212,6 +214,7 @@ func (p *Processor) buildFlushNotification(item *PendingDetection, status Pendin
 		Species:         item.Detection.Result.Species.CommonName,
 		ScientificName:  scientificName,
 		Thumbnail:       thumbnail,
+		Confidence:      item.Confidence,
 		Transcript:      transcript,
 		Status:          status,
 		FirstDetected:   item.CreatedAt.Unix(),

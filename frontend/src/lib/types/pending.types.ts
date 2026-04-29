@@ -9,6 +9,8 @@ export interface PendingDetection {
   scientificName: string;
   /** Bird image URL */
   thumbnail: string;
+  /** Optional confidence (0..1). Used by the language pipeline dashboard card. */
+  confidence?: number;
   /** Optional transcript (language pipeline) */
   transcript?: string;
   /** Lifecycle status */

@@ -699,6 +699,12 @@ func (p *Processor) processDetections(item classifier.Results) {
 	// Broadcast updated pending detections snapshot for "currently hearing" UI.
 	// This runs after all new detections are incorporated into pendingDetections.
 	minDet := p.calculateMinDetections()
+	if p.isLanguagePipelineMode() {
+		// Language pipeline results should be visible immediately; the false-positive
+		// confirmation loop is bird-specific and would otherwise discard language
+		// detections as "false positives".
+		minDet = 1
+	}
 	snapshot := p.SnapshotVisiblePending(minDet)
 	p.broadcastPendingSnapshot(snapshot)
 }
@@ -1165,6 +1171,10 @@ func (p *Processor) buildClipPath(scientificName string, confidence float32, dur
 
 // shouldDiscardDetection checks if a detection should be discarded based on various criteria
 func (p *Processor) shouldDiscardDetection(item *PendingDetection, minDetections int) (shouldDiscard bool, reason string) {
+	if p.isLanguagePipelineMode() {
+		// Do not apply minDetections false-positive filtering to language pipeline.
+		return false, ""
+	}
 	// Check minimum detection count
 	if item.Count < minDetections {
 		// Add structured logging for minimum count filtering
@@ -1175,10 +1185,6 @@ func (p *Processor) shouldDiscardDetection(item *PendingDetection, minDetections
 			logger.String("source", p.getDisplayNameForSource(item.Source)),
 			logger.String("operation", "minimum_count_filter"))
 		return true, fmt.Sprintf("false positive, matched %d/%d times", item.Count, minDetections)
-	}
-
-	if p.isLanguagePipelineMode() {
-		return false, ""
 	}
 
 	// Check privacy filter
@@ -1460,35 +1466,22 @@ func (p *Processor) flushPendingDetections(minDetections int) (pendingCount, flu
 		}
 	}
 
-	// Build snapshot while still holding the lock, then release before broadcasting.
-	if len(terminalNotifs) > 0 || flushedCount > 0 {
-		threshold := CalculateVisibilityThreshold(minDetections)
-		broadcastSnapshot = make([]SSEPendingDetection, 0, len(p.pendingDetections)+len(terminalNotifs))
-		for key := range p.pendingDetections {
-			item := p.pendingDetections[key]
-			if item.Count >= threshold {
-				broadcastSnapshot = append(broadcastSnapshot, SSEPendingDetection{
-					Species:         item.Detection.Result.Species.CommonName,
-					ScientificName:  item.Detection.Result.Species.ScientificName,
-					Thumbnail:       p.getThumbnailURL(item.Detection.Result.Species.ScientificName),
-					Status:          PendingStatusActive,
-					FirstDetected:   item.CreatedAt.Unix(),
-					AudioCapturedAt: unixOrZero(item.AudioCapturedAt),
-					LastUpdated:     item.LastUpdated.Unix(),
-					Source:          p.getDisplayNameForSource(item.Source),
-					SourceID:        item.Source,
-					ModelID:         item.ModelID,
-					HitCount:        item.Count,
-				})
-			}
-		}
-		logPendingBroadcast(len(broadcastSnapshot), len(terminalNotifs))
+	// Signal to broadcast after releasing the lock.
+	shouldBroadcast := len(terminalNotifs) > 0 || flushedCount > 0
+
+	p.pendingMutex.Unlock()
+
+	if shouldBroadcast {
+		// Build active snapshot via the single source of truth so language shaping
+		// stays consistent.
+		active := p.SnapshotVisiblePending(minDetections)
+		broadcastSnapshot = make([]SSEPendingDetection, 0, len(active)+len(terminalNotifs))
+		broadcastSnapshot = append(broadcastSnapshot, active...)
 		broadcastSnapshot = append(broadcastSnapshot, terminalNotifs...)
 		// Sort for stable comparison in broadcastPendingSnapshot.
 		sortPendingSnapshot(broadcastSnapshot)
+		logPendingBroadcast(len(broadcastSnapshot), len(terminalNotifs))
 	}
-
-	p.pendingMutex.Unlock()
 
 	// Broadcast outside the lock to avoid blocking processDetections.
 	if broadcastSnapshot != nil {

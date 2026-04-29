@@ -117,14 +117,20 @@ func NewRealLanguageOrchestrator(settings *conf.Settings) (*Orchestrator, error)
 	adapter := newRealPipelineAdapter(pipeline)
 
 	settings.BirdNET.Labels = []string{"language"}
+	// The language pipeline produces a single top-1 label per inference (the detected
+	// language code). We size the reusable buffers to match that 1-element output.
+	// This keeps BirdNET.Predict's reuse helpers happy (buffer length must match
+	// labels/predictions length) while still allowing FastText to compute top-N
+	// internally.
+	const languagePipelineOutputSize = 1
 
 	bn := &BirdNET{
 		classifier:       newLanguagePipelineClassifier(adapter, settings, pipeline),
 		Settings:         settings,
 		ModelInfo:        info,
 		modelVersion:     realLanguageModelVersion,
-		resultsBuffer:    make([]datastore.Results, realLanguageNumSpecies),
-		confidenceBuffer: make([]float32, realLanguageNumSpecies),
+		resultsBuffer:    make([]datastore.Results, languagePipelineOutputSize),
+		confidenceBuffer: make([]float32, languagePipelineOutputSize),
 		speciesCache:     make(map[string]*speciesCacheEntry),
 	}
 
