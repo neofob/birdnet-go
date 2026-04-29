@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:8080"
+      - "${PROMETHEUS_PORT:-8090}:8090"
     environment:
       - TZ=${TZ:-UTC}
       - BIRDNET_UID=${BIRDNET_UID:-1000}

@@ -41,7 +41,15 @@ func NewWhisperClient(cfg WhisperConfig) *WhisperClient {
 		timeout = 30 * time.Second
 	}
 	if cfg.Endpoint == "" {
-		cfg.Endpoint = "http://localhost:8010"
+		server := os.Getenv("WHISPER_SERVER")
+		port := os.Getenv("WHISPER_PORT")
+		if server != "" && port != "" {
+			cfg.Endpoint = fmt.Sprintf("http://%s:%s", server, port)
+		} else if server != "" {
+			cfg.Endpoint = server
+		} else {
+			cfg.Endpoint = "http://localhost:8010"
+		}
 	}
 	if cfg.Language == "" {
 		cfg.Language = "auto"
