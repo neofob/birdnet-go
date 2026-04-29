@@ -46,3 +46,4 @@ REFACTOR_CHANGELOG.md
 .worktrees/
 .leann/
 .venv/
+.AGENTS.md

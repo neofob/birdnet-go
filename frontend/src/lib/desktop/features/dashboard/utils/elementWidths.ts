@@ -8,6 +8,7 @@ export const SUPPORTS_HALF: ReadonlySet<string> = new Set([
   'banner',
   'video-embed',
   'currently-hearing',
+  'language-analytics',
   'detections-grid',
 ]);
 

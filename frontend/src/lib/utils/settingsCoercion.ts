@@ -704,6 +704,53 @@ function coercePushSettings(settings: unknown): PushSettings {
   };
 }
 
+function coerceLanguagePipelineSettings(settings: unknown): UnknownSettings {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    return {
+      enabled: true,
+      minConfidence: 0.6,
+      whisper: {
+        endpoint: 'http://localhost:8010',
+        timeout: '30s',
+        language: 'auto',
+      },
+      fastText: {
+        endpoint: 'http://localhost:8000',
+        timeout: '5s',
+        maxTopN: 5,
+      },
+    };
+  }
+
+  const s = settings as UnknownSettings;
+  const whisper =
+    s.whisper && typeof s.whisper === 'object' && !Array.isArray(s.whisper)
+      ? (s.whisper as UnknownSettings)
+      : {};
+  const fastText =
+    s.fastText && typeof s.fastText === 'object' && !Array.isArray(s.fastText)
+      ? (s.fastText as UnknownSettings)
+      : {};
+
+  return {
+    ...s,
+    enabled: coerceBoolean(s.enabled, true),
+    minConfidence: coerceNumber(s.minConfidence, 0, 1, 0.6),
+    whisper: {
+      ...whisper,
+      endpoint: coerceString(whisper.endpoint, 'http://localhost:8010'),
+      timeout: coerceString(whisper.timeout, '30s'),
+      language: coerceString(whisper.language, 'auto'),
+    },
+    fastText: {
+      ...fastText,
+      endpoint: coerceString(fastText.endpoint, 'http://localhost:8000'),
+      timeout: coerceString(fastText.timeout, '5s'),
+      maxTopN: coerceNumber(fastText.maxTopN, 1, 10, 5),
+    },
+  };
+}
+
 /**
  * Validate and coerce notification settings
  */
@@ -804,6 +851,8 @@ export function coerceSettings(section: string, data: UnknownSettings): UnknownS
       return coerceMQTTSettings(data as PartialMQTTSettings);
     case 'notification':
       return coerceNotificationSettings(data as PartialNotificationSettings);
+    case 'languagePipeline':
+      return coerceLanguagePipelineSettings(data);
     default:
       return data;
   }

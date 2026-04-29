@@ -41,6 +41,7 @@ Performance Optimizations:
   import { onMount, untrack } from 'svelte';
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import CurrentlyHearingCard from '$lib/desktop/features/dashboard/components/CurrentlyHearingCard.svelte';
+  import LanguagePipelineCard from '$lib/desktop/features/dashboard/components/LanguagePipelineCard.svelte';
   import DailySummaryCard from '$lib/desktop/features/dashboard/components/DailySummaryCard.svelte';
   import DetectionCardGrid from '$lib/desktop/features/dashboard/components/DetectionCardGrid.svelte';
   import { t } from '$lib/i18n';
@@ -157,6 +158,8 @@ Performance Optimizations:
   let summaryLimit = $state(30); // Default from backend (conf/defaults.go) - species count limit for daily summary
   let configLoaded = $state(false); // Gates reactive preloading until config is loaded
   let pendingDetections = $state<PendingDetection[]>([]);
+  let languageAnalyticsDetections = $state<Detection[]>([]);
+  let isLoadingLanguageAnalytics = $state(true);
 
   // Subscribe to edit mode store
   let isEditing = $derived($dashboardEditMode);
@@ -165,9 +168,26 @@ Performance Optimizations:
   const defaultElements: DashboardElement[] = [
     { id: 'daily-summary-0', type: 'daily-summary', enabled: true, summary: { summaryLimit: 30 } },
     { id: 'currently-hearing-0', type: 'currently-hearing', enabled: true },
+    { id: 'language-analytics-0', type: 'language-analytics', enabled: true },
     { id: 'live-spectrogram-0', type: 'live-spectrogram', enabled: true },
     { id: 'detections-grid-0', type: 'detections-grid', enabled: true },
   ];
+
+  function ensureLanguageAnalyticsElement(elements: DashboardElement[]): DashboardElement[] {
+    const hasLanguageAnalytics = elements.some(el => el.type === 'language-analytics');
+    if (hasLanguageAnalytics) {
+      return elements;
+    }
+
+    return [
+      ...elements,
+      {
+        id: `language-analytics-${Date.now()}`,
+        type: 'language-analytics',
+        enabled: true,
+      },
+    ];
+  }
   // Check whether authenticated settings were actually loaded successfully.
   // When settings failed to load (e.g. guest/unauthenticated), skip the
   // settings-derived layout so we fall through to the public app config.
@@ -176,10 +196,12 @@ Performance Optimizations:
   let isGuest = $derived(appState.security.enabled && !appState.security.accessAllowed);
   // Priority: authenticated settings > guest localStorage > public app config > hardcoded defaults
   let layoutElements = $derived(
-    (settingsLoaded ? $dashboardLayout?.elements : null) ??
-      (isGuest ? $guestDashboardLayout?.elements : null) ??
-      (appState.layout?.elements as DashboardElement[] | undefined) ??
-      defaultElements
+    ensureLanguageAnalyticsElement(
+      ((settingsLoaded ? $dashboardLayout?.elements : null) ??
+        (isGuest ? $guestDashboardLayout?.elements : null) ??
+        (appState.layout?.elements as DashboardElement[] | undefined) ??
+        defaultElements) as DashboardElement[]
+    )
   );
 
   // Current layout as a DashboardLayout object for DashboardEditMode
@@ -456,6 +478,32 @@ Performance Optimizations:
       logger.error('Error fetching recent detections:', error);
     } finally {
       isLoadingDetections = false;
+    }
+  }
+
+  async function fetchLanguageAnalyticsDetections() {
+    isLoadingLanguageAnalytics = true;
+
+    try {
+      const response = await fetch(buildAppUrl('/api/v2/detections/recent?limit=1000'));
+      if (!response.ok) {
+        throw new Error(
+          t('dashboard.errors.recentDetectionsFetch', { status: response.statusText })
+        );
+      }
+
+      const rawData = (await response.json()) as Detection[];
+      const thresholdMs = Date.now() - 24 * 60 * 60 * 1000;
+
+      languageAnalyticsDetections = rawData.filter(d => {
+        const ts = d.timestamp ? Date.parse(d.timestamp) : Number.NaN;
+        return Number.isFinite(ts) && ts >= thresholdMs;
+      });
+    } catch (error) {
+      logger.error('Error fetching language analytics detections:', error);
+      languageAnalyticsDetections = [];
+    } finally {
+      isLoadingLanguageAnalytics = false;
     }
   }
 
@@ -752,9 +800,14 @@ Performance Optimizations:
       // Adjacent date preloading is handled by the $effect gated on configLoaded
     });
     fetchRecentDetections();
+    fetchLanguageAnalyticsDetections();
 
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
+
+    const languageAnalyticsInterval = setInterval(() => {
+      fetchLanguageAnalyticsDetections();
+    }, 60000);
 
     // Handle browser navigation (back/forward)
     const handlePopState = () => {
@@ -815,6 +868,8 @@ Performance Optimizations:
 
       // Clear pending cleanups
       pendingCleanups.clear();
+
+      clearInterval(languageAnalyticsInterval);
 
       // Clean up daily summary cache
       dailySummaryCache.clear();
@@ -1526,6 +1581,12 @@ Performance Optimizations:
         />
       {:else if element.type === 'currently-hearing'}
         <CurrentlyHearingCard detections={isViewingToday ? pendingDetections : []} />
+      {:else if element.type === 'language-analytics'}
+        <LanguagePipelineCard
+          detections={isViewingToday ? languageAnalyticsDetections : []}
+          pendingDetections={isViewingToday ? pendingDetections : []}
+          loading={isLoadingLanguageAnalytics}
+        />
       {:else if element.type === 'live-spectrogram'}
         {#if isViewingToday}
           <MiniSpectrogram {pendingDetections} />

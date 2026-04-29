@@ -131,10 +131,94 @@ Props:
   // Show transcript line only when at least one item has it
   let hasAnyTranscript = $derived(displayDetections.some(d => (d.transcript ?? '').length > 0));
 
+  let languageDetections = $derived(
+    displayDetections.filter(d => isLanguageDetection(d.species, d.scientificName))
+  );
+
+  let hasLanguageDetections = $derived(languageDetections.length > 0);
+
+  type LanguageAggregate = {
+    label: string;
+    recordings: number;
+    avgConfidence: number;
+    totalDurationSeconds: number;
+  };
+
+  let languageAggregates = $derived.by(() => {
+    void tick;
+    const byLabel = new Map<string, LanguageAggregate>();
+
+    for (const d of languageDetections) {
+      const label = (d.species ?? '').trim().toLowerCase();
+      if (label.length === 0) {
+        continue;
+      }
+
+      const recordings = Math.max(1, d.hitCount ?? 1);
+      const durationSeconds = Math.max(0, Math.floor(Date.now() / 1000 - d.firstDetected));
+      const weightedConfidence =
+        typeof d.confidence === 'number' && Number.isFinite(d.confidence)
+          ? Math.max(0, Math.min(1, d.confidence)) * recordings
+          : 0;
+
+      const current = byLabel.get(label);
+      if (current) {
+        current.recordings += recordings;
+        current.avgConfidence += weightedConfidence;
+        current.totalDurationSeconds += durationSeconds;
+      } else {
+        byLabel.set(label, {
+          label,
+          recordings,
+          avgConfidence: weightedConfidence,
+          totalDurationSeconds: durationSeconds,
+        });
+      }
+    }
+
+    const aggregates = Array.from(byLabel.values()).map(item => ({
+      ...item,
+      avgConfidence: item.recordings > 0 ? item.avgConfidence / item.recordings : 0,
+    }));
+
+    aggregates.sort((a, b) => b.recordings - a.recordings || a.label.localeCompare(b.label));
+    return aggregates;
+  });
+
+  let totalLanguageRecordings = $derived(
+    languageAggregates.reduce((sum, item) => sum + item.recordings, 0)
+  );
+
+  let averageLanguageConfidence = $derived.by(() => {
+    if (totalLanguageRecordings === 0) {
+      return 0;
+    }
+    const weightedSum = languageAggregates.reduce(
+      (sum, item) => sum + item.avgConfidence * item.recordings,
+      0
+    );
+    return weightedSum / totalLanguageRecordings;
+  });
+
+  let totalLanguageDurationSeconds = $derived(
+    languageAggregates.reduce((sum, item) => sum + item.totalDurationSeconds, 0)
+  );
+
   function formatConfidence(conf?: number): string {
     if (typeof conf !== 'number' || !Number.isFinite(conf)) return '';
     const pct = Math.max(0, Math.min(1, conf)) * 100;
     return `${pct.toFixed(1)}%`;
+  }
+
+  function formatDuration(seconds: number): string {
+    const safeSeconds = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const secs = safeSeconds % 60;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m ${secs}s`;
   }
 
   // Clean up pending timers on component destroy
@@ -163,6 +247,52 @@ Props:
 
   <!-- Card Content -->
   {#if hasDisplayDetections}
+    {#if hasLanguageDetections}
+      <div class="grid grid-cols-1 gap-2 border-b border-[var(--color-base-200)] px-4 py-3 sm:grid-cols-3">
+        <div class="rounded-lg bg-[var(--color-base-200)] px-3 py-2">
+          <div class="text-xs uppercase tracking-wide text-[var(--color-base-content)]/60">
+            Languages
+          </div>
+          <div class="text-sm font-semibold text-[var(--color-base-content)]">
+            {languageAggregates.length}
+          </div>
+        </div>
+        <div class="rounded-lg bg-[var(--color-base-200)] px-3 py-2">
+          <div class="text-xs uppercase tracking-wide text-[var(--color-base-content)]/60">
+            Recordings
+          </div>
+          <div class="text-sm font-semibold text-[var(--color-base-content)]">
+            {totalLanguageRecordings}
+          </div>
+        </div>
+        <div class="rounded-lg bg-[var(--color-base-200)] px-3 py-2">
+          <div class="text-xs uppercase tracking-wide text-[var(--color-base-content)]/60">
+            Avg Confidence
+          </div>
+          <div class="text-sm font-semibold text-[var(--color-base-content)]">
+            {formatConfidence(averageLanguageConfidence)}
+          </div>
+        </div>
+        <div class="rounded-lg bg-[var(--color-base-200)] px-3 py-2 sm:col-span-3">
+          <div class="text-xs uppercase tracking-wide text-[var(--color-base-content)]/60">
+            Total Active Duration
+          </div>
+          <div class="text-sm font-semibold text-[var(--color-base-content)]">
+            {formatDuration(totalLanguageDurationSeconds)}
+          </div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            {#each languageAggregates.slice(0, 6) as item (item.label)}
+              <span
+                class="rounded-full border border-[var(--color-primary)]/25 bg-[var(--color-primary)]/10 px-2.5 py-1 text-xs text-[var(--color-base-content)]"
+              >
+                {item.label} · {item.recordings}
+              </span>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {/if}
+
     <div class="flex flex-wrap gap-3 p-4">
       {#each displayDetections as detection (detectionKey(detection))}
         {@const key = detectionKey(detection)}
@@ -212,6 +342,9 @@ Props:
                 {@const confText = formatConfidence(detection.confidence)}
                 {#if confText}
                   · {confText}
+                {/if}
+                {#if (detection.hitCount ?? 0) > 0}
+                  · {detection.hitCount} rec
                 {/if}
               {/if}
             </span>

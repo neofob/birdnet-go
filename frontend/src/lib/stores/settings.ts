@@ -554,6 +554,7 @@ export type DashboardElementType =
   | 'banner'
   | 'daily-summary'
   | 'currently-hearing'
+  | 'language-analytics'
   | 'detections-grid'
   | 'live-spectrogram'
   | 'video-embed';
@@ -763,6 +764,25 @@ export interface NotificationSettings {
   templates?: NotificationTemplates;
 }
 
+export interface LanguagePipelineWhisperSettings {
+  endpoint?: string;
+  timeout?: string;
+  language?: string;
+}
+
+export interface LanguagePipelineFastTextSettings {
+  endpoint?: string;
+  timeout?: string;
+  maxTopN?: number;
+}
+
+export interface LanguagePipelineSettings {
+  enabled?: boolean;
+  minConfidence?: number;
+  whisper?: LanguagePipelineWhisperSettings;
+  fastText?: LanguagePipelineFastTextSettings;
+}
+
 // Main settings form data interface - EXACTLY matching backend structure
 export interface SettingsFormData {
   debug?: boolean;
@@ -779,6 +799,7 @@ export interface SettingsFormData {
   output?: OutputSettings;
   backup?: BackupSettings;
   notification?: NotificationSettings;
+  languagePipeline?: LanguagePipelineSettings;
   taxonomySynonyms?: Record<string, string>;
 }
 
@@ -961,6 +982,7 @@ function createEmptySettings(): SettingsFormData {
               summary: { summaryLimit: 30 },
             },
             { id: 'currently-hearing-0', type: 'currently-hearing', enabled: true },
+            { id: 'language-analytics-0', type: 'language-analytics', enabled: true },
             { id: 'live-spectrogram-0', type: 'live-spectrogram', enabled: true },
             { id: 'detections-grid-0', type: 'detections-grid', enabled: true },
           ],
@@ -1019,6 +1041,20 @@ function createEmptySettings(): SettingsFormData {
           title: '',
           message: '',
         },
+      },
+    },
+    languagePipeline: {
+      enabled: true,
+      minConfidence: 0.6,
+      whisper: {
+        endpoint: 'http://localhost:8010',
+        timeout: '30s',
+        language: 'auto',
+      },
+      fastText: {
+        endpoint: 'http://localhost:8000',
+        timeout: '5s',
+        maxTopN: 5,
       },
     },
     taxonomySynonyms: {},
@@ -1130,6 +1166,7 @@ export const integrationSettings = derived(settingsStore, $store => ({
     cacheTTL: 24,
     locale: 'en',
   },
+  languagePipeline: $store.formData.languagePipeline,
 }));
 
 export const supportSettings = derived(settingsStore, $store => ({

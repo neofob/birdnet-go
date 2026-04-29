@@ -289,8 +289,9 @@ Config in BirdNET-Go settings:
 ```yaml
 language_pipeline:
   enabled: true
+  min_confidence: 0.60
   whisper:
-    endpoint: "http://localhost:8080"
+    endpoint: "http://localhost:8010"
     timeout: 30s
     language: "auto"
   fasttext:

@@ -2,6 +2,7 @@ package language
 
 import (
 	"context"
+	"math"
 	"strings"
 
 	"github.com/tphakala/birdnet-go/internal/errors"
@@ -20,13 +21,22 @@ type Result struct {
 type Pipeline struct {
 	transcriber        Transcriber
 	languageClassifier LanguageClassifier
+	minConfidence      float32
 }
 
 // NewPipeline creates a language classification pipeline.
-func NewPipeline(transcriber Transcriber, languageClassifier LanguageClassifier) *Pipeline {
+func NewPipeline(transcriber Transcriber, languageClassifier LanguageClassifier, minConfidence float32) *Pipeline {
+	if minConfidence <= 0 || math.IsNaN(float64(minConfidence)) {
+		minConfidence = 0.60
+	}
+	if minConfidence > 1 {
+		minConfidence = 1
+	}
+
 	return &Pipeline{
 		transcriber:        transcriber,
 		languageClassifier: languageClassifier,
+		minConfidence:      minConfidence,
 	}
 }
 
@@ -88,9 +98,22 @@ func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, err
 			logger.String("language", transcription.Language),
 			logger.String("transcription", truncate(transcription.Text, 200)))
 
+		fallbackConfidence := float32(0.5)
+		if fallbackConfidence < p.minConfidence {
+			log.Info("whisper fallback below confidence threshold; emitting undetermined label",
+				logger.String("raw_language", transcription.Language),
+				logger.Float64("raw_confidence", float64(fallbackConfidence)),
+				logger.Float64("min_confidence", float64(p.minConfidence)))
+			return Result{
+				Label:      "und",
+				Confidence: fallbackConfidence,
+				Transcript: cleanText,
+			}, nil
+		}
+
 		return Result{
 			Label:      transcription.Language,
-			Confidence: 0.5,
+			Confidence: fallbackConfidence,
 			Transcript: cleanText,
 		}, nil
 	}
@@ -100,6 +123,18 @@ func (p *Pipeline) Classify(ctx context.Context, samples []float32) (Result, err
 		logger.Float64("confidence", float64(langResult.Confidence)),
 		logger.String("transcription", truncate(transcription.Text, 200)),
 		logger.Int("top_n_count", len(langResult.TopN)))
+
+	if langResult.Confidence < p.minConfidence {
+		log.Info("language below confidence threshold; emitting undetermined label",
+			logger.String("raw_language", langResult.Label),
+			logger.Float64("raw_confidence", float64(langResult.Confidence)),
+			logger.Float64("min_confidence", float64(p.minConfidence)))
+		return Result{
+			Label:      "und",
+			Confidence: langResult.Confidence,
+			Transcript: cleanText,
+		}, nil
+	}
 
 	for i, tn := range langResult.TopN {
 		log.Info("fasttext top_n",

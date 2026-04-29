@@ -47,6 +47,7 @@ func TestPipeline_Classify_Success(t *testing.T) {
 				Confidence: 0.98,
 			},
 		},
+		0.60,
 	)
 
 	samples := make([]float32, 100)
@@ -63,6 +64,7 @@ func TestPipeline_Classify_WhisperFails(t *testing.T) {
 	pipeline := NewPipeline(
 		&mockTranscriber{err: errors.New("connection refused")},
 		&mockLanguageClassifier{},
+		0.60,
 	)
 
 	samples := make([]float32, 100)
@@ -80,13 +82,16 @@ func TestPipeline_Classify_EmptyTranscription(t *testing.T) {
 			result: &TranscriptionResult{Text: "", Language: ""},
 		},
 		&mockLanguageClassifier{},
+		0.60,
 	)
 
 	samples := make([]float32, 100)
-	_, err := pipeline.Classify(context.Background(), samples)
+	result, err := pipeline.Classify(context.Background(), samples)
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty transcription")
+	require.NoError(t, err)
+	assert.Equal(t, "und", result.Label)
+	assert.InDelta(t, 0.0, float64(result.Confidence), 0.001)
+	assert.Equal(t, "", result.Transcript)
 }
 
 func TestPipeline_Classify_FastTextFallsBackToWhisper(t *testing.T) {
@@ -100,13 +105,14 @@ func TestPipeline_Classify_FastTextFallsBackToWhisper(t *testing.T) {
 			},
 		},
 		&mockLanguageClassifier{err: errors.New("fasttext error")},
+		0.60,
 	)
 
 	samples := make([]float32, 100)
 	result, err := pipeline.Classify(context.Background(), samples)
 
 	require.NoError(t, err)
-	assert.Equal(t, "fr", result.Label)
+	assert.Equal(t, "und", result.Label)
 	assert.InDelta(t, 0.5, float64(result.Confidence), 0.001)
 }
 
@@ -121,6 +127,7 @@ func TestPipeline_Classify_FastTextAndWhisperLanguageFail(t *testing.T) {
 			},
 		},
 		&mockLanguageClassifier{err: errors.New("fasttext error")},
+		0.60,
 	)
 
 	samples := make([]float32, 100)
@@ -136,10 +143,39 @@ func TestPipeline_Close(t *testing.T) {
 	pipeline := NewPipeline(
 		&mockTranscriber{},
 		&mockLanguageClassifier{},
+		0.60,
 	)
 
 	err := pipeline.Close()
 	assert.NoError(t, err)
+}
+
+func TestPipeline_Classify_BelowThresholdEmitsUnd(t *testing.T) {
+	t.Parallel()
+
+	pipeline := NewPipeline(
+		&mockTranscriber{
+			result: &TranscriptionResult{
+				Text:     "hola mundo",
+				Language: "es",
+			},
+		},
+		&mockLanguageClassifier{
+			result: &LanguageResult{
+				Label:      "es",
+				Confidence: 0.42,
+			},
+		},
+		0.60,
+	)
+
+	samples := make([]float32, 100)
+	result, err := pipeline.Classify(context.Background(), samples)
+
+	require.NoError(t, err)
+	assert.Equal(t, "und", result.Label)
+	assert.InDelta(t, 0.42, float64(result.Confidence), 0.001)
+	assert.Equal(t, "hola mundo", result.Transcript)
 }
 
 func TestTruncate(t *testing.T) {

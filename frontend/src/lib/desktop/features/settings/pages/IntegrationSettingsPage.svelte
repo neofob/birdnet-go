@@ -47,6 +47,7 @@
     settingsActions,
     settingsStore,
     settingsValidationErrors,
+    type LanguagePipelineSettings,
     type MQTTSettings,
     type SettingsFormData,
   } from '$lib/stores/settings';
@@ -126,6 +127,20 @@
         cacheTTL: 24,
         locale: 'en',
       },
+      languagePipeline: {
+        enabled: true,
+        minConfidence: 0.6,
+        whisper: {
+          endpoint: 'http://localhost:8010',
+          timeout: '30s',
+          language: 'auto',
+        },
+        fastText: {
+          endpoint: 'http://localhost:8000',
+          timeout: '5s',
+          maxTopN: 5,
+        },
+      },
     }
   );
 
@@ -158,6 +173,13 @@
     hasSettingsChanged(
       (store.originalData as SettingsFormData)?.realtime?.ebird,
       (store.formData as SettingsFormData)?.realtime?.ebird
+    )
+  );
+
+  let languagePipelineHasChanges = $derived(
+    hasSettingsChanged(
+      (store.originalData as SettingsFormData)?.languagePipeline,
+      (store.formData as SettingsFormData)?.languagePipeline
     )
   );
 
@@ -315,6 +337,13 @@
       icon: Activity,
       content: prometheusTabContent,
       hasChanges: observabilityHasChanges,
+    },
+    {
+      id: 'language',
+      label: 'Language Pipeline',
+      icon: Info,
+      content: languagePipelineTabContent,
+      hasChanges: languagePipelineHasChanges,
     },
   ]);
 
@@ -501,6 +530,43 @@
   function updateEBirdCacheTTL(cacheTTL: number) {
     settingsActions.updateSection('realtime', {
       ebird: { ...settings.ebird!, cacheTTL },
+    });
+  }
+
+  // Language pipeline update handlers
+  function updateLanguagePipelineEnabled(enabled: boolean) {
+    settingsActions.updateSection('languagePipeline', {
+      ...(settings.languagePipeline as LanguagePipelineSettings),
+      enabled,
+    });
+  }
+
+  function updateLanguagePipelineMinConfidence(minConfidence: number) {
+    settingsActions.updateSection('languagePipeline', {
+      ...(settings.languagePipeline as LanguagePipelineSettings),
+      minConfidence,
+    });
+  }
+
+  function updateWhisperEndpoint(endpoint: string) {
+    const current = (settings.languagePipeline as LanguagePipelineSettings) ?? {};
+    settingsActions.updateSection('languagePipeline', {
+      ...current,
+      whisper: {
+        ...(current.whisper ?? {}),
+        endpoint,
+      },
+    });
+  }
+
+  function updateFastTextEndpoint(endpoint: string) {
+    const current = (settings.languagePipeline as LanguagePipelineSettings) ?? {};
+    settingsActions.updateSection('languagePipeline', {
+      ...current,
+      fastText: {
+        ...(current.fastText ?? {}),
+        endpoint,
+      },
     });
   }
 
@@ -1735,6 +1801,72 @@
             <SettingsNote>
               <span>{t('settings.integration.ebird.note')}</span>
             </SettingsNote>
+          </div>
+        </fieldset>
+      </div>
+    </SettingsSection>
+  </div>
+{/snippet}
+
+{#snippet languagePipelineTabContent()}
+  <div class="space-y-6">
+    <SettingsSection
+      title="Language Pipeline"
+      description="Configure Whisper/FastText endpoints and minimum confidence for language labels."
+      originalData={(store.originalData as SettingsFormData)?.languagePipeline}
+      currentData={(store.formData as SettingsFormData)?.languagePipeline}
+    >
+      <div class="space-y-4">
+        <Checkbox
+          checked={settings.languagePipeline?.enabled ?? true}
+          label="Enable language pipeline"
+          disabled={store.isLoading || store.isSaving}
+          onchange={updateLanguagePipelineEnabled}
+        />
+
+        <fieldset
+          disabled={!settings.languagePipeline?.enabled || store.isLoading || store.isSaving}
+          class="contents"
+          aria-describedby="language-pipeline-status"
+        >
+          <span id="language-pipeline-status" class="sr-only">
+            {settings.languagePipeline?.enabled
+              ? 'Language pipeline enabled'
+              : 'Language pipeline disabled'}
+          </span>
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity duration-200"
+            class:opacity-50={!settings.languagePipeline?.enabled}
+          >
+            <NumberField
+              label="Minimum confidence"
+              value={settings.languagePipeline?.minConfidence ?? 0.6}
+              onUpdate={updateLanguagePipelineMinConfidence}
+              min={0}
+              max={1}
+              step={0.01}
+              placeholder="0.60"
+              helpText="Predictions below this threshold emit as 'und'."
+              disabled={!settings.languagePipeline?.enabled || store.isLoading || store.isSaving}
+            />
+
+            <TextInput
+              id="language-whisper-endpoint"
+              value={settings.languagePipeline?.whisper?.endpoint ?? ''}
+              label="Whisper endpoint"
+              placeholder="http://localhost:8010"
+              disabled={!settings.languagePipeline?.enabled || store.isLoading || store.isSaving}
+              onchange={updateWhisperEndpoint}
+            />
+
+            <TextInput
+              id="language-fasttext-endpoint"
+              value={settings.languagePipeline?.fastText?.endpoint ?? ''}
+              label="FastText endpoint"
+              placeholder="http://localhost:8000"
+              disabled={!settings.languagePipeline?.enabled || store.isLoading || store.isSaving}
+              onchange={updateFastTextEndpoint}
+            />
           </div>
         </fieldset>
       </div>

@@ -10,6 +10,9 @@ const elementLabelKeys = new Map<string, string>([
 ]);
 
 export function getElementLabel(type: string): string {
+  if (type === 'language-analytics') {
+    return 'Language Analytics';
+  }
   const key = elementLabelKeys.get(type);
   return key ? t(key) : type;
 }

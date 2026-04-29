@@ -113,7 +113,7 @@ func NewRealLanguageOrchestrator(settings *conf.Settings) (*Orchestrator, error)
 		MaxTopN:  cfg.FastText.MaxTopN,
 	})
 
-	pipeline := language.NewPipeline(whisperClient, fastTextClient)
+	pipeline := language.NewPipeline(whisperClient, fastTextClient, cfg.MinConfidence)
 	adapter := newRealPipelineAdapter(pipeline)
 
 	settings.BirdNET.Labels = []string{"language"}

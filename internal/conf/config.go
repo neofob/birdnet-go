@@ -1144,9 +1144,10 @@ type ModelsConfig struct {
 
 // LanguagePipelineConfig holds settings for the language classification pipeline.
 type LanguagePipelineConfig struct {
-	Enabled  bool            `yaml:"enabled" json:"enabled"`           // true to enable the language classification pipeline
-	Whisper  WhisperSettings `yaml:"whisper" json:"whisper"`           // Whisper transcription service settings
-	FastText FastTextSettings `yaml:"fasttext" json:"fasttext"`       // FastText language identification service settings
+	Enabled       bool             `yaml:"enabled" json:"enabled"`                   // true to enable the language classification pipeline
+	MinConfidence float32          `yaml:"min_confidence" json:"minConfidence"`       // minimum confidence required for language label emission
+	Whisper       WhisperSettings  `yaml:"whisper" json:"whisper"`                   // Whisper transcription service settings
+	FastText      FastTextSettings `yaml:"fasttext" json:"fasttext"`                 // FastText language identification service settings
 }
 
 // WhisperSettings holds configuration for the Whisper HTTP transcription service.

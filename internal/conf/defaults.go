@@ -87,6 +87,7 @@ func setDefaultConfig() {
 
 	// Language pipeline configuration (disabled by default)
 	viper.SetDefault("language_pipeline.enabled", true)
+	viper.SetDefault("language_pipeline.min_confidence", 0.60)
 	viper.SetDefault("language_pipeline.whisper.endpoint", "http://localhost:8010")
 	viper.SetDefault("language_pipeline.whisper.timeout", "30s")
 	viper.SetDefault("language_pipeline.whisper.language", "auto")
