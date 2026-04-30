@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -14,22 +15,10 @@ import (
 	"github.com/tphakala/birdnet-go/internal/logger"
 )
 
-// fastTextRequest is the JSON body sent to the FastText classification server.
-type fastTextRequest struct {
-	Text string `json:"text"`
-}
-
 // fastTextResponse is the JSON response from the FastText classification server.
 type fastTextResponse struct {
-	Label      string       `json:"label"`
-	Confidence float32      `json:"confidence"`
-	TopN       []labelScore `json:"top_n"`
-}
-
-// labelScore pairs a language label with its confidence score.
-type labelScore struct {
-	Label      string  `json:"label"`
-	Confidence float32 `json:"confidence"`
+	Language   string  `json:"language"`
+	Probability float32 `json:"probability"`
 }
 
 // FastTextClient implements LanguageClassifier by calling a FastText HTTP server.
@@ -84,22 +73,15 @@ func (f *FastTextClient) Classify(ctx context.Context, text string) (*LanguageRe
 			Build()
 	}
 
-	reqBody := fastTextRequest{Text: text}
-	reqBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, errors.Newf("failed to marshal fasttext request: %w", err).
-			Component("classifier.language.fasttext").
-			Category(errors.CategoryHTTP).
-			Build()
-	}
-
-	url := fmt.Sprintf("%s/classify", f.endpoint)
-	resp, err := f.client.Post(ctx, url, "application/json", reqBytes)
+	params := url.Values{}
+	params.Add("text", text)
+	fullURL := fmt.Sprintf("%s/detect?%s", f.endpoint, params.Encode())
+	resp, err := f.client.Get(ctx, fullURL)
 	if err != nil {
 		return nil, errors.New(err).
 			Component("classifier.language.fasttext").
 			Category(errors.CategoryNetwork).
-			Context("url", url).
+			Context("url", fullURL).
 			Build()
 	}
 	defer resp.Body.Close()
@@ -129,18 +111,10 @@ func (f *FastTextClient) Classify(ctx context.Context, text string) (*LanguageRe
 			Build()
 	}
 
-	topN := make([]LabelScore, 0, len(ftResp.TopN))
-	for _, s := range ftResp.TopN {
-		topN = append(topN, LabelScore{
-			Label:      s.Label,
-			Confidence: s.Confidence,
-		})
-	}
-
 	return &LanguageResult{
-		Label:      ftResp.Label,
-		Confidence: ftResp.Confidence,
-		TopN:       topN,
+		Label:      ftResp.Language,
+		Confidence: ftResp.Probability,
+		TopN:       nil,
 	}, nil
 }
 
