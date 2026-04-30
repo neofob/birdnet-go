@@ -90,7 +90,7 @@ func setDefaultConfig() {
 	viper.SetDefault("language_pipeline.whisper.endpoint", "http://localhost:8010")
 	viper.SetDefault("language_pipeline.whisper.timeout", "30s")
 	viper.SetDefault("language_pipeline.whisper.language", "auto")
-	viper.SetDefault("language_pipeline.fasttext.endpoint", "http://localhost:8000")
+	viper.SetDefault("language_pipeline.fasttext.endpoint", "")
 	viper.SetDefault("language_pipeline.fasttext.timeout", "5s")
 	viper.SetDefault("language_pipeline.fasttext.max_top_n", 5)
 

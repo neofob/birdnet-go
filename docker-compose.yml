@@ -6,10 +6,13 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:8080"
+      - "${PROMETHEUS_PORT:-8090}:8090"
     environment:
       - TZ=${TZ:-UTC}
       - BIRDNET_UID=${BIRDNET_UID:-1000}
       - BIRDNET_GID=${BIRDNET_GID:-1000}
+      - WHISPER_SERVER=jetkvm0.g0.ovpn
+      - WHISPER_PORT=2600
       # Optional: uncomment to configure via environment variables
       # BirdNET Configuration
       # - BIRDNET_LOCALE=en-us                      # Locale code (2-10 chars, e.g., "en" or "en-us")

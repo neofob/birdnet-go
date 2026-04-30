@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/tphakala/birdnet-go/internal/errors"
@@ -46,7 +47,15 @@ func NewFastTextClient(cfg FastTextConfig) *FastTextClient {
 		timeout = 5 * time.Second
 	}
 	if cfg.Endpoint == "" {
-		cfg.Endpoint = "http://localhost:8000"
+		server := os.Getenv("FASTTEXT_SERVER")
+		if server == "" {
+			server = "localhost"
+		}
+		port := os.Getenv("FASTTEXT_PORT")
+		if port == "" {
+			port = "8000"
+		}
+		cfg.Endpoint = fmt.Sprintf("http://%s:%s", server, port)
 	}
 	if cfg.MaxTopN <= 0 {
 		cfg.MaxTopN = 5
